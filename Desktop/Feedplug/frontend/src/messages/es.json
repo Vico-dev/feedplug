@@ -1,0 +1,1049 @@
+{
+  "lpGoogleShopping": {
+    "hero": {
+      "title": "Optimiza tu feed de productos para distribuir mejor en Google Shopping",
+      "subtitle": "Puntuación de calidad, enriquecimiento con IA, conformidad Merchant Center — el método FeedPlug para listados que convierten."
+    },
+    "pain": {
+      "title": "Problemas habituales de los feeds de Google Shopping",
+      "items": [
+        "Productos rechazados por Google Merchant Center por campos faltantes o incorrectos",
+        "Títulos y descripciones no optimizados para SEO y conversión",
+        "Datos incoherentes entre tu tienda y el feed exportado",
+        "Difícil priorizar qué listados mejorar primero"
+      ]
+    },
+    "solution": {
+      "title": "Cómo FeedPlug optimiza tu feed",
+      "subtitle": "Un enfoque en 4 pasos para resultados óptimos en Google Shopping",
+      "steps": [
+        {
+          "title": "Importación y centralización",
+          "desc": "Conecta Shopify o tu archivo de exportación. FeedPlug agrega y sincroniza tus datos. Las actualizaciones del catálogo son automáticas — no hace falta reexportar manualmente."
+        },
+        {
+          "title": "Puntuación de calidad 0-100",
+          "desc": "Cada listado recibe una puntuación por dimensión: título, descripción, imagen, conformidad. Identificas los productos a corregir primero y los campos exactos para las validaciones de Google."
+        },
+        {
+          "title": "Enriquecimiento con IA",
+          "desc": "La IA optimiza títulos y descripciones según las mejores prácticas de Google (palabras clave relevantes, longitud recomendada, formato). Plantillas por sector para contenido adaptado a tu mercado."
+        },
+        {
+          "title": "Exportación conforme",
+          "desc": "Feed XML listo para Google Merchant Center. Actualizaciones automáticas, conformidad con las especificaciones de Google — sin más rechazos por campos faltantes o inválidos."
+        }
+      ]
+    },
+    "useCase": {
+      "title": "Ejemplo real",
+      "intro": "Un e-commerce de moda con 2.500 SKU en Shopify tenía un 18% de productos rechazados por Google Merchant Center. Tras importar en FeedPlug:",
+      "results": [
+        "Puntuación media mejorada de 52 a 78 en 3 semanas gracias al enriquecimiento con IA",
+        "Rechazos de Google reducidos a menos del 2% tras correcciones de conformidad",
+        "Sincronización automática configurada — sin más archivos manuales"
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿Cuánto tarda en optimizarse un catálogo?",
+          "a": "La configuración inicial toma unos 15 minutos. El enriquecimiento con IA procesa de 100 a 500 productos por hora según la complejidad. Los primeros resultados (puntuación, conformidad) se ven justo después de la sincronización."
+        },
+        {
+          "q": "¿FeedPlug sustituye a Shopify?",
+          "a": "No. FeedPlug se conecta a Shopify (o tu ERP) y obtiene los datos de productos. Mantienes Shopify para las ventas; FeedPlug optimiza y exporta feeds a Google, Amazon y marketplaces."
+        },
+        {
+          "q": "¿El feed es compatible con Google Ads?",
+          "a": "Sí. El feed generado está en formato Google Merchant Center, usado por Google Shopping y anuncios de Productos. Una vez conectado a tu cuenta Merchant Center, alimenta automáticamente tus campañas Shopping."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para optimizar tu feed de Google Shopping?",
+      "subtitle": "Únete a los e-commerces que distribuyen mejor con FeedPlug.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación",
+      "docsScore": "Puntuación FeedPlug"
+    }
+  },
+  "lpAmazon": {
+    "hero": {
+      "title": "Optimiza tu feed de productos para vender en Amazon",
+      "subtitle": "Enriquecimiento con IA, conformidad de catálogo, variantes y descripciones A+ — el método FeedPlug para listados Amazon de alto rendimiento."
+    },
+    "pain": {
+      "title": "Problemas habituales de los feeds Amazon",
+      "items": [
+        "Productos bloqueados o en error en Seller Central por atributos faltantes (EAN, marca, categoría)",
+        "Descripciones y bullet points no optimizados para el ranking A9 de Amazon",
+        "Gestión tediosa de variantes (color, talla) y catálogos multi-marketplace",
+        "Datos incoherentes entre tu tienda y la exportación Amazon"
+      ]
+    },
+    "solution": {
+      "title": "Cómo FeedPlug optimiza tu feed Amazon",
+      "subtitle": "Un enfoque en 4 pasos para listados Seller Central optimizados",
+      "steps": [
+        {
+          "title": "Importación y centralización",
+          "desc": "Conecta Shopify o tu archivo de exportación. FeedPlug agrega y sincroniza tus datos. Las variantes (color, talla) y los catálogos multi-marketplace se gestionan automáticamente."
+        },
+        {
+          "title": "Puntuación de calidad 0-100",
+          "desc": "Cada listado recibe una puntuación por dimensión. Identifica productos bloqueados y atributos faltantes (EAN, marca, categoría) para corregir primero."
+        },
+        {
+          "title": "Enriquecimiento con IA",
+          "desc": "La IA optimiza títulos, descripciones y bullet points para el algoritmo A9. Plantillas por categoría (moda, tecnología, etc.) para listados adaptados a tu nicho."
+        },
+        {
+          "title": "Exportación conforme Amazon",
+          "desc": "Feed listo para Seller Central con todos los atributos obligatorios. Variantes padre-hijo, multi-marketplace — actualizaciones automáticas sin intervención manual."
+        }
+      ]
+    },
+    "useCase": {
+      "title": "Ejemplo real",
+      "intro": "Un vendedor de belleza en Amazon tenía 200 SKU en error por atributos faltantes. Con FeedPlug:",
+      "results": [
+        "Enriquecimiento con IA de bullet points en 180 productos en 2h",
+        "Correcciones de EAN y categoría vía puntuación de conformidad",
+        "Sincronización automática con la tienda fuente configurada"
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿FeedPlug gestiona las variantes Amazon (padre-hijo)?",
+          "a": "Sí. FeedPlug detecta variantes (color, talla, etc.) y genera la estructura padre-hijo esperada por Seller Central. Las relaciones se mantienen automáticamente en las actualizaciones."
+        },
+        {
+          "q": "¿Cuántos marketplaces Amazon están soportados?",
+          "a": "FeedPlug adapta el feed a los principales marketplaces Amazon (Francia, Alemania, Italia, España, Reino Unido, etc.). Cada marketplace tiene sus reglas — atributos y formatos se ajustan automáticamente."
+        },
+        {
+          "q": "¿Puedo usar FeedPlug si ya vendo en Amazon?",
+          "a": "Sí. Importas tu catálogo existente (desde Shopify, una exportación Seller Central o un archivo). FeedPlug lo enriquece y reexporta conforme. Ideal para mejorar listados existentes o expandir a varios marketplaces."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para optimizar tu feed Amazon?",
+      "subtitle": "Únete a los vendedores Amazon que rinden mejor con FeedPlug.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación",
+      "docsScore": "Puntuación FeedPlug"
+    }
+  },
+  "lpRakuten": {
+    "hero": {
+      "title": "Optimiza tu feed de productos para Rakuten",
+      "subtitle": "Conformidad Seller Space, enriquecimiento con IA, exportación automática — el método FeedPlug para listados Rakuten optimizados."
+    },
+    "pain": {
+      "title": "Problemas habituales de los feeds Rakuten",
+      "items": [
+        "Productos rechazados por Rakuten por atributos faltantes (EAN, categoría, descripción)",
+        "Descripciones y listados no optimizados para el ranking Rakuten",
+        "Gestión tediosa de actualizaciones de catálogo y sincronización multicanal",
+        "Datos incoherentes entre tu tienda y la exportación Rakuten"
+      ]
+    },
+    "solution": {
+      "title": "Cómo FeedPlug optimiza tu feed Rakuten",
+      "subtitle": "Un enfoque en 4 pasos para Seller Space",
+      "steps": [
+        {
+          "title": "Importación y centralización",
+          "desc": "Conecta Shopify o tu archivo de exportación. FeedPlug agrega y sincroniza tus datos de productos."
+        },
+        {
+          "title": "Puntuación de calidad 0-100",
+          "desc": "Cada listado recibe una puntuación por dimensión. Prioriza las mejoras."
+        },
+        {
+          "title": "Enriquecimiento con IA",
+          "desc": "La IA optimiza títulos y descripciones según las mejores prácticas Rakuten. Plantillas por categoría."
+        },
+        {
+          "title": "Exportación conforme Rakuten",
+          "desc": "Feed listo para Seller Space. Formato esperado, atributos obligatorios, actualizaciones automáticas."
+        }
+      ]
+    },
+    "useCase": {
+      "title": "Ejemplo real",
+      "intro": "Un vendedor lifestyle tenía rechazos repetidos en Rakuten. Con FeedPlug:",
+      "results": [
+        "Conformidad del catálogo al 100% tras corregir campos obligatorios",
+        "Enriquecimiento de descripciones para el ranking Rakuten",
+        "Sincronización automática con la fuente Shopify"
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿Cuánto tarda en configurarse la exportación Rakuten?",
+          "a": "La configuración toma unos 10 minutos tras importar el catálogo. La primera exportación está disponible de inmediato; las actualizaciones son automáticas."
+        },
+        {
+          "q": "¿Rakuten y Amazon: puedo gestionar ambos con FeedPlug?",
+          "a": "Sí. FeedPlug centraliza un solo catálogo y exporta a cada canal. Gestionas tus listados una vez y distribuyes en Rakuten, Amazon, Google Shopping y otros marketplaces."
+        },
+        {
+          "q": "¿Qué atributos Rakuten están soportados?",
+          "a": "FeedPlug adapta el feed a los requisitos Rakuten: EAN, categoría, descripción, imágenes, precio, disponibilidad. Los campos específicos de Seller Space se mapean automáticamente."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para optimizar tu feed Rakuten?",
+      "subtitle": "Únete a los vendedores Rakuten que rinden mejor con FeedPlug.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación",
+      "docsScore": "Puntuación FeedPlug"
+    }
+  },
+  "lpCdiscount": {
+    "hero": {
+      "title": "Optimiza tu feed de productos para Cdiscount",
+      "subtitle": "Conformidad Pro Seller, enriquecimiento con IA, exportación automática — el método FeedPlug para listados Cdiscount optimizados."
+    },
+    "pain": {
+      "title": "Problemas habituales de los feeds Cdiscount",
+      "items": [
+        "Productos rechazados por Cdiscount Pro por atributos faltantes (EAN, categoría, referencia)",
+        "Descripciones y listados no optimizados para el ranking Cdiscount",
+        "Gestión tediosa de actualizaciones y sincronización multicanal",
+        "Datos incoherentes entre tu tienda y la exportación Cdiscount"
+      ]
+    },
+    "solution": {
+      "title": "Cómo FeedPlug optimiza tu feed Cdiscount",
+      "subtitle": "Un enfoque en 4 pasos para Pro Seller",
+      "steps": [
+        {
+          "title": "Importación y centralización",
+          "desc": "Conecta Shopify o tu archivo de exportación. FeedPlug agrega y sincroniza tus datos de productos."
+        },
+        {
+          "title": "Puntuación de calidad 0-100",
+          "desc": "Cada listado recibe una puntuación por dimensión. Prioriza las mejoras."
+        },
+        {
+          "title": "Enriquecimiento con IA",
+          "desc": "La IA optimiza títulos y descripciones según las mejores prácticas Cdiscount. Plantillas por categoría."
+        },
+        {
+          "title": "Exportación conforme Cdiscount",
+          "desc": "Feed listo para Pro Seller. Formato esperado, atributos obligatorios, actualizaciones automáticas."
+        }
+      ]
+    },
+    "useCase": {
+      "title": "Ejemplo real",
+      "intro": "Un vendedor de tecnología tuvo rechazos en Cdiscount Pro. Con FeedPlug:",
+      "results": [
+        "Correcciones de referencia y categoría Cdiscount en 1 día",
+        "Enriquecimiento de listados para el ranking Cdiscount",
+        "Exportación automática a Pro Seller sin desarrollo"
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿FeedPlug es compatible con Cdiscount Pro Seller?",
+          "a": "Sí. FeedPlug genera un feed en el formato esperado por Cdiscount Pro Seller. Los atributos obligatorios (EAN, categoría, referencia, etc.) se mapean y validan antes de exportar."
+        },
+        {
+          "q": "¿Puedo vender en Cdiscount y otros marketplaces?",
+          "a": "Sí. FeedPlug centraliza un catálogo y exporta a Cdiscount, Amazon, Rakuten, Google Shopping y otros. Una fuente, exportaciones adaptadas a cada canal."
+        },
+        {
+          "q": "¿Cuánto cuesta la integración Cdiscount con FeedPlug?",
+          "a": "FeedPlug ofrece planes según el tamaño del catálogo y el número de canales. La integración Cdiscount no requiere desarrollo: configuración en unos clics, sin programar APIs."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para optimizar tu feed Cdiscount?",
+      "subtitle": "Únete a los vendedores Cdiscount que rinden mejor con FeedPlug.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación",
+      "docsScore": "Puntuación FeedPlug"
+    }
+  },
+  "lpDiffusionCanaux": {
+    "hero": {
+      "title": "Distribución en nuevos canales y mercados",
+      "subtitle": "Prueba Amazon, Cdiscount, Fnac… o lánzate en Italia, España, Alemania. Configuración en 5 minutos, sin desarrollo."
+    },
+    "channels": {
+      "title": "Nuevos canales en 5 minutos",
+      "description": "¿Quieres probar Amazon, Cdiscount o Fnac? Configura tu distribución en unos clics. No hace falta desarrollar ni integrar APIs complejas.",
+      "features": [
+        {
+          "title": "Configuración en 5 minutos",
+          "desc": "Conecta un nuevo canal (Amazon, Cdiscount, Fnac…) en unos clics. Sin API que integrar."
+        },
+        {
+          "title": "Puesta en marcha automática",
+          "desc": "Tu feed se transforma y exporta automáticamente para cada canal. Actualizaciones continuas."
+        },
+        {
+          "title": "Adaptación de formato",
+          "desc": "Atributos obligatorios, categorías, imágenes — FeedPlug adapta tus datos a los requisitos de cada plataforma."
+        }
+      ]
+    },
+    "markets": {
+      "title": "Expansión geográfica sencilla",
+      "description": "Lánzate en Italia, España, Alemania o cualquier otro mercado europeo sin esfuerzo técnico. Traducción automática, adaptación de moneda y formatos locales.",
+      "features": [
+        {
+          "title": "Multi-país y multi-idioma",
+          "desc": "Lánzate en Italia, España, Alemania o cualquier otro mercado europeo."
+        },
+        {
+          "title": "Despliegue instantáneo",
+          "desc": "Traducción al vuelo, adaptación de moneda y formatos locales."
+        },
+        {
+          "title": "Conformidad local",
+          "desc": "Cada mercado tiene sus reglas. FeedPlug se adapta automáticamente."
+        }
+      ]
+    },
+    "useCase": {
+      "title": "Ejemplo real",
+      "intro": "Un e-commerce francés vendía en 3 canales. Con FeedPlug, en 2 semanas:",
+      "results": [
+        "De 3 a 15 canales (Amazon, Cdiscount, Rakuten, Fnac, etc.)",
+        "Despliegue completo en el mercado italiano en 48h (traducción + adaptación)",
+        "Reducción del 70% en costes de desarrollo de integración"
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿Cuántos canales puedo añadir?",
+          "a": "FeedPlug soporta Google Shopping, Amazon, Cdiscount, Rakuten, Fnac, Mirakl y más. Cada canal se configura en unos clics. Sin límite técnico por parte de FeedPlug."
+        },
+        {
+          "q": "¿La traducción es automática?",
+          "a": "Sí. FeedPlug traduce tus títulos y descripciones al vuelo para los mercados objetivo (Italia, España, Alemania, etc.). Monedas y formatos locales se adaptan automáticamente."
+        },
+        {
+          "q": "¿Se requieren conocimientos técnicos?",
+          "a": "No. La interfaz FeedPlug está pensada para equipos de e-commerce. Sin API que integrar, sin desarrollo. Configuración guiada, exportación en un clic."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para desplegar en nuevos canales?",
+      "subtitle": "Únete a los e-commerces que distribuyen en todas partes con FeedPlug.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación",
+      "docsScore": "Puntuación FeedPlug"
+    }
+  },
+  "lpAssistantsIA": {
+    "hero": {
+      "badge": "Nuevo canal · Comercio agéntico",
+      "title": "Hazte visible en los asistentes de IA",
+      "subtitle": "ChatGPT, Perplexity, Gemini… Los usuarios buscan productos directamente en la IA. Prepara tus feeds para este nuevo canal de distribución — incluyendo comercio agéntico."
+    },
+    "context": {
+      "title": "Un canal de distribución por derecho propio",
+      "description": "\"¿Dónde puedo comprar zapatillas de trail?\" — los usuarios hacen este tipo de preguntas en ChatGPT, Perplexity o Gemini. El descubrimiento de productos vía chatbots de IA es distinto de Google Shopping o Amazon. Los comerciantes deben estar presentes mediante feeds push."
+    },
+    "channels": {
+      "title": "Canales de asistentes de IA",
+      "description": "Panorámica 2026: qué plataformas aceptan feeds de productos y cómo acceder.",
+      "platforms": [
+        {
+          "name": "ChatGPT",
+          "status": "Maduro",
+          "desc": "Product Feed Spec oficial, comercio agéntico (ACP), Stripe Instant Checkout. Regístrate en chatgpt.com/merchants."
+        },
+        {
+          "name": "Perplexity",
+          "status": "Activo",
+          "desc": "Merchant Program, feeds CSV vía SFTP o URL. Compra con Pro + PayPal/Venmo. Regístrate mediante formulario merchant."
+        },
+        {
+          "name": "Google Gemini",
+          "status": "2026",
+          "desc": "Shopping integrado en el chatbot. Reutiliza tu catálogo de Google Merchant Center vía Merchant API."
+        }
+      ]
+    },
+    "agentic": {
+      "title": "Comercio agéntico (ACP)",
+      "description": "El estándar abierto iniciado por OpenAI y Stripe que especifica los flujos de comercio entre compradores, agentes de IA y comerciantes.",
+      "points": [
+        "Agentic Commerce Protocol (Apache 2.0) — adoptado por ChatGPT, otras plataformas pueden seguirlo.",
+        "Instant Checkout: compras directas en el asistente sin salir de la interfaz.",
+        "Tus feeds de productos deben cumplir el Product Feed Spec para ser elegibles."
+      ]
+    },
+    "feedplug": {
+      "title": "Qué te prepara FeedPlug",
+      "description": "Nuestra plataforma te permite exportar feeds conformes con los requisitos de los asistentes de IA.",
+      "features": [
+        {
+          "title": "Feed conforme ChatGPT",
+          "desc": "Exportación JSON/CSV compatible con OpenAI Product Feed Spec — campos requeridos, variantes, formatos."
+        },
+        {
+          "title": "Un catálogo, todos los canales",
+          "desc": "Misma fuente de productos para Google, Amazon, Meta… y asistentes de IA. Sin trabajo duplicado."
+        },
+        {
+          "title": "Listo para mañana",
+          "desc": "Cuando Perplexity, Gemini u otros abran sus programas merchant, tus datos ya estarán estructurados."
+        }
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿Cómo me registro en ChatGPT Shopping?",
+          "a": "Ve a chatgpt.com/merchants y rellena el formulario. El acceso es por solicitud. Prepara tu info merchant (seller_url, return_policy) y un feed de muestra (~100 productos) si lo piden."
+        },
+        {
+          "q": "¿FeedPlug hace push automático a ChatGPT?",
+          "a": "Actualmente exportas el feed desde FeedPlug. La automatización (push al endpoint de OpenAI) llegará tras la aprobación del partner. Por ahora, exportación + script de envío sirve para actualizaciones diarias."
+        },
+        {
+          "q": "¿El comercio agéntico es solo para ChatGPT?",
+          "a": "Por ahora, el Agentic Commerce Protocol lo adopta sobre todo ChatGPT. Otras plataformas (Perplexity, etc.) podrían unirse. Prepararse ahora deja tus feeds en los formatos correctos."
+        }
+      ]
+    },
+    "cta": {
+      "title": "¿Listo para distribuir en asistentes de IA?",
+      "subtitle": "Únete a los e-commerces que preparan sus feeds para ChatGPT, Perplexity y comercio agéntico.",
+      "button": "Solicitar una demo"
+    },
+    "nav": {
+      "home": "Inicio",
+      "docs": "Documentación"
+    }
+  },
+  "hero": {
+    "tagline": "Conecta. Optimiza. Distribuye.",
+    "title": "Gestiona tu feed de productos una sola vez",
+    "titleHighlight": "y escálalo sin esfuerzo",
+    "titleEnd": "en Google, Meta, Amazon y todos tus canales de venta",
+    "description": "FeedPlug simplifica la gestión de feeds de productos — catálogos sincronizados, datos más limpios y distribución fiable — todo en un solo espacio.",
+    "channels": "Google Shopping · Google Merchant Center · Meta · Amazon · Marketplaces",
+    "metrics": {
+      "channels": "canales soportados",
+      "setup": "minutos de configuración",
+      "score": "puntuación de calidad"
+    }
+  },
+  "problem": {
+    "title": "El problema",
+    "description": "Muchos equipos de e-commerce pasan horas interminables con errores de feed, restricciones de plataforma y datos incoherentes.",
+    "solution": "FeedPlug lo simplifica en cada paso: catálogos sincronizados, datos más limpios y distribución fiable — todo en un solo espacio."
+  },
+  "features": {
+    "title": "Funcionalidades clave",
+    "subtitle": "Todo lo que necesitas para gestionar tus feeds de productos",
+    "centralized": {
+      "title": "Gestión centralizada de feeds",
+      "description": "Conecta tu tienda o feed existente en minutos — FeedPlug se encarga del resto."
+    },
+    "optimization": {
+      "title": "Optimización de títulos y descripciones con IA",
+      "description": "La IA reescribe tus títulos y descripciones — acaba con el contenido duplicado, mantén la voz de marca en cada canal (Google, Amazon, marketplaces)."
+    },
+    "distribution": {
+      "title": "Distribución multicanal",
+      "description": "Desde Google Shopping hasta catálogos Meta, Amazon y marketplaces — distribuye sin fricciones."
+    },
+    "insights": {
+      "title": "Información de rendimiento",
+      "description": "Sigue errores, monitoriza la salud del feed y mide el impacto — para mejorar resultados rápido."
+    }
+  },
+  "aiOptimization": {
+    "title": "Optimización de títulos y descripciones con IA",
+    "subtitle": "Destaca en cada canal sin perder tu identidad",
+    "description": "La IA reescribe el contenido de tus productos para cada plataforma — Google Shopping, Amazon, Meta, Cdiscount… Un catálogo, versiones únicas adaptadas a cada algoritmo.",
+    "benefits": {
+      "duplicateContent": {
+        "title": "Acaba con el contenido duplicado",
+        "description": "Cada canal recibe títulos y descripciones reformulados. Sin contenido idéntico entre plataformas — evita penalizaciones SEO y bloqueos."
+      },
+      "brandVoice": {
+        "title": "Preserva la voz de tu marca",
+        "description": "Incluso en Amazon o Cdiscount, tus listados reflejan tu identidad. La IA se adapta al estilo de cada plataforma manteniendo tu voz."
+      },
+      "compliance": {
+        "title": "Conformidad por canal",
+        "description": "Google quiere 150 caracteres, Amazon prefiere palabras clave A9… La IA se adapta automáticamente — menos rechazos, menos productos bloqueados."
+      },
+      "scale": {
+        "title": "Calidad consistente a escala",
+        "description": "¿500 o 5.000 productos? La IA mantiene el mismo rigor en todo tu catálogo. Plantillas por sector (moda, tecnología, belleza) para contenido relevante."
+      }
+    }
+  },
+  "value": {
+    "title": "Simplicidad + Control + Rendimiento",
+    "description": "FeedPlug te da una infraestructura de feed limpia y fiable — para dedicar menos tiempo a hojas de cálculo y más a hacer crecer tu negocio."
+  },
+  "howItWorks": {
+    "title": "Cómo funciona",
+    "subtitle": "Un catálogo, feeds conformes en todas partes. Gestión de feeds en tres pasos.",
+    "step1": {
+      "title": "Centraliza",
+      "description": "Conecta tu tienda Shopify o importa tu archivo (CSV, hoja de cálculo). FeedPlug agrega tus datos de productos en un solo catálogo. Sin mantener varios archivos: una fuente alimenta todos tus canales — Google Merchant Center, Meta, Amazon y marketplaces."
+    },
+    "step2": {
+      "title": "Optimiza",
+      "description": "La puntuación FeedPlug (0-100) identifica qué listados necesitan mejora: título, descripción, imagen, conformidad. El enriquecimiento con IA optimiza títulos y descripciones para cada canal. Obtienes un catálogo limpio y conforme para Google Shopping y marketplaces, sin trabajo manual repetitivo."
+    },
+    "step3": {
+      "title": "Distribuye",
+      "description": "Genera feeds listos para Google Merchant Center, Meta, Amazon, Cdiscount, Mirakl, Fnac. Exportación multicanal desde el mismo catálogo: cada canal recibe el formato y atributos esperados. Actualizaciones automáticas, sin desarrollo ni integración de API."
+    }
+  },
+  "whyFeedplug": {
+    "title": "Por qué FeedPlug",
+    "paragraph1": "FeedPlug pone la simplicidad y los datos en el centro. A diferencia de soluciones pesadas, la interfaz está pensada para ser operativa en minutos: conectar una fuente, ejecutar una sincronización, revisar la puntuación y exportar a Google Shopping o marketplaces no requiere formación ni conocimientos técnicos.",
+    "paragraph2": "Los datos guían tus decisiones: la puntuación por producto muestra dónde actuar primero; informes y alertas permiten monitorizar la salud del feed y reducir errores. Una herramienta para centralizar, optimizar y distribuir tus catálogos — Google, Meta, Amazon y marketplaces — con eficacia probada.",
+    "stat": "Primer feed en vivo en menos de 15 minutos — sin desarrollo ni integración de API."
+  },
+  "resources": {
+    "title": "Saber más",
+    "exportGuide": "Guía de exportación y feeds",
+    "scoreGuide": "Puntuación FeedPlug",
+    "demarrage": "Primeros pasos",
+    "documentation": "Documentación"
+  },
+  "form": {
+    "firstName": "Nombre",
+    "lastName": "Apellidos",
+    "jobTitle": "Cargo",
+    "phone": "Teléfono",
+    "email": "Email profesional",
+    "company": "Empresa",
+    "submit": "Solicitar una demo",
+    "submitting": "Enviando...",
+    "success": "¡Registro correcto!",
+    "successMessage": "Gracias por tu interés. Te contactaremos muy pronto."
+  },
+  "nav": {
+    "home": "Inicio",
+    "solutions": "Soluciones",
+    "features": "Funcionalidades",
+    "tarifs": "Precios",
+    "contact": "Contacto",
+    "documentation": "Documentación",
+    "clientAccess": "Acceso cliente",
+    "closeMenu": "Cerrar menú",
+    "openMenu": "Abrir menú",
+    "menuLabel": "Menú de navegación",
+    "comingSoon": "Próximamente",
+    "solutionsGoogleShopping": "Google Ads / Google Shopping",
+    "solutionsAmazon": "Amazon",
+    "solutionsCdiscount": "Cdiscount",
+    "solutionsRakuten": "Rakuten",
+    "solutionsAssistantsIa": "ChatGPT y asistentes IA",
+    "featuresEnrichissementIa": "Optimización de títulos y descripciones con IA",
+    "featuresDiffusionCanaux": "Distribución en nuevos canales",
+    "featuresTraductionFlux": "Traducción del feed al vuelo",
+    "featuresAnalytics": "Analytics y rendimiento",
+    "featuresAbTesting": "A/B Testing"
+  },
+  "cta": {
+    "title": "¿Listo para transformar tu distribución de productos?",
+    "subtitle": "Únete a las empresas que usan FeedPlug para centralizar y optimizar sus feeds.",
+    "button": "Solicitar una demo"
+  },
+  "tarifs": {
+    "title": "Feeds de productos conformes, sin complicaciones",
+    "subtitle": "Elige el número de productos y de canales. Tu plan se adapta — y tú mantienes el control.",
+    "badge1": "Ahorro de tiempo en la preparación de feeds",
+    "badge2": "Conformidad GMC, Meta, Amazon",
+    "badge3": "Prueba 30 días, sin tarjeta",
+    "configureTitle": "Configura tu plan",
+    "mostPopular": "El más elegido",
+    "productCountLabel": "Número de productos",
+    "upTo": "Hasta {value}",
+    "over50k": "¿Más de 50 000 productos?",
+    "contactUs": "Contáctanos",
+    "forQuote": "para un presupuesto.",
+    "channelsLabel": "Canales de exportación — selecciona tus plataformas",
+    "channelsSelected": "{count} canal seleccionado",
+    "channelsSelected_plural": "{count} canales seleccionados",
+    "moreChannelsDevis": "¿Más de 5 canales? Presupuesto bajo petición.",
+    "addonIATitle": "Pack IA",
+    "addonIADesc": "— Generación de títulos + imágenes",
+    "addonPricePerMonth": "IVA no incl. / mes",
+    "yourPlan": "Tu plan",
+    "perMonthHT": "IVA no incl. / mes",
+    "productsAndChannels": "Hasta {products} productos · {channels} {channelLabel}",
+    "addonIncluded": " · Pack IA incluido",
+    "channel": "canal",
+    "channels": "canales",
+    "featureImport": "Importación y feeds (CSV, Shopify…)",
+    "featureExport": "Exportación a tus {count} {channelLabel}",
+    "featureIA": "Generación de títulos e imágenes (IA)",
+    "ctaStartTrial": "Empezar mi prueba gratuita",
+    "noCardCancel": "Sin tarjeta de crédito · Cancela cuando quieras",
+    "onQuoteTitle": "Presupuesto bajo petición",
+    "onQuoteDesc": "Más de 50 000 productos o 5 canales: establecemos un acuerdo marco con SLA adaptado.",
+    "viewGridSummary": "Ver la grilla de precios (IVA no incl. / mes)",
+    "products": "Productos",
+    "addonGridNote": "Add-on Pack IA (títulos + imágenes): +49 € IVA no incl. / mes. Todos los precios en euros IVA no incl.",
+    "trialNote": "30 días de prueba gratuita, sin tarjeta. Facturación por transferencia o proforma."
+  },
+  "integrations": {
+    "title": "Integraciones y canales",
+    "description": "FeedPlug conecta tu catálogo a todos tus canales de venta: Google Shopping, Meta, Amazon y marketplaces. Un feed de productos, exportaciones conformes para cada plataforma.",
+    "backToHome": "Volver al inicio",
+    "seeExportGuide": "Ver guía de exportación y feeds",
+    "channelLabels": {
+      "googleShopping": "Google Shopping y Google Merchant Center",
+      "meta": "Meta (Facebook e Instagram)",
+      "amazon": "Amazon Seller Central",
+      "cdiscount": "Cdiscount Pro Seller",
+      "mirakl": "Mirakl",
+      "fnac": "Fnac",
+      "rakuten": "Rakuten Seller Space",
+      "shopify": "Shopify"
+    },
+    "channels": {
+      "googleShopping": "Google Shopping y Google Merchant Center. Feed XML conforme a las especificaciones de Google para tus anuncios Shopping. Conexión por URL, actualizaciones automáticas.",
+      "meta": "Meta (Facebook e Instagram). Catálogos de productos para campañas dinámicas y tiendas. Formato y atributos adaptados a los requisitos de Meta.",
+      "amazon": "Amazon Seller Central. Exportación de feed Amazon con atributos obligatorios (EAN, marca, categoría), variantes y bullet points optimizados para el algoritmo A9.",
+      "cdiscount": "Cdiscount Pro Seller. Feed conforme Pro Seller para distribuir tu catálogo en Cdiscount. Atributos y categorías mapeados automáticamente.",
+      "mirakl": "Mirakl. Exportación a marketplaces que usan Mirakl. Un catálogo, múltiples mercados.",
+      "fnac": "Fnac. Distribución de tu catálogo en el marketplace Fnac. Formato y referencias adaptados.",
+      "rakuten": "Rakuten Seller Space. Feed conforme para vender en Rakuten. Sincronización de catálogo y actualizaciones automáticas.",
+      "shopify": "Shopify. Conexión OAuth en un clic para importar tus productos desde tu tienda Shopify. Una fuente ideal para alimentar todos tus canales."
+    }
+  },
+  "footer": {
+    "description": "Plataforma de gestión de feeds de productos para e-commerce.",
+    "legal": "Legal",
+    "privacy": "Privacidad",
+    "terms": "Condiciones de uso",
+    "copyright": "© 2024 FeedPlug. Todos los derechos reservados.",
+    "integrations": "Integraciones"
+  },
+  "error": {
+    "generic": "Se ha producido un error. Por favor, inténtalo de nuevo."
+  },
+  "faq": {
+    "title": "Preguntas frecuentes",
+    "items": [
+      {
+        "q": "¿Cómo optimizo mi feed de Google Shopping?",
+        "a": "FeedPlug importa tu catálogo, lo enriquece con IA (títulos, descripciones), calcula una puntuación de calidad y exporta un feed conforme a Google Merchant Center. Centraliza una vez, distribuye en todas partes."
+      },
+      {
+        "q": "¿Cómo optimizo mi feed para Amazon?",
+        "a": "FeedPlug adapta automáticamente tus datos a los requisitos de Amazon: atributos obligatorios (EAN, marca, categoría), variantes, bullet points optimizados para el algoritmo A9. Exportación lista para Seller Central, sin desarrollo."
+      },
+      {
+        "q": "¿FeedPlug soporta Cdiscount y Rakuten?",
+        "a": "Sí. FeedPlug exporta a Cdiscount Pro Seller y Rakuten Seller Space. Formato y atributos se adaptan a cada marketplace. Una fuente de catálogo, exportaciones conformes para cada canal."
+      },
+      {
+        "q": "¿Qué es un feed de productos?",
+        "a": "Un feed de productos es un archivo (CSV, XML) que describe tus productos para canales de venta: Google Shopping, Meta, Amazon, marketplaces, etc. FeedPlug gestiona la transformación de datos para cada canal."
+      },
+      {
+        "q": "¿FeedPlug soporta marketplaces además de Google?",
+        "a": "Sí. FeedPlug distribuye a Google Shopping, Google Merchant Center, Meta, Amazon y marketplaces (Cdiscount, Rakuten, Mirakl, Fnac, etc.). Una fuente, exportaciones adaptadas a cada canal."
+      },
+      {
+        "q": "¿Cómo lanzo rápido en nuevos canales?",
+        "a": "FeedPlug te permite configurar un nuevo canal (Amazon, Cdiscount, Fnac…) en unos clics. Sin integración de API: conecta tu catálogo, elige el canal y exporta. La traducción y adaptación de formato son automáticas."
+      },
+      {
+        "q": "¿Por qué FeedPlug en lugar de una hoja de cálculo?",
+        "a": "Una hoja de cálculo te obliga a mantener varios archivos, reformatear a mano para cada canal y gestionar errores tú mismo. FeedPlug centraliza un catálogo, adapta automáticamente los formatos (Google Merchant Center, Amazon, Cdiscount, etc.), calcula una puntuación de calidad y alerta de errores. Ahorro de tiempo y menos rechazos."
+      },
+      {
+        "q": "¿Cuánto tardo en estar operativo?",
+        "a": "La mayoría de usuarios tienen su primer feed exportado en menos de 15 minutos: crear cuenta, conectar una fuente (Shopify o archivo), sincronizar, crear el feed y exportar. Sin desarrollo ni integración de API."
+      }
+    ]
+  },
+  "expansion": {
+    "newChannels": {
+      "title": "Nuevos canales en 5 minutos",
+      "description": "¿Quieres probar Amazon, Cdiscount o Fnac? Configura tu distribución en unos clics. No hace falta desarrollar ni integrar APIs complejas.",
+      "features": {
+        "config": "Configuración en 5 minutos",
+        "auto": "Puesta en marcha automática",
+        "adaptation": "Adaptación automática de formato"
+      }
+    },
+    "newMarkets": {
+      "title": "Expansión geográfica sencilla",
+      "description": "Lánzate en Italia, España, Alemania o cualquier otro mercado europeo sin esfuerzo técnico. Traducción automática, adaptación de moneda y formatos locales.",
+      "features": {
+        "multi": "Multi-país y multi-idioma",
+        "instant": "Despliegue instantáneo",
+        "compliance": "Conformidad local automática"
+      }
+    },
+    "useCases": {
+      "channels": {
+        "title": "De 3 a 15 canales",
+        "description": "Uno de nuestros clientes pasó de 3 a 15 canales en 2 semanas"
+      },
+      "geographic": {
+        "title": "Francia → Italia",
+        "description": "Despliegue completo en el mercado italiano en 48h"
+      },
+      "costs": {
+        "title": "Reducción del 70% de costes",
+        "description": "Eliminación del desarrollo técnico de integración"
+      }
+    }
+  },
+  "advanced": {
+    "title": "Funcionalidades avanzadas",
+    "subtitle": "Más que sincronización, una plataforma de optimización inteligente",
+    "description": "FeedPlug no solo sincroniza tus productos. Analiza rendimiento, prueba tus estrategias y optimiza tus catálogos con IA automáticamente.",
+    "analytics": {
+      "title": "Analíticas y rendimiento",
+      "description": "Sigue el rendimiento de tus productos en tiempo real: impresiones, clics, conversiones, ROI por canal y mercado.",
+      "features": {
+        "dashboards": "Paneles en tiempo real",
+        "roi": "ROI por canal y mercado",
+        "reports": "Informes personalizables",
+        "alerts": "Alertas de rendimiento"
+      }
+    },
+    "abTesting": {
+      "title": "Pruebas A/B integradas",
+      "description": "Prueba distintos títulos, descripciones, precios e imágenes en tus canales. Identifica las variantes que más convierten.",
+      "features": {
+        "traffic": "Pruebas multi-variante",
+        "results": "Distribución automática de tráfico",
+        "statistics": "Análisis de confianza estadística",
+        "recommendations": "Recomendaciones de optimización"
+      }
+    },
+    "aiScoring": {
+      "title": "Puntuación y optimización con IA",
+      "description": "Puntúa automáticamente tus productos según calidad, completitud y potencial de conversión. La IA genera y optimiza tu contenido.",
+      "features": {
+        "scoring": "Puntuación de calidad automática",
+        "generation": "Generación de títulos/descripciones con IA",
+        "anomalies": "Optimización específica por canal"
+      }
+    },
+    "benefits": {
+      "visibility": {
+        "title": "Visibilidad completa",
+        "description": "Entiende qué productos, en qué canales, generan más ingresos."
+      },
+      "optimization": {
+        "title": "Optimización continua",
+        "description": "La IA mejora automáticamente el contenido de tus productos para maximizar conversiones."
+      },
+      "decisions": {
+        "title": "Decisiones basadas en datos",
+        "description": "Toma decisiones estratégicas con datos reales, no intuición."
+      }
+    }
+  },
+  "dashboard": {
+    "loading": "Comprobando...",
+    "nav": {
+      "dashboard": "Panel",
+      "sources": "Fuentes",
+      "catalogue": "Catálogo",
+      "flux": "Feeds",
+      "optimiser": "Optimizar",
+      "ia": "IA",
+      "rapports": "Informes",
+      "performance": "Rendimiento",
+      "scoringChannels": "Puntuación por canal",
+      "notifications": "Notificaciones",
+      "billing": "Facturación",
+      "accounts": "Cuentas",
+      "leads": "Leads",
+      "featureIdeas": "Ideas de funciones",
+      "aiKeys": "Claves API IA",
+      "settings": "Ajustes"
+    },
+    "common": {
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "cancel": "Cancelar",
+      "delete": "Eliminar",
+      "edit": "Editar",
+      "send": "Enviar",
+      "sending": "Enviando…",
+      "errorLoad": "Error al cargar",
+      "errorSave": "Error al guardar",
+      "errorSaveAccount": "Error al cargar la cuenta",
+      "errorRole": "Error al actualizar el rol",
+      "errorDelete": "Error al eliminar",
+      "errorPassword": "Error al cambiar contraseña",
+      "refresh": "Actualizar",
+      "modificationsSaved": "Cambios guardados",
+      "errorRecording": "Error al guardar",
+      "notSet": "No definido",
+      "select": "Seleccionar",
+      "recommended": "Recomendado",
+      "allFlux": "Todos los feeds",
+      "allChannels": "Todos los canales",
+      "noRules": "Sin reglas",
+      "modified": "Modificado",
+      "noMatch": "Sin coincidencia",
+      "good": "Bien",
+      "toImprove": "A mejorar",
+      "toOptimize": "A optimizar",
+      "disabled": "Desactivado",
+      "notConfigured": "No configurado",
+      "urlCopied": "URL copiada al portapapeles.",
+      "noImageAvailable": "Sin imagen disponible: usa la imagen del producto o sube una (botón abajo).",
+      "imageUrlMustBePublic": "La URL de la imagen del producto debe ser accesible públicamente (sin autenticación)."
+    },
+    "catalogue": {
+      "title": "Catálogo",
+      "subtitle": "Gestiona tu catálogo de productos",
+      "price": "Precio",
+      "description": "Descripción",
+      "productType": "Tipo de producto",
+      "availability": "Disponibilidad",
+      "enrichment": "Enriquecimiento",
+      "errorScore": "Error al calcular la puntuación",
+      "errorPreference": "No se pudo guardar la preferencia",
+      "titleDescSaved": "Título, descripción y campos guardados",
+      "enrichmentError": "Enriquecimiento: {msg}",
+      "placeholderNotSet": "No definido",
+      "placeholderDescription": "Descripción del producto...",
+      "placeholderUrl": "https://...",
+      "placeholderCategory": "Ej. Ropa y complementos > Vestidos",
+      "placeholderProductType": "Ej. Vestidos",
+      "placeholderPrice": "0.00",
+      "placeholderCurrency": "EUR",
+      "placeholderStock": "0",
+      "labelGtin": "GTIN (código de barras)",
+      "labelMpn": "MPN (número de fabricante)",
+      "labelCondition": "Condición",
+      "labelCategory": "Categoría Google"
+    },
+    "mapping": {
+      "title": "Todos los campos del feed",
+      "subtitle": "Consulta el valor importado de cada campo de Google Merchant Center.",
+      "feedMapping": "Mapeo del feed",
+      "extraFieldsTitle": "Campos adicionales disponibles",
+      "extraFieldsDesc": "Estos campos de Google Merchant Center aún no están mapeados en tu feed. Puedes añadirlos en la configuración de mapeo.",
+      "fluxValue": "Valor del feed",
+      "customValue": "Valor personalizado",
+      "noValueInFeed": "Sin valor en el feed"
+    },
+    "sources": {
+      "title": "Fuentes de datos",
+      "subtitle": "Conecta tus fuentes para importar tus productos",
+      "noSources": "Sin fuentes conectadas",
+      "connectSource": "Conectar una fuente",
+      "editMapping": "Editar mapeo",
+      "deleteSource": "Eliminar fuente",
+      "syncLaunched": "Sincronización iniciada correctamente",
+      "sourcePaused": "Fuente pausada",
+      "sourceReactivated": "Fuente reactivada",
+      "noFeedForSource": "Ningún feed vinculado a esta fuente",
+      "mpn": "Número de pieza del fabricante (MPN)",
+      "condition": "Condición (nuevo, usado...)",
+      "ageGroup": "Grupo de edad",
+      "energyClass": "Clase energética"
+    },
+    "flux": {
+      "title": "Feeds de exportación",
+      "subtitle": "Buscadores, redes sociales, marketplaces y LLMs — gestiona tus feeds de salida",
+      "noFlux": "Sin feeds"
+    },
+    "parametres": {
+      "subtitle": "Gestiona tus preferencias y ajustes",
+      "tabProfile": "Perfil",
+      "tabNotifications": "Notificaciones",
+      "tabSecurity": "Seguridad",
+      "tabIntegrations": "Integraciones",
+      "tabBilling": "Facturación",
+      "tabTeam": "Equipo",
+      "owner": "Propietario",
+      "manager": "Gestor",
+      "viewer": "Visualizador",
+      "agency": "Agencia",
+      "notifications": "Notificaciones",
+      "integrations": "Integraciones",
+      "billing": "Facturación",
+      "sendInvitation": "Enviar invitación",
+      "register": "Guardar",
+      "changePassword": "Guardar",
+      "loading": "Cargando…"
+    },
+    "facturation": {
+      "title": "Facturación",
+      "subtitle": "Tu suscripción y facturación"
+    },
+    "scoringCanaux": {
+      "title": "Puntuación por canal",
+      "errorChannels": "Error al cargar canales"
+    },
+    "dashboardPage": {
+      "subtitle": "Resumen de tu catálogo e importaciones",
+      "errorLoad": "Error al cargar el panel",
+      "errorAuth": "Inicia sesión para acceder al panel",
+      "loading": "Cargando panel…",
+      "trendBasedOnSyncs": "Tendencia según ejecuciones de sincronización",
+      "evolutionChartHint": "Un punto por sincronización correcta (puntuación de ese feed).",
+      "lastImport": "Última importación",
+      "sourceSync": "Fuente / sincronización",
+      "productsImported": "Productos importados",
+      "totalCatalogue": "Total catálogo",
+      "avgScore": "Puntuación media",
+      "good": "Bien",
+      "toImprove": "A mejorar",
+      "toOptimize": "A optimizar",
+      "evolution30d": "en 30 días",
+      "successfulSyncs": "Sincronizaciones correctas",
+      "last10Runs": "Últimas 10 ejecuciones",
+      "scoreEvolutionTitle": "Evolución de la puntuación (30 días)",
+      "evolutionAfterSyncs": "La evolución se mostrará tras las próximas sincronizaciones",
+      "enrichmentIA": "Enriquecimiento con IA",
+      "titlesOptimized": "Títulos optimizados",
+      "descriptionsEnriched": "Descripciones enriquecidas",
+      "titleCoverage": "Cobertura de títulos",
+      "summary": "Resumen",
+      "sourcesCount": "fuentes",
+      "feedsCount": "feeds",
+      "quickActions": "Acciones rápidas",
+      "addSource": "Añadir una fuente",
+      "optimizeWithIA": "Optimizar con IA",
+      "exportFeed": "Exportar un feed",
+      "errorGeneric": "Error",
+      "errorNetwork": "No se puede contactar con el servidor. Compruebe su conexión o inténtelo de nuevo."
+    },
+    "fluxPage": {
+      "statusActive": "Activo",
+      "statusError": "Error",
+      "statusPending": "En espera",
+      "statusInactive": "Inactivo",
+      "limitReached": "Límite alcanzado: {count} canal usado (máx. {max}). Para añadir más, consulta",
+      "limitReached_plural": "Límite alcanzado: {count} canales usados (máx. {max}). Para añadir más, consulta",
+      "limitReachedSuffix": " o contáctanos.",
+      "totalProducts": "Total: {total} productos",
+      "connectGoogle": "Conectar Google",
+      "connectAmazon": "Conectar Amazon",
+      "connecting": "Conectando...",
+      "syncInProgress": "Sincronización en curso",
+      "noActiveFeed": "Ningún feed activo",
+      "noFluxTitle": "Sin feeds",
+      "loadingFeeds": "Cargando feeds…",
+      "errorLoadingFeeds": "Error al cargar los feeds",
+      "pricingLinkLabel": "tarifas"
+    },
+    "rapports": {
+      "title": "Informes y analíticas",
+      "subtitle": "Analiza el rendimiento de tu feed y optimiza tus campañas"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "subtitle": "Gestiona tus notificaciones y mantente informado sobre la actividad de tu feed"
+    },
+    "optimiser": {
+      "errorRules": "Error al cargar reglas",
+      "title": "Optimizar",
+      "description": "Reglas SI-ENTONCES para modificar o enriquecer tus datos por feed y canal",
+      "all": "Todos",
+      "actives": "Activas",
+      "inactives": "Inactivas",
+      "applyNow": "Aplicar ahora",
+      "newRule": "Nueva regla",
+      "noRulesDesc": "Crea tu primera regla para modificar o enriquecer tus datos por canal.",
+      "createRule": "Crear una regla",
+      "disable": "Desactivar",
+      "enable": "Activar",
+      "simulate": "Simular"
+    },
+    "admin": {
+      "accountsTitle": "Todas las cuentas",
+      "errorAccounts": "Error al cargar cuentas",
+      "featureIdeasNone": "Aún no hay ideas",
+      "errorFeatureIdeas": "Error al cargar",
+      "errorAddKey": "Error al añadir clave",
+      "nameRequired": "El nombre es obligatorio",
+      "errorUpdateKey": "Error al actualizar clave",
+      "errorDeleteKey": "Error al eliminar clave",
+      "errorUpdate": "Error al actualizar",
+      "cacheCleaned": "Caché borrada correctamente",
+      "errorCache": "Error al borrar caché",
+      "leaveEmptyToKeep": "Deja vacío para mantener la clave actual"
+    },
+    "fields": {
+      "id": "ID de producto",
+      "title": "Título",
+      "description": "Descripción",
+      "link": "URL del producto",
+      "image_link": "Imagen principal",
+      "additional_image_link": "Imágenes adicionales",
+      "price": "Precio",
+      "sale_price": "Precio oferta",
+      "availability": "Disponibilidad",
+      "brand": "Marca",
+      "gtin": "GTIN / Código de barras",
+      "mpn": "MPN / Número de fabricante",
+      "condition": "Condición",
+      "google_product_category": "Categoría Google",
+      "product_type": "Tipo de producto",
+      "sku": "SKU / Referencia",
+      "url": "URL del producto",
+      "imageUrl": "Imagen",
+      "inventory": "Stock",
+      "currency": "Moneda",
+      "availability_date": "Fecha de disponibilidad",
+      "cost_of_goods_sold": "Coste de bienes vendidos",
+      "expiration_date": "Fecha de caducidad",
+      "mobile_link": "URL móvil",
+      "sale_price_effective_date": "Fechas de oferta"
+    },
+    "drawer": {
+      "living_room": "Salón",
+      "outdoor": "Exterior",
+      "kitchen": "Cocina",
+      "bathroom": "Baño",
+      "desk": "Escritorio",
+      "neutral": "Neutro (sombra suave)"
+    }
+  }
+}
