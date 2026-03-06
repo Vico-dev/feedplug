@@ -455,91 +455,31 @@
     }
   },
   "hero": {
-    "tagline": "Conecta. Optimiza. Distribuye.",
-    "title": "Gestiona tu feed de productos una sola vez",
-    "titleHighlight": "y escálalo sin esfuerzo",
-    "titleEnd": "en Google, Meta, Amazon y todos tus canales de venta",
-    "description": "FeedPlug simplifica la gestión de feeds de productos — catálogos sincronizados, datos más limpios y distribución fiable — todo en un solo espacio.",
-    "channels": "Google Shopping · Google Merchant Center · Meta · Amazon · Marketplaces",
-    "metrics": {
-      "channels": "canales soportados",
-      "setup": "minutos de configuración",
-      "score": "puntuación de calidad"
-    }
-  },
-  "problem": {
-    "title": "El problema",
-    "description": "Muchos equipos de e-commerce pasan horas interminables con errores de feed, restricciones de plataforma y datos incoherentes.",
-    "solution": "FeedPlug lo simplifica en cada paso: catálogos sincronizados, datos más limpios y distribución fiable — todo en un solo espacio."
-  },
-  "features": {
-    "title": "Funcionalidades clave",
-    "subtitle": "Todo lo que necesitas para gestionar tus feeds de productos",
-    "centralized": {
-      "title": "Gestión centralizada de feeds",
-      "description": "Conecta tu tienda o feed existente en minutos — FeedPlug se encarga del resto."
-    },
-    "optimization": {
-      "title": "Optimización de títulos y descripciones con IA",
-      "description": "La IA reescribe tus títulos y descripciones — acaba con el contenido duplicado, mantén la voz de marca en cada canal (Google, Amazon, marketplaces)."
-    },
-    "distribution": {
-      "title": "Distribución multicanal",
-      "description": "Desde Google Shopping hasta catálogos Meta, Amazon y marketplaces — distribuye sin fricciones."
-    },
-    "insights": {
-      "title": "Información de rendimiento",
-      "description": "Sigue errores, monitoriza la salud del feed y mide el impacto — para mejorar resultados rápido."
-    }
-  },
-  "aiOptimization": {
-    "title": "Optimización de títulos y descripciones con IA",
-    "subtitle": "Destaca en cada canal sin perder tu identidad",
-    "description": "La IA reescribe el contenido de tus productos para cada plataforma — Google Shopping, Amazon, Meta, Cdiscount… Un catálogo, versiones únicas adaptadas a cada algoritmo.",
-    "benefits": {
-      "duplicateContent": {
-        "title": "Acaba con el contenido duplicado",
-        "description": "Cada canal recibe títulos y descripciones reformulados. Sin contenido idéntico entre plataformas — evita penalizaciones SEO y bloqueos."
-      },
-      "brandVoice": {
-        "title": "Preserva la voz de tu marca",
-        "description": "Incluso en Amazon o Cdiscount, tus listados reflejan tu identidad. La IA se adapta al estilo de cada plataforma manteniendo tu voz."
-      },
-      "compliance": {
-        "title": "Conformidad por canal",
-        "description": "Google quiere 150 caracteres, Amazon prefiere palabras clave A9… La IA se adapta automáticamente — menos rechazos, menos productos bloqueados."
-      },
-      "scale": {
-        "title": "Calidad consistente a escala",
-        "description": "¿500 o 5.000 productos? La IA mantiene el mismo rigor en todo tu catálogo. Plantillas por sector (moda, tecnología, belleza) para contenido relevante."
-      }
-    }
-  },
-  "value": {
-    "title": "Simplicidad + Control + Rendimiento",
-    "description": "FeedPlug te da una infraestructura de feed limpia y fiable — para dedicar menos tiempo a hojas de cálculo y más a hacer crecer tu negocio."
+    "eyebrow": "Para responsables e-commerce y equipos de adquisición",
+    "title": "Tus feeds de producto te están costando",
+    "titleHighlight": "tiempo, ventas",
+    "titleEnd": "y visibilidad",
+    "description": "FeedPlug centraliza tu catálogo, corrige errores y distribuye feeds conformes a Google Shopping, Amazon, Meta y 10+ marketplaces — en pocos clics.",
+    "ctaButton": "Comenzar mi prueba gratuita",
+    "ctaSub": "30 días gratis · Sin tarjeta de crédito",
+    "logosLabel": "Compatible con tus canales de venta",
+    "channels": "Google Shopping · Amazon · Meta · Cdiscount · Rakuten · Fnac · Mirakl · ChatGPT"
   },
   "howItWorks": {
     "title": "Cómo funciona",
-    "subtitle": "Un catálogo, feeds conformes en todas partes. Gestión de feeds en tres pasos.",
+    "subtitle": "3 pasos para feeds conformes en todos tus canales",
     "step1": {
       "title": "Centraliza",
-      "description": "Conecta tu tienda Shopify o importa tu archivo (CSV, hoja de cálculo). FeedPlug agrega tus datos de productos en un solo catálogo. Sin mantener varios archivos: una fuente alimenta todos tus canales — Google Merchant Center, Meta, Amazon y marketplaces."
+      "description": "Conecta Shopify o importa un CSV. FeedPlug crea un catálogo único que alimenta todos tus canales."
     },
     "step2": {
       "title": "Optimiza",
-      "description": "La puntuación FeedPlug (0-100) identifica qué listados necesitan mejora: título, descripción, imagen, conformidad. El enriquecimiento con IA optimiza títulos y descripciones para cada canal. Obtienes un catálogo limpio y conforme para Google Shopping y marketplaces, sin trabajo manual repetitivo."
+      "description": "La puntuación 0-100 identifica las fichas a corregir. La IA enriquece títulos y descripciones para cada canal."
     },
     "step3": {
       "title": "Distribuye",
-      "description": "Genera feeds listos para Google Merchant Center, Meta, Amazon, Cdiscount, Mirakl, Fnac. Exportación multicanal desde el mismo catálogo: cada canal recibe el formato y atributos esperados. Actualizaciones automáticas, sin desarrollo ni integración de API."
+      "description": "Exporta a Google, Amazon, Meta, Cdiscount, Fnac en un clic. Actualización automática, sin API."
     }
-  },
-  "whyFeedplug": {
-    "title": "Por qué FeedPlug",
-    "paragraph1": "FeedPlug pone la simplicidad y los datos en el centro. A diferencia de soluciones pesadas, la interfaz está pensada para ser operativa en minutos: conectar una fuente, ejecutar una sincronización, revisar la puntuación y exportar a Google Shopping o marketplaces no requiere formación ni conocimientos técnicos.",
-    "paragraph2": "Los datos guían tus decisiones: la puntuación por producto muestra dónde actuar primero; informes y alertas permiten monitorizar la salud del feed y reducir errores. Una herramienta para centralizar, optimizar y distribuir tus catálogos — Google, Meta, Amazon y marketplaces — con eficacia probada.",
-    "stat": "Primer feed en vivo en menos de 15 minutos — sin desarrollo ni integración de API."
   },
   "resources": {
     "title": "Saber más",
@@ -549,15 +489,10 @@
     "documentation": "Documentación"
   },
   "form": {
-    "firstName": "Nombre",
-    "lastName": "Apellidos",
-    "jobTitle": "Cargo",
-    "phone": "Teléfono",
-    "email": "Email profesional",
-    "company": "Empresa",
-    "submit": "Solicitar una demo",
+    "email": "Tu email profesional",
+    "submit": "Comenzar mi prueba gratuita",
     "submitting": "Enviando...",
-    "success": "¡Registro correcto!",
+    "success": "¡Registro exitoso!",
     "successMessage": "Gracias por tu interés. Te contactaremos muy pronto."
   },
   "nav": {
@@ -667,120 +602,30 @@
     "title": "Preguntas frecuentes",
     "items": [
       {
-        "q": "¿Cómo optimizo mi feed de Google Shopping?",
-        "a": "FeedPlug importa tu catálogo, lo enriquece con IA (títulos, descripciones), calcula una puntuación de calidad y exporta un feed conforme a Google Merchant Center. Centraliza una vez, distribuye en todas partes."
+        "q": "¿Cuánto tiempo se tarda en estar operativo?",
+        "a": "La mayoría de usuarios tienen su primer feed exportado en menos de 15 minutos: creación de cuenta, conexión de fuente (Shopify o archivo), sincronización y exportación. Sin desarrollo ni integración API."
       },
       {
-        "q": "¿Cómo optimizo mi feed para Amazon?",
-        "a": "FeedPlug adapta automáticamente tus datos a los requisitos de Amazon: atributos obligatorios (EAN, marca, categoría), variantes, bullet points optimizados para el algoritmo A9. Exportación lista para Seller Central, sin desarrollo."
+        "q": "¿Qué canales son compatibles?",
+        "a": "Google Shopping (Merchant Center), Amazon, Meta (Facebook/Instagram), Cdiscount, Rakuten, Fnac, Mirakl y ChatGPT. Cada canal recibe un feed adaptado a sus requisitos."
       },
       {
-        "q": "¿FeedPlug soporta Cdiscount y Rakuten?",
-        "a": "Sí. FeedPlug exporta a Cdiscount Pro Seller y Rakuten Seller Space. Formato y atributos se adaptan a cada marketplace. Una fuente de catálogo, exportaciones conformes para cada canal."
+        "q": "¿Necesito un desarrollador o conocimientos técnicos?",
+        "a": "No. FeedPlug está diseñado para equipos de e-commerce y marketing. Sin API que integrar, sin código. Configuración guiada, exportación en un clic."
       },
       {
-        "q": "¿Qué es un feed de productos?",
-        "a": "Un feed de productos es un archivo (CSV, XML) que describe tus productos para canales de venta: Google Shopping, Meta, Amazon, marketplaces, etc. FeedPlug gestiona la transformación de datos para cada canal."
+        "q": "¿Cómo funciona la optimización IA?",
+        "a": "La IA analiza tus fichas de producto y genera títulos y descripciones optimizados para cada canal (palabras clave, longitud, formato). Cada plataforma recibe contenido único."
       },
       {
-        "q": "¿FeedPlug soporta marketplaces además de Google?",
-        "a": "Sí. FeedPlug distribuye a Google Shopping, Google Merchant Center, Meta, Amazon y marketplaces (Cdiscount, Rakuten, Mirakl, Fnac, etc.). Una fuente, exportaciones adaptadas a cada canal."
+        "q": "¿Por qué FeedPlug en vez de una hoja de cálculo?",
+        "a": "Las hojas de cálculo requieren mantener múltiples archivos, reformatear para cada canal y gestionar errores manualmente. FeedPlug centraliza un catálogo, adapta formatos automáticamente y calcula puntuaciones de calidad."
       },
       {
-        "q": "¿Cómo lanzo rápido en nuevos canales?",
-        "a": "FeedPlug te permite configurar un nuevo canal (Amazon, Cdiscount, Fnac…) en unos clics. Sin integración de API: conecta tu catálogo, elige el canal y exporta. La traducción y adaptación de formato son automáticas."
-      },
-      {
-        "q": "¿Por qué FeedPlug en lugar de una hoja de cálculo?",
-        "a": "Una hoja de cálculo te obliga a mantener varios archivos, reformatear a mano para cada canal y gestionar errores tú mismo. FeedPlug centraliza un catálogo, adapta automáticamente los formatos (Google Merchant Center, Amazon, Cdiscount, etc.), calcula una puntuación de calidad y alerta de errores. Ahorro de tiempo y menos rechazos."
-      },
-      {
-        "q": "¿Cuánto tardo en estar operativo?",
-        "a": "La mayoría de usuarios tienen su primer feed exportado en menos de 15 minutos: crear cuenta, conectar una fuente (Shopify o archivo), sincronizar, crear el feed y exportar. Sin desarrollo ni integración de API."
+        "q": "¿Hay una prueba gratuita?",
+        "a": "Sí, 30 días de prueba gratuita sin tarjeta de crédito. Puedes probar todas las funciones: importación, scoring, enriquecimiento IA y exportación multi-canal."
       }
     ]
-  },
-  "expansion": {
-    "newChannels": {
-      "title": "Nuevos canales en 5 minutos",
-      "description": "¿Quieres probar Amazon, Cdiscount o Fnac? Configura tu distribución en unos clics. No hace falta desarrollar ni integrar APIs complejas.",
-      "features": {
-        "config": "Configuración en 5 minutos",
-        "auto": "Puesta en marcha automática",
-        "adaptation": "Adaptación automática de formato"
-      }
-    },
-    "newMarkets": {
-      "title": "Expansión geográfica sencilla",
-      "description": "Lánzate en Italia, España, Alemania o cualquier otro mercado europeo sin esfuerzo técnico. Traducción automática, adaptación de moneda y formatos locales.",
-      "features": {
-        "multi": "Multi-país y multi-idioma",
-        "instant": "Despliegue instantáneo",
-        "compliance": "Conformidad local automática"
-      }
-    },
-    "useCases": {
-      "channels": {
-        "title": "De 3 a 15 canales",
-        "description": "Uno de nuestros clientes pasó de 3 a 15 canales en 2 semanas"
-      },
-      "geographic": {
-        "title": "Francia → Italia",
-        "description": "Despliegue completo en el mercado italiano en 48h"
-      },
-      "costs": {
-        "title": "Reducción del 70% de costes",
-        "description": "Eliminación del desarrollo técnico de integración"
-      }
-    }
-  },
-  "advanced": {
-    "title": "Funcionalidades avanzadas",
-    "subtitle": "Más que sincronización, una plataforma de optimización inteligente",
-    "description": "FeedPlug no solo sincroniza tus productos. Analiza rendimiento, prueba tus estrategias y optimiza tus catálogos con IA automáticamente.",
-    "analytics": {
-      "title": "Analíticas y rendimiento",
-      "description": "Sigue el rendimiento de tus productos en tiempo real: impresiones, clics, conversiones, ROI por canal y mercado.",
-      "features": {
-        "dashboards": "Paneles en tiempo real",
-        "roi": "ROI por canal y mercado",
-        "reports": "Informes personalizables",
-        "alerts": "Alertas de rendimiento"
-      }
-    },
-    "abTesting": {
-      "title": "Pruebas A/B integradas",
-      "description": "Prueba distintos títulos, descripciones, precios e imágenes en tus canales. Identifica las variantes que más convierten.",
-      "features": {
-        "traffic": "Pruebas multi-variante",
-        "results": "Distribución automática de tráfico",
-        "statistics": "Análisis de confianza estadística",
-        "recommendations": "Recomendaciones de optimización"
-      }
-    },
-    "aiScoring": {
-      "title": "Puntuación y optimización con IA",
-      "description": "Puntúa automáticamente tus productos según calidad, completitud y potencial de conversión. La IA genera y optimiza tu contenido.",
-      "features": {
-        "scoring": "Puntuación de calidad automática",
-        "generation": "Generación de títulos/descripciones con IA",
-        "anomalies": "Optimización específica por canal"
-      }
-    },
-    "benefits": {
-      "visibility": {
-        "title": "Visibilidad completa",
-        "description": "Entiende qué productos, en qué canales, generan más ingresos."
-      },
-      "optimization": {
-        "title": "Optimización continua",
-        "description": "La IA mejora automáticamente el contenido de tus productos para maximizar conversiones."
-      },
-      "decisions": {
-        "title": "Decisiones basadas en datos",
-        "description": "Toma decisiones estratégicas con datos reales, no intuición."
-      }
-    }
   },
   "dashboard": {
     "loading": "Comprobando...",
@@ -1045,5 +890,77 @@
       "desk": "Escritorio",
       "neutral": "Neutro (sombra suave)"
     }
+  },
+  "painSolution": {
+    "title": "¿Reconoces estos problemas?",
+    "pains": [
+      "Productos rechazados por Google o Amazon por campos faltantes o incorrectos",
+      "Horas de trabajo manual reformateando feeds para cada canal",
+      "Errores de sincronización entre tu tienda y tus marketplaces",
+      "Imposible saber qué productos priorizar para la optimización"
+    ],
+    "solutionTitle": "FeedPlug resuelve todo esto",
+    "solutions": [
+      "Detección y corrección automática de errores de conformidad",
+      "Un solo catálogo alimenta todos tus canales — sin reformateo",
+      "Sincronización automática desde Shopify o CSV",
+      "Puntuación de calidad 0-100 por ficha para priorizar tus acciones"
+    ]
+  },
+  "socialProof": {
+    "title": "Resultados concretos",
+    "metrics": [
+      {
+        "value": "-80%",
+        "label": "de rechazos de productos",
+        "context": "Los errores de Merchant Center y Amazon se corrigen automáticamente"
+      },
+      {
+        "value": "15 min",
+        "label": "para estar operativo",
+        "context": "Primer feed exportado sin desarrollo ni API"
+      },
+      {
+        "value": "5x",
+        "label": "más canales",
+        "context": "Pasa de 3 a 15 canales en 2 semanas"
+      },
+      {
+        "value": "-70%",
+        "label": "costes de integración",
+        "context": "Sin más desarrollos técnicos para cada marketplace"
+      }
+    ]
+  },
+  "differentiators": {
+    "title": "Por qué FeedPlug",
+    "subtitle": "Lo que nos diferencia",
+    "ai": {
+      "title": "Optimización IA de contenidos",
+      "description": "Títulos y descripciones únicos por canal. Sin contenido duplicado, la IA adapta tu catálogo a cada marketplace."
+    },
+    "score": {
+      "title": "Puntuación de calidad 0-100",
+      "description": "Cada ficha recibe una puntuación por dimensión: título, descripción, imagen, conformidad. Sabes exactamente dónde actuar."
+    },
+    "multichannel": {
+      "title": "Multi-canal desde una fuente única",
+      "description": "Un solo catálogo alimenta Google Shopping, Amazon, Cdiscount, Rakuten, Fnac, Mirakl, Meta y ChatGPT."
+    },
+    "nodev": {
+      "title": "Cero desarrollo requerido",
+      "description": "Sin API que integrar, sin código. Conecta tu fuente, configura tus canales y exporta en pocos clics."
+    }
+  },
+  "midCta": {
+    "title": "¿Listo para simplificar tus feeds de producto?",
+    "trust": "30 días gratis · Sin tarjeta de crédito · Configuración en 5 min"
+  },
+  "finalCta": {
+    "title": "Tus competidores ya optimizan sus feeds.",
+    "titleHighlight": "¿Y tú?",
+    "subtitle": "Cada día sin FeedPlug son productos rechazados, ventas perdidas y tiempo desperdiciado.",
+    "button": "Comenzar mi prueba gratuita",
+    "trust": "Configuración en 5 min · 30 días gratis · Sin tarjeta de crédito"
   }
 }
