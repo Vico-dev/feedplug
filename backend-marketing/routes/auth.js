@@ -126,9 +126,13 @@ function registerAuthRoutes(app, prisma, getPrismaReady, { EFFECTIVE_JWT_SECRET,
       smartAuthLimiter(req, res, async () => {
         const { email, password } = req.body;
         const clientIp = await getClientIp(req);
+
+        console.log(`[AUTH] Login attempt for: ${email} from IP: ${clientIp}`);
+
         const failureStatus = await getLoginFailureStatus(clientIp);
 
         if (failureStatus.blocked) {
+          console.log(`[AUTH] Login blocked - too many failures for IP: ${clientIp}, remaining: ${failureStatus.remainingTime}min`);
           return res.status(429).json({
             message: `Trop de tentatives de connexion échouées. Réessayez dans ${failureStatus.remainingTime} minute(s).`,
           });
@@ -138,16 +142,27 @@ function registerAuthRoutes(app, prisma, getPrismaReady, { EFFECTIVE_JWT_SECRET,
 
         if (!user) {
           await recordLoginFailure(clientIp);
+          console.log(`[AUTH] Login failed - user not found: ${email}`);
+          return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+        }
+
+        console.log(`[AUTH] User found: ${email}, role: ${user.role}, checking password...`);
+
+        if (!user.password) {
+          console.log(`[AUTH] Login failed - user has no password (OAuth account?): ${email}`);
+          await recordLoginFailure(clientIp);
           return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
         }
 
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
           await recordLoginFailure(clientIp);
+          console.log(`[AUTH] Login failed - wrong password for: ${email}`);
           return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
         }
 
         await recordLoginSuccess(clientIp);
+        console.log(`[AUTH] Login successful for: ${email}`);
         await markMarketingLeadConverted(user.email).catch((conversionError) => {
           console.warn('Lead marketing non converti après connexion:', conversionError.message);
         });
