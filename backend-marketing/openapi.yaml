@@ -1,0 +1,773 @@
+openapi: 3.0.3
+info:
+  title: FeedPlug API
+  description: API Backend for FeedPlug Marketing Platform
+  version: 1.0.0
+  contact:
+    name: FeedPlug Support
+
+servers:
+  - url: /api/v1
+    description: Current API version
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Auth
+    description: Authentication endpoints
+  - name: Accounts
+    description: Account management
+  - name: Ingestion
+    description: Feed sources and feeds management
+  - name: Enrichment
+    description: Product enrichment
+  - name: Optimization
+    description: AI-powered optimization endpoints
+  - name: Performance
+    description: Performance tracking and analytics
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness check
+      responses:
+        '200':
+          description: Service is ready
+        '503':
+          description: Service not ready
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+        '429':
+          description: Too many attempts
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                company:
+                  type: string
+      responses:
+        '201':
+          description: Registration successful
+        '400':
+          description: Validation error
+        '409':
+          description: Email already exists
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New tokens issued
+        '401':
+          description: Invalid refresh token
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: Get account info
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Account info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '403':
+          description: No account associated
+
+    put:
+      tags: [Accounts]
+      summary: Update account
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Account updated
+
+  /accounts/users:
+    get:
+      tags: [Accounts]
+      summary: List account users
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /accounts/users/invite:
+    post:
+      tags: [Accounts]
+      summary: Invite user to account
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                role:
+                  type: string
+                  enum: [OWNER, MANAGER, VIEWER, AGENCY]
+      responses:
+        '201':
+          description: Invitation sent
+
+  /ingestion/sources:
+    get:
+      tags: [Ingestion]
+      summary: List feed sources
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeedSource'
+
+    post:
+      tags: [Ingestion]
+      summary: Create feed source
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, connector, configJson]
+              properties:
+                name:
+                  type: string
+                connector:
+                  type: string
+                  enum: [CSV, SHOPIFY, PRESTASHOP, ERP, PIM]
+                configJson:
+                  type: object
+                defaultFreq:
+                  type: string
+                  enum: [HOURLY, DAILY, WEEKLY, MONTHLY]
+      responses:
+        '201':
+          description: Source created
+        '400':
+          description: Validation error
+        '403':
+          description: Plan limit reached
+
+  /ingestion/sources/{id}:
+    put:
+      tags: [Ingestion]
+      summary: Update feed source
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                configJson:
+                  type: object
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Source updated
+        '403':
+          description: Access denied
+
+    delete:
+      tags: [Ingestion]
+      summary: Delete feed source
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Source deleted
+        '404':
+          description: Source not found
+
+  /ingestion/feeds:
+    get:
+      tags: [Ingestion]
+      summary: List feeds
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of feeds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Feed'
+
+    post:
+      tags: [Ingestion]
+      summary: Create feed
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, sourceId, mappingJson]
+              properties:
+                name:
+                  type: string
+                sourceId:
+                  type: string
+                mappingJson:
+                  type: object
+                frequency:
+                  type: string
+                dedupStrategy:
+                  type: string
+      responses:
+        '201':
+          description: Feed created
+
+  /ingestion/feeds/{id}:
+    put:
+      tags: [Ingestion]
+      summary: Update feed
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                frequency:
+                  type: string
+                mappingJson:
+                  type: object
+      responses:
+        '200':
+          description: Feed updated
+
+  /ingestion/items/{id}/enrichment-analysis:
+    get:
+      tags: [Enrichment]
+      summary: Get enrichment analysis for item
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Item ID, UUID, MPN or SKU
+      responses:
+        '200':
+          description: Enrichment analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  itemId:
+                    type: string
+                  enrichments:
+                    type: object
+                  alerts:
+                    type: array
+                    items:
+                      type: string
+
+  /enrichment/score/{itemId}:
+    get:
+      tags: [Enrichment]
+      summary: Get quality score for item
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Quality score breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  globalScore:
+                    type: number
+                  breakdown:
+                    type: object
+                    properties:
+                      title:
+                        type: object
+                      description:
+                        type: object
+                      images:
+                        type: object
+                      technical:
+                        type: object
+                  recommendations:
+                    type: array
+                    items:
+                      type: object
+
+  /optimization/titles/generate:
+    post:
+      tags: [Optimization]
+      summary: Generate AI-optimized titles
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                itemIds:
+                  type: array
+                  items:
+                    type: string
+                platform:
+                  type: string
+                  enum: [GMC, META, AMAZON, CHATGPT]
+      responses:
+        '200':
+          description: Generated titles
+        '403':
+          description: Plan feature not available
+
+  /optimization/descriptions/generate:
+    post:
+      tags: [Optimization]
+      summary: Generate AI-optimized descriptions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                itemIds:
+                  type: array
+                  items:
+                    type: string
+                platform:
+                  type: string
+                  enum: [GMC, META, AMAZON, CHATGPT]
+      responses:
+        '200':
+          description: Generated descriptions
+        '403':
+          description: Plan feature not available
+
+  /enrichment/batch:
+    post:
+      tags: [Enrichment]
+      summary: Batch enrichment with AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                itemIds:
+                  type: array
+                  items:
+                    type: string
+                optimizations:
+                  type: object
+                  properties:
+                    titles:
+                      type: boolean
+                    descriptions:
+                      type: boolean
+                    images:
+                      type: boolean
+                platforms:
+                  type: array
+                  items:
+                    type: string
+                saveToCatalog:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Batch results
+        '403':
+          description: Plan feature not available
+
+  /performance/dashboard:
+    get:
+      tags: [Performance]
+      summary: Get performance dashboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: feedId
+          in: query
+          schema:
+            type: string
+        - name: limitProducts
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  byChannel:
+                    type: array
+                    items:
+                      type: object
+                  topProducts:
+                    type: array
+                    items:
+                      type: object
+                  byCategory:
+                    type: array
+                    items:
+                      type: object
+
+  /performance/history:
+    get:
+      tags: [Performance]
+      summary: Get performance history for item
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channel
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [GOOGLE_ADS, META_ADS, AMAZON_ADS]
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [LAST_7_DAYS, LAST_30_DAYS, LAST_90_DAYS, LAST_365_DAYS]
+      responses:
+        '200':
+          description: Historical performance data
+
+  /performance/sync/google-ads:
+    post:
+      tags: [Performance]
+      summary: Sync Google Ads performance data
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                feedId:
+                  type: string
+                customerId:
+                  type: string
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Sync completed
+        '400':
+          description: Missing credentials
+
+  /performance/sync/meta-ads:
+    post:
+      tags: [Performance]
+      summary: Sync Meta Ads performance data
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                feedId:
+                  type: string
+                adAccountId:
+                  type: string
+                accessToken:
+                  type: string
+      responses:
+        '200':
+          description: Sync completed
+        '400':
+          description: Missing credentials
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+        accountId:
+          type: string
+        accountName:
+          type: string
+        plan:
+          type: string
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        plan:
+          type: string
+        email:
+          type: string
+        trialEndsAt:
+          type: string
+          format: date-time
+        billingStatus:
+          type: string
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    FeedSource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        connector:
+          type: string
+        configJson:
+          type: object
+        defaultFreq:
+          type: string
+        status:
+          type: string
+        lastRunAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    Feed:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sourceId:
+          type: string
+        frequency:
+          type: string
+        status:
+          type: string
+        mappingJson:
+          type: object
+        dedupStrategy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time

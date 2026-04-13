@@ -1,0 +1,62 @@
+{
+  "name": "feedplug-backend-marketing",
+  "version": "1.0.0",
+  "description": "FeedPlug Backend Marketing Server",
+  "main": "server-minimal.js",
+  "scripts": {
+    "start": "node server-minimal.js",
+    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema=./prisma/schema.prisma",
+    "check:syntax": "node --check server-minimal.js && node --check domains/auth/security.js && node --check domains/billing/access-state.js && node --check ingestion/csv-mapping.js && node --check lib/plan-limits.js && node --check lib/shared-abuse-store.js && node --check lib/schema-guards.js && node --check lib/secret-crypto.js && node --check lib/logger.js",
+    "test:domain": "node --test tests/auth/security.test.js tests/billing/access-state.test.js tests/multi-tenant/plan-limits.test.js tests/ingestion/csv-mapping.test.js tests/lib/logger.test.js tests/lib/secret-crypto.test.js",
+    "test:smoke": "node --test tests/smoke/authenticated-access-smoke.test.js",
+    "test": "npm run test:domain && npm run test:smoke",
+    "ci": "npm run prisma:generate && npm run check:syntax && npm run test",
+    "secrets:encrypt-existing": "node scripts/encrypt-existing-secrets.js",
+    "cost-per-client": "node scripts/cost-per-client.js",
+    "cout-previsionnel": "node scripts/cout-previsionnel.js"
+  },
+  "dependencies": {
+    "@fal-ai/client": "^1.9.5",
+    "@google-cloud/storage": "^7.19.0",
+    "@google/genai": "^1.49.0",
+    "@prisma/client": "^5.22.0",
+    "@sentry/node": "^10.48.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "csv-parse": "^5.6.0",
+    "express": "^4.22.1",
+    "express-rate-limit": "^7.5.0",
+    "google-ads-api": "^23.0.0",
+    "google-auth-library": "^9.15.0",
+    "helmet": "^7.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.5",
+    "pdfkit": "^0.18.0",
+    "resend": "^6.10.0",
+    "sharp": "^0.34.5",
+    "stripe": "^20.4.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.0.0",
+    "prisma": "^5.7.1",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
