@@ -1,0 +1,47 @@
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        SECRET=$$(gcloud secrets versions access latest --secret=scheduler-secret --project=$PROJECT_ID)
+        gcloud scheduler jobs create http feedplug-scheduled-ingestion \
+          --location=europe-west1 \
+          --schedule='0 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/ingestion/scheduled-runs' \
+          --http-method=POST \
+          --headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Mise à jour automatique quotidienne des flux produits' \
+          || gcloud scheduler jobs update http feedplug-scheduled-ingestion \
+          --location=europe-west1 \
+          --schedule='0 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/ingestion/scheduled-runs' \
+          --http-method=POST \
+          --update-headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Mise à jour automatique quotidienne des flux produits'
+
+        gcloud scheduler jobs create http feedplug-marketing-nurture \
+          --location=europe-west1 \
+          --schedule='15 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/marketing/nurture-runs' \
+          --http-method=POST \
+          --headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Envoi automatique des relances marketing FeedPlug' \
+          || gcloud scheduler jobs update http feedplug-marketing-nurture \
+          --location=europe-west1 \
+          --schedule='15 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/marketing/nurture-runs' \
+          --http-method=POST \
+          --update-headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Envoi automatique des relances marketing FeedPlug'
+    id: 'configure-scheduler-job'
+    waitFor: ['-']

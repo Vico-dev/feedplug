@@ -1,0 +1,525 @@
+// Schema Prisma pour backend-marketing
+// Colonnes mappées en snake_case (correspondance avec PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== MARKETING LEADS =====
+model MarketingLead {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  jobTitle    String
+  phone       String
+  email       String   @unique
+  company     String
+  ipAddress   String?
+  userAgent   String?
+  locale      String?
+  source      String?
+  status      String?  @default("new")
+  notes       String?
+  marketingOptIn       Boolean   @default(false) @map("marketingoptin")
+  resendContactId      String?   @map("resendcontactid")
+  nurtureStage         String?   @default("pending_j0") @map("nurturestage")
+  lastMarketingEmailAt DateTime? @map("lastmarketingemailat")
+  nextMarketingEmailAt DateTime? @map("nextmarketingemailat")
+  marketingClickCount  Int       @default(0) @map("marketingclickcount")
+  lastMarketingClickAt DateTime? @map("lastmarketingclickat")
+  lastMarketingClickTarget String? @map("lastmarketingclicktarget")
+  unsubscribedAt       DateTime? @map("unsubscribedat")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+  @@index([createdAt])
+  @@index([status])
+  @@index([nurtureStage])
+  @@index([nextMarketingEmailAt])
+  @@index([lastMarketingClickAt])
+  @@map("marketing_leads")
+}
+
+// ===== INGESTION FEEDS =====
+
+enum ConnectorType {
+  CSV
+  SHOPIFY
+  WOOCOMMERCE
+  SFCC
+  PRESTASHOP
+  ERP
+  PIM
+}
+
+enum FeedStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum IngestionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum Frequency {
+  HOURLY
+  DAILY
+}
+
+model Credential {
+  id           String        @id @default(cuid())
+  name         String
+  connector    ConnectorType
+  secretJson   Json
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sources      FeedSource[]
+}
+
+model FeedSource {
+  id             String        @id @default(cuid())
+  name           String
+  connector      ConnectorType
+  configJson     Json          @map("configjson")
+  defaultFreq    Frequency     @default(DAILY) @map("defaultfreq")
+  status         FeedStatus    @default(ACTIVE)
+  lastRunAt      DateTime?     @map("lastrunat")
+  accountId      String        @default("default-account") @map("accountid")
+  createdAt      DateTime      @default(now()) @map("createdat")
+  updatedAt      DateTime      @updatedAt @map("updatedat")
+
+  credential     Credential?   @relation(fields: [credentialId], references: [id])
+  credentialId   String?       @map("credentialid")
+
+  account        Account       @relation(fields: [accountId], references: [id])
+  feeds          Feed[]
+
+  @@index([connector])
+  @@index([status])
+  @@index([accountId])
+}
+
+model Feed {
+  id              String        @id @default(cuid())
+  name            String
+  source          FeedSource    @relation(fields: [sourceId], references: [id])
+  sourceId        String        @map("sourceid")
+  frequency       Frequency     @default(DAILY)
+  status          FeedStatus    @default(ACTIVE)
+  mappingJson     Json          @map("mappingjson")
+  dedupStrategy   String        @default("guid_or_url") @map("dedupstrategy")
+  accountId       String        @default("default-account") @map("accountid")
+  createdAt       DateTime      @default(now()) @map("createdat")
+  updatedAt       DateTime      @updatedAt @map("updatedat")
+
+  account         Account       @relation(fields: [accountId], references: [id])
+  items           FeedItem[]
+  runs           IngestionRun[]
+  enrichmentSources EnrichmentSource[]
+
+  @@index([sourceId])
+  @@index([status])
+  @@index([accountId])
+}
+
+model EnrichmentSource {
+  id            String    @id @default(cuid())
+  feedId        String    @map("feedid")
+  feed          Feed      @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  name          String
+  configJson    Json      @default("{}") @map("configjson")
+  mappingJson   Json      @default("{}") @map("mappingjson")
+  status        String    @default("ACTIVE")
+  lastSyncAt    DateTime? @map("lastsyncat")
+  accountId     String    @default("default-account") @map("accountid")
+  createdAt     DateTime  @default(now()) @map("createdat")
+  updatedAt     DateTime  @updatedAt @map("updatedat")
+
+  @@index([feedId])
+  @@index([status])
+  @@index([accountId])
+}
+
+model FeedItem {
+  id              String     @id @default(cuid())
+  feed            Feed       @relation(fields: [feedId], references: [id])
+  feedId          String     @map("feedid")
+  originId        String     @map("originid")
+  url             String?
+  title           String
+  descriptionHtml String?    @map("descriptionhtml")
+  descriptionText String?    @map("descriptiontext")
+  imageUrl        String?    @map("imageurl")
+  brand           String?
+  sku             String?
+  price           Float?
+  currency        String?
+  inventory       Int?
+  publishedAt     DateTime?  @map("publishedat")
+  updatedAt       DateTime?  @map("updatedat")
+  contentHash     String     @map("contenthash")
+  createdAt       DateTime   @default(now()) @map("createdat")
+
+  revisions       FeedItemRevision[]
+
+  @@unique([feedId, originId])
+  @@index([feedId])
+  @@index([sku])
+  @@index([contentHash])
+}
+
+model IngestionRun {
+  id            String           @id @default(cuid())
+  feed          Feed             @relation(fields: [feedId], references: [id])
+  feedId        String           @map("feedid")
+  status        IngestionStatus  @default(PENDING)
+  scheduledAt   DateTime?        @map("scheduledat")
+  startedAt     DateTime?        @map("startedat")
+  finishedAt    DateTime?        @map("finishedat")
+  totalFetched  Int              @default(0) @map("totalfetched")
+  totalInserted Int              @default(0) @map("totalinserted")
+  totalUpdated  Int              @default(0) @map("totalupdated")
+  totalSkipped  Int              @default(0) @map("totalskipped")
+  errorMessage  String?          @map("errormessage")
+
+  errors        FeedError[]
+
+  @@index([feedId])
+  @@index([status])
+}
+
+model FeedError {
+  id           String         @id @default(cuid())
+  run          IngestionRun   @relation(fields: [runId], references: [id])
+  runId        String         @map("runid")
+  code         String?
+  message      String
+  contextJson  Json?          @map("contextjson")
+  createdAt    DateTime       @default(now()) @map("createdat")
+
+  @@index([runId])
+}
+
+// ===== MULTI-TENANCY =====
+
+model Account {
+  id           String    @id
+  name         String
+  plan         String    @default("STARTER")
+  email        String?
+  trialEndsAt  DateTime? @map("trialendsat")
+  billingStatus String?  @map("billingstatus")
+  paymentGraceUntil DateTime? @map("paymentgraceuntil")
+  addonIA      Boolean   @default(false) @map("addonia")
+  maxChannels  Int?      @default(5) @map("max_channels") @db.SmallInt
+  companyName  String?   @map("companyname")
+  phoneE164    String?   @map("phonee164")
+  billingEmail String?   @map("billingemail")
+  createdAt    DateTime  @default(now()) @map("createdat")
+  updatedAt    DateTime  @updatedAt @map("updatedat")
+
+  users              User[]
+  sources            FeedSource[]
+  feeds              Feed[]
+  platformConnections PlatformConnection[]
+  exportLogs         ExportLog[]
+  exportChannels     ExportChannel[]
+  rules              Rule[]
+  bulkEditOperations BulkEditOperation[]
+  billing            Billing?
+  onboardingProgress OnboardingProgress?
+  abTests            ABTest[]
+  channelScoringConfigs ChannelScoringConfig[]
+
+  @@index([plan])
+}
+
+model ChannelScoringConfig {
+  id                  String   @id @default(cuid())
+  accountId            String   @map("accountid")
+  channel             String   // GOOGLE_ADS, META_ADS, AMAZON, MIRAKL, SHOPIFY, OTHER
+  name                String
+  enabled             Boolean  @default(true)
+  qualityWeight       Decimal  @default(0.5) @map("qualityweight") // 0-1
+  performanceWeight   Decimal  @default(0.5) @map("performanceweight") // 0-1
+  performanceMetrics  Json     @default("{}") @map("performancemetrics")
+  period              String   @default("LAST_30_DAYS")
+  createdAt           DateTime @default(now()) @map("createdat")
+  updatedAt           DateTime @updatedAt @map("updatedat")
+
+  account             Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, channel])
+  @@index([accountId])
+  @@index([channel])
+  @@map("channel_scoring_config")
+}
+
+model Billing {
+  id                   String    @id @default(cuid())
+  accountId             String    @unique @map("accountid")
+  companyName           String    @map("companyname")
+  siret                 String?
+  siren                 String?
+  vatNumber             String?   @map("vatnumber")
+  addressLine1          String    @map("addressline1")
+  addressLine2          String?   @map("addressline2")
+  postalCode            String    @map("postalcode")
+  city                  String
+  country               String    @default("FR")
+  billingEmail          String    @map("billingemail")
+  stripeCustomerId      String?   @map("stripe_customer_id")
+  stripeSubscriptionId  String?   @map("stripe_subscription_id")
+  createdAt             DateTime  @default(now()) @map("createdat")
+  updatedAt             DateTime  @updatedAt @map("updatedat")
+
+  account               Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model OnboardingProgress {
+  id            String   @id @default(cuid())
+  accountId     String   @unique @map("accountid")
+  currentStep   String   @default("welcome") @map("currentstep")
+  completedSteps Json    @default("[]") @map("completedsteps")
+  collectedData  Json    @default("{}") @map("collecteddata")
+  updatedAt     DateTime @updatedAt @map("updatedat")
+
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model ExportChannel {
+  id         String   @id @default(cuid())
+  accountId  String   @map("accountid")
+  platform   String
+  channelKey String   @map("channelkey")
+  label      String
+  config     Json     @default("{}")
+  isActive   Boolean  @default(true) @map("isactive")
+  createdAt  DateTime @default(now()) @map("createdat")
+  updatedAt  DateTime @updatedAt @map("updatedat")
+
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, platform, channelKey])
+  @@index([accountId])
+  @@index([platform])
+}
+
+// ===== MOTEUR DE RÈGLES & HISTORISATION =====
+
+model Rule {
+  id             String    @id @default(cuid())
+  accountId      String    @map("accountid")
+  name           String
+  conditionJson  Json       @default("{}") @map("conditionjson")
+  actionJson     Json       @default("{}") @map("actionjson")
+  feedIds        Json       @default("[]") @map("feedids")
+  channelIds     Json       @default("[]") @map("channelids")
+  startDate      DateTime?  @map("startdate")
+  endDate        DateTime?  @map("enddate")
+  runOnIngestion Boolean   @default(true) @map("runoningestion")
+  priority       Int        @default(0)
+  isActive       Boolean   @default(true) @map("isactive")
+  createdAt      DateTime  @default(now()) @map("createdat")
+  updatedAt      DateTime  @updatedAt @map("updatedat")
+
+  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  abTests        ABTest[]
+
+  @@index([accountId])
+  @@index([isActive])
+}
+
+model FeedItemRevision {
+  id           String   @id @default(cuid())
+  feedItemId   String   @map("feeditemid")
+  snapshotJson Json     @map("snapshotjson")
+  source       String   // ingestion | rule | bulk_edit | manual | restore
+  operationId String?  @map("operationid")
+  createdAt    DateTime @default(now()) @map("createdat")
+
+  feedItem     FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+
+  @@index([feedItemId])
+  @@index([createdAt])
+  @@index([operationId])
+}
+
+model BulkEditOperation {
+  id          String   @id @default(cuid())
+  accountId   String   @map("accountid")
+  feedId      String?  @map("feedid")
+  changesJson Json     @map("changesjson")
+  itemCount   Int      @default(0) @map("itemcount")
+  createdAt   DateTime @default(now()) @map("createdat")
+
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([createdAt])
+}
+
+model User {
+  id                String    @id
+  email             String    @unique
+  password          String?
+  firstName         String    @default("") @map("firstname")
+  lastName          String    @default("") @map("lastname")
+  role              String    @default("OWNER")
+  accountId         String    @map("accountid")
+  provider          String    @default("local")
+  providerId        String?   @map("providerid")
+  resetToken        String?   @map("resettoken")
+  resetTokenExpiry  DateTime? @map("resettokenexpiry")
+  status            String    @default("ACTIVE")
+  lastLoginAt       DateTime? @map("lastloginat")
+  createdAt         DateTime  @default(now()) @map("createdat")
+  updatedAt         DateTime  @updatedAt @map("updatedat")
+
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([accountId])
+}
+
+model PlatformConnection {
+  id            String    @id
+  accountId     String    @map("accountid")
+  platform      String
+  merchantId    String?   @map("merchantid")
+  accessToken   String?   @map("accesstoken")
+  refreshToken  String?   @map("refreshtoken")
+  tokenExpiry   DateTime? @map("tokenexpiry")
+  email         String?
+  status        String    @default("active")
+  metadata      Json      @default("{}")
+  createdAt     DateTime  @default(now()) @map("createdat")
+  updatedAt     DateTime  @updatedAt @map("updatedat")
+
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, platform], name: "PlatformConnection_account_platform_key")
+  @@index([accountId])
+  @@index([platform])
+}
+
+model OAuthEphemeralState {
+  id        String   @id
+  provider  String
+  flow      String
+  payload   Json     @default("{}")
+  expiresAt DateTime @map("expiresat")
+  createdAt DateTime @default(now()) @map("createdat")
+
+  @@index([provider])
+  @@index([flow])
+  @@index([expiresAt])
+  @@map("oauth_ephemeral_state")
+}
+
+model SharedRateLimit {
+  scope        String
+  rateLimitKey String   @map("ratelimitkey")
+  hitCount     Int      @default(0) @map("hitcount")
+  resetAt      DateTime @map("resetat")
+  createdAt    DateTime @default(now()) @map("createdat")
+  updatedAt    DateTime @updatedAt @map("updatedat")
+
+  @@id([scope, rateLimitKey])
+  @@index([resetAt])
+  @@map("shared_rate_limits")
+}
+
+model ExportLog {
+  id            String   @id
+  accountId     String   @map("accountid")
+  feedId        String   @map("feedid")
+  platform      String
+  status        String   @default("pending")
+  totalProducts Int      @default(0) @map("totalproducts")
+  succeeded     Int      @default(0)
+  failed        Int      @default(0)
+  errorMessage  String?  @map("errormessage")
+  createdAt     DateTime @default(now()) @map("createdat")
+
+  account       Account  @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+  @@index([feedId])
+}
+
+// ===== TESTS A/B (témoin + variant, statistiquement cohérents) =====
+
+enum ABTestStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+enum ABTestArm {
+  CONTROL   // bras témoin (titre original)
+  VARIANT   // bras test (titre optimisé)
+}
+
+model ABTest {
+  id                String       @id @default(cuid())
+  accountId         String       @map("accountid")
+  ruleId            String?      @map("ruleid")   // si renseigné : test A/B sur cette règle (control = ne pas appliquer, variant = appliquer)
+  name              String
+  feedId            String?      @map("feedid")
+  fieldUnderTest    String       @default("title") @map("fieldundertest")
+  platform          String       // GMC, META, AMAZON, CHATGPT
+  status            ABTestStatus @default(DRAFT)
+  startDate        DateTime?    @map("startdate")
+  endDate          DateTime?    @map("enddate")
+  minDurationDays  Int          @default(14) @map("mindurationdays")
+  controlPercent   Int          @default(50) @map("controlpercent")
+  variantPercent   Int          @default(50) @map("variantpercent")
+  prerequisitesMet Boolean?     @map("prerequisitesmet")
+  resultSummary    Json?        @map("resultsummary")
+  createdAt        DateTime     @default(now()) @map("createdat")
+  updatedAt        DateTime     @updatedAt @map("updatedat")
+
+  account    Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  rule       Rule?               @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  assignments ABTestAssignment[]
+
+  @@index([accountId])
+  @@index([status])
+  @@index([platform])
+  @@index([ruleId])
+  @@map("ab_test")
+}
+
+model ABTestAssignment {
+  id           String    @id @default(cuid())
+  testId       String    @map("testid")
+  itemId       String    @map("itemid")
+  arm         ABTestArm
+  variantValue String?   @map("variantvalue") // titre optimisé pour arm=VARIANT
+  createdAt   DateTime  @default(now()) @map("createdat")
+
+  test ABTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, itemId])
+  @@index([testId])
+  @@index([itemId])
+  @@map("ab_test_assignment")
+}

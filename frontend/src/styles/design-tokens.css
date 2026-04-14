@@ -1,0 +1,121 @@
+/**
+ * Design tokens FeedPlug – dashboard
+ * Socle visuel unique pour réduire la dispersion des styles page par page.
+ */
+:root {
+  --app-bg: #ffffff;
+  --app-panel: #ffffff;
+  --app-panel-strong: #ffffff;
+  --app-border: rgba(15, 23, 42, 0.09);
+  --app-border-strong: rgba(15, 23, 42, 0.14);
+  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --app-shadow-md: 0 14px 34px rgba(15, 23, 42, 0.06);
+  --app-shadow-lg: 0 22px 60px rgba(15, 23, 42, 0.08);
+  --app-text: #132218;
+  --app-text-muted: #5f6f65;
+  --app-text-soft: #7d8c82;
+  --app-accent: #0f766e;
+  --app-accent-strong: #115e59;
+  --app-accent-soft: #e0f2ee;
+  --app-danger: #dc2626;
+  --app-danger-soft: #fef2f2;
+
+  /* Page container */
+  --page-padding-x: 40px;
+  --page-padding-y: 32px;
+  --page-max-width: 1440px;
+  --page-content-gap: 24px;
+
+  /* Page header */
+  --page-title-size: 30px;
+  --page-title-weight: 600;
+  --page-title-color: var(--app-text);
+  --page-subtitle-size: 15px;
+  --page-subtitle-color: var(--app-text-muted);
+  --page-header-margin-bottom: 28px;
+
+  /* Cards */
+  --card-border: 1px solid var(--app-border);
+  --card-radius: 18px;
+  --card-padding: 24px;
+  --card-bg: var(--app-panel);
+  --card-shadow: var(--app-shadow-sm);
+
+  /* Buttons */
+  --btn-height: 42px;
+  --btn-padding-x: 16px;
+  --btn-primary-bg: var(--app-text);
+  --btn-primary-bg-hover: #1e3124;
+  --btn-primary-color: #fff;
+  --btn-primary-radius: 12px;
+  --btn-secondary-border: 1px solid var(--app-border);
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-bg-hover: #fafafa;
+  --btn-secondary-color: var(--app-text);
+  --btn-secondary-radius: 12px;
+
+  /* Alerts */
+  --alert-error-bg: var(--app-danger-soft);
+  --alert-error-border: #fecaca;
+  --alert-error-color: #b91c1c;
+  --alert-success-bg: #f0fdf4;
+  --alert-success-border: #bbf7d0;
+  --alert-success-color: #15803d;
+  --alert-warning-bg: #fffbeb;
+  --alert-warning-border: #fde68a;
+  --alert-warning-color: #b45309;
+
+  /* Loading */
+  --spinner-size: 40px;
+  --spinner-color: var(--app-accent);
+  --spinner-track: #dbe4dd;
+
+  /* Empty state */
+  --empty-state-padding: 48px;
+  --empty-state-icon-color: #9aa9a0;
+  --empty-state-text: var(--app-text-muted);
+  --empty-state-title: var(--app-text);
+
+  /* Tables */
+  --table-border: 1px solid var(--app-border);
+  --table-header-bg: #f7f7f7;
+  --table-header-fw: 600;
+  --table-cell-padding: 13px 16px;
+  --table-radius: 16px;
+
+  /* Section spacing */
+  --section-gap: 28px;
+  --section-title-size: 18px;
+  --section-title-fw: 600;
+  --section-title-color: var(--app-text);
+
+  /* Status badges */
+  --badge-success-bg: #dcfce7;
+  --badge-success-color: #15803d;
+  --badge-error-bg: #fee2e2;
+  --badge-error-color: #b91c1c;
+  --badge-warning-bg: #fef3c7;
+  --badge-warning-color: #b45309;
+  --badge-neutral-bg: #f3f4f6;
+  --badge-neutral-color: #5f6f65;
+  --badge-radius: 999px;
+  --badge-padding: 4px 10px;
+  --badge-font-size: 12px;
+  --badge-fw: 600;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --page-padding-x: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --page-padding-x: 18px;
+    --page-padding-y: 24px;
+    --page-title-size: 24px;
+    --card-padding: 18px;
+    --empty-state-padding: 32px;
+  }
+}

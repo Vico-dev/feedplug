@@ -1,15 +1,16 @@
 import { vi } from 'vitest';
 
-global.ResizeObserver = class ResizeObserver {
+(global as Record<string, unknown>).ResizeObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
 };
 
-global.IntersectionObserver = class IntersectionObserver {
+(global as Record<string, unknown>).IntersectionObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
+  takeRecords() { return []; }
 };
 
 HTMLCanvasElement.prototype.getContext = vi.fn();

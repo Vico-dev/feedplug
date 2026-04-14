@@ -15,7 +15,8 @@
     "ci": "npm run prisma:generate && npm run check:syntax && npm run test",
     "secrets:encrypt-existing": "node scripts/encrypt-existing-secrets.js",
     "cost-per-client": "node scripts/cost-per-client.js",
-    "cout-previsionnel": "node scripts/cout-previsionnel.js"
+    "cout-previsionnel": "node scripts/cout-previsionnel.js",
+    "stripe:import": "node scripts/import-stripe-products.js"
   },
   "dependencies": {
     "@fal-ai/client": "^1.9.5",

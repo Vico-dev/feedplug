@@ -1,0 +1,426 @@
+{
+  "productId": "prod_UKfLAwFoi44fky",
+  "prices": [
+    {
+      "tier": 100,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00VQ8WO9CgnnOQCKVvvMt",
+      "amount": 39
+    },
+    {
+      "tier": 100,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00VQ8WO9CgnnOY2SumlXz",
+      "amount": 88
+    },
+    {
+      "tier": 100,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00VQ8WO9CgnnOEAn3T2gw",
+      "amount": 49
+    },
+    {
+      "tier": 100,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00WQ8WO9CgnnOZk9rU8Kn",
+      "amount": 98
+    },
+    {
+      "tier": 100,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00WQ8WO9CgnnOKpmwBzCm",
+      "amount": 59
+    },
+    {
+      "tier": 100,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00WQ8WO9CgnnOaRuB7su5",
+      "amount": 108
+    },
+    {
+      "tier": 100,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00XQ8WO9CgnnOKbIOSCaa",
+      "amount": 69
+    },
+    {
+      "tier": 100,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00XQ8WO9CgnnO24mzpYJa",
+      "amount": 118
+    },
+    {
+      "tier": 100,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00XQ8WO9CgnnOFKC8SlAh",
+      "amount": 79
+    },
+    {
+      "tier": 100,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00YQ8WO9CgnnOwRP5dCgZ",
+      "amount": 128
+    },
+    {
+      "tier": 500,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00YQ8WO9CgnnOWdzYTXIi",
+      "amount": 79
+    },
+    {
+      "tier": 500,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00ZQ8WO9CgnnOEApTOBxM",
+      "amount": 128
+    },
+    {
+      "tier": 500,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00ZQ8WO9CgnnOqYrkAwwM",
+      "amount": 99
+    },
+    {
+      "tier": 500,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00aQ8WO9CgnnOSRBN6zPr",
+      "amount": 148
+    },
+    {
+      "tier": 500,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00aQ8WO9CgnnOxQbg2H64",
+      "amount": 119
+    },
+    {
+      "tier": 500,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00aQ8WO9CgnnOesyG4wyV",
+      "amount": 168
+    },
+    {
+      "tier": 500,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00bQ8WO9CgnnOVF7QzGbw",
+      "amount": 139
+    },
+    {
+      "tier": 500,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00bQ8WO9CgnnOu3qMf4j1",
+      "amount": 188
+    },
+    {
+      "tier": 500,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00bQ8WO9CgnnOZFBm9w3M",
+      "amount": 159
+    },
+    {
+      "tier": 500,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00cQ8WO9CgnnOSlCQoLUG",
+      "amount": 208
+    },
+    {
+      "tier": 1000,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00cQ8WO9CgnnOEXXq6sdq",
+      "amount": 129
+    },
+    {
+      "tier": 1000,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00dQ8WO9CgnnOdOwTZQqE",
+      "amount": 178
+    },
+    {
+      "tier": 1000,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00dQ8WO9CgnnOnHyXv2iv",
+      "amount": 159
+    },
+    {
+      "tier": 1000,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00eQ8WO9CgnnOu8AxD6rj",
+      "amount": 208
+    },
+    {
+      "tier": 1000,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00eQ8WO9CgnnO0BbJ7e63",
+      "amount": 189
+    },
+    {
+      "tier": 1000,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00eQ8WO9CgnnOBO7RX649",
+      "amount": 238
+    },
+    {
+      "tier": 1000,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00fQ8WO9CgnnOsvB8Tx2P",
+      "amount": 219
+    },
+    {
+      "tier": 1000,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00fQ8WO9CgnnOpsxCyApg",
+      "amount": 268
+    },
+    {
+      "tier": 1000,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00fQ8WO9CgnnOMWghfu45",
+      "amount": 249
+    },
+    {
+      "tier": 1000,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00gQ8WO9CgnnOAl6xcK8o",
+      "amount": 298
+    },
+    {
+      "tier": 2500,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00gQ8WO9CgnnOiK2hoWIT",
+      "amount": 199
+    },
+    {
+      "tier": 2500,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00gQ8WO9CgnnOzFU6iXGy",
+      "amount": 248
+    },
+    {
+      "tier": 2500,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00hQ8WO9CgnnOLT3EsLBE",
+      "amount": 249
+    },
+    {
+      "tier": 2500,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00hQ8WO9CgnnOBRNFUXKD",
+      "amount": 298
+    },
+    {
+      "tier": 2500,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00hQ8WO9CgnnObxs47lI2",
+      "amount": 299
+    },
+    {
+      "tier": 2500,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00iQ8WO9CgnnO5pauYqJn",
+      "amount": 348
+    },
+    {
+      "tier": 2500,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00iQ8WO9CgnnO5xefSJCZ",
+      "amount": 349
+    },
+    {
+      "tier": 2500,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00jQ8WO9CgnnOx6W8dRA5",
+      "amount": 398
+    },
+    {
+      "tier": 2500,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00jQ8WO9CgnnOeEyDEWSH",
+      "amount": 399
+    },
+    {
+      "tier": 2500,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00jQ8WO9CgnnOsw2NOeVi",
+      "amount": 448
+    },
+    {
+      "tier": 10000,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00kQ8WO9CgnnOvZO1DJIQ",
+      "amount": 299
+    },
+    {
+      "tier": 10000,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00kQ8WO9CgnnOGtGn2Odi",
+      "amount": 348
+    },
+    {
+      "tier": 10000,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00kQ8WO9CgnnOlrba4ksp",
+      "amount": 369
+    },
+    {
+      "tier": 10000,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00lQ8WO9CgnnOwHRBZrK7",
+      "amount": 418
+    },
+    {
+      "tier": 10000,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00lQ8WO9CgnnOQ653dvMg",
+      "amount": 439
+    },
+    {
+      "tier": 10000,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00mQ8WO9CgnnOuGq6pZqZ",
+      "amount": 488
+    },
+    {
+      "tier": 10000,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00mQ8WO9CgnnOzYt1Q5ku",
+      "amount": 509
+    },
+    {
+      "tier": 10000,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00mQ8WO9CgnnOKonmwRVY",
+      "amount": 558
+    },
+    {
+      "tier": 10000,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00nQ8WO9CgnnOi8aUqsuw",
+      "amount": 579
+    },
+    {
+      "tier": 10000,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00nQ8WO9CgnnO2rnRckeO",
+      "amount": 628
+    },
+    {
+      "tier": 50000,
+      "channels": 1,
+      "addonIA": false,
+      "priceId": "price_1TM00nQ8WO9CgnnOhky3YYxJ",
+      "amount": 449
+    },
+    {
+      "tier": 50000,
+      "channels": 1,
+      "addonIA": true,
+      "priceId": "price_1TM00oQ8WO9CgnnOoui1W5HF",
+      "amount": 498
+    },
+    {
+      "tier": 50000,
+      "channels": 2,
+      "addonIA": false,
+      "priceId": "price_1TM00oQ8WO9CgnnO1NRjyq78",
+      "amount": 549
+    },
+    {
+      "tier": 50000,
+      "channels": 2,
+      "addonIA": true,
+      "priceId": "price_1TM00pQ8WO9CgnnOkKUh9h96",
+      "amount": 598
+    },
+    {
+      "tier": 50000,
+      "channels": 3,
+      "addonIA": false,
+      "priceId": "price_1TM00pQ8WO9CgnnO8aPrbuEt",
+      "amount": 649
+    },
+    {
+      "tier": 50000,
+      "channels": 3,
+      "addonIA": true,
+      "priceId": "price_1TM00pQ8WO9CgnnO6kaU8su1",
+      "amount": 698
+    },
+    {
+      "tier": 50000,
+      "channels": 4,
+      "addonIA": false,
+      "priceId": "price_1TM00qQ8WO9CgnnOhYK4UpO1",
+      "amount": 749
+    },
+    {
+      "tier": 50000,
+      "channels": 4,
+      "addonIA": true,
+      "priceId": "price_1TM00qQ8WO9CgnnOyBfRigCa",
+      "amount": 798
+    },
+    {
+      "tier": 50000,
+      "channels": 5,
+      "addonIA": false,
+      "priceId": "price_1TM00rQ8WO9CgnnO3ZIYpZXh",
+      "amount": 849
+    },
+    {
+      "tier": 50000,
+      "channels": 5,
+      "addonIA": true,
+      "priceId": "price_1TM00rQ8WO9CgnnO7ZYZmCqV",
+      "amount": 898
+    }
+  ],
+  "updatedAt": "2026-04-14T05:59:53.923Z"
+}

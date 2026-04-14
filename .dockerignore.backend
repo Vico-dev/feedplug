@@ -1,0 +1,32 @@
+# Exclure le frontend lors du build du backend
+frontend/
+.git/
+.gitignore
+node_modules/
+dist/
+*.log
+.env
+.env.local
+.DS_Store
+*.md
+!README.md
+coverage/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclure les fichiers backend NestJS si présents
+backend/dist/
+backend/node_modules/
+src/
+
+# Garder uniquement ce qui est nécessaire pour server-minimal.js
+!server-minimal.js
+!package.json
+!package-lock.json
+!prisma/
+
+
+

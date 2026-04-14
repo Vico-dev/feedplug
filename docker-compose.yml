@@ -1,0 +1,135 @@
+# ===== DOCKER COMPOSE POUR FEEDPLUG =====
+version: '3.8'
+
+services:
+  # ===== BASE DE DONNÉES POSTGRESQL =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: feedplug-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: feedplug
+      POSTGRES_USER: feedplug
+      POSTGRES_PASSWORD: feedplug123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - feedplug-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedplug -d feedplug"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== REDIS POUR CACHE ET QUEUES =====
+  redis:
+    image: redis:7-alpine
+    container_name: feedplug-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - feedplug-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --requirepass feedplug123
+
+  # ===== APPLICATION FEEDPLUG =====
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: feedplug-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://feedplug:feedplug123@postgres:5432/feedplug?schema=public
+      REDIS_URL: redis://:feedplug123@redis:6379
+      JWT_SECRET: dev-only-secret-do-not-use-in-production
+      JWT_EXPIRES_IN: 7d
+      # Variables GCP (optionnelles pour le dev)
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/gcp-key.json
+      GCS_BUCKET_NAME: feedplug-dev
+      PUBSUB_TOPIC: feedplug-events
+      # Variables Pennylane (optionnelles pour le dev)
+      PENNYLANE_API_URL: https://api.pennylane.com
+      PENNYLANE_API_KEY: your-pennylane-api-key
+      # Variables IA (optionnelles pour le dev)
+      GEMINI_API_KEY: your-gemini-api-key
+      MISTRAL_API_KEY: your-mistral-api-key
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    networks:
+      - feedplug-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run start:dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===== PGADMIN POUR GESTION BASE DE DONNÉES =====
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: feedplug-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@feedplug.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - feedplug-network
+    depends_on:
+      - postgres
+
+  # ===== REDIS COMMANDER POUR GESTION REDIS =====
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: feedplug-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:feedplug123
+    ports:
+      - "8081:8081"
+    networks:
+      - feedplug-network
+    depends_on:
+      - redis
+
+# ===== VOLUMES PERSISTANTS =====
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# ===== RÉSEAU =====
+networks:
+  feedplug-network:
+    driver: bridge

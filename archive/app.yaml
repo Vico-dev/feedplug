@@ -1,0 +1,34 @@
+runtime: nodejs20
+service: default
+env: standard
+
+# Configuration des instances
+automatic_scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+# Configuration des ressources
+resources:
+  cpu: 1
+  memory_gb: 1
+
+# Variables d'environnement
+# IMPORTANT: Les secrets (DATABASE_URL, JWT_SECRET) doivent être injectés via GCP Secret Manager
+# Ne JAMAIS mettre de vrais secrets dans ce fichier.
+# Voir: https://cloud.google.com/run/docs/configuring/secrets
+env_variables:
+  NODE_ENV: production
+  PORT: 8080
+  CORS_ORIGIN: https://feedplug-frontend-771607738477.europe-west1.run.app
+  # DATABASE_URL et JWT_SECRET doivent être configurés via Secret Manager dans la console GCP
+
+# Configuration Cloud SQL
+beta_settings:
+  cloud_sql_instances: feedplug-prod:europe-west1:feedplug-db
+
+# Configuration de sécurité (VPC retiré pour simplifier)
+
+
+
+

@@ -1,0 +1,28 @@
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps && npm cache clean --force
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+# Requis au build pour les usages SSR/server-only de l'API backend.
+ARG BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com
+ENV BACKEND_API_URL=$BACKEND_API_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+COPY --from=builder /app .
+EXPOSE 3000
+# Utilise le start custom qui respecte PORT (start.js déjà présent dans le repo)
+CMD ["node", "start.cjs"]
+
+

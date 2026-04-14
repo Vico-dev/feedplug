@@ -1,0 +1,26 @@
+{
+  "name": "feedplug",
+  "version": "1.0.0",
+  "description": "Workspace FeedPlug (frontend Next.js + backend Express/Prisma)",
+  "author": "FeedPlug Team",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "test:e2e:frontend": "npm run test:e2e --prefix frontend",
+    "dev:backend": "npm run start --prefix backend-marketing",
+    "test:backend": "npm run test --prefix backend-marketing",
+    "ci:backend": "npm run ci --prefix backend-marketing",
+    "ci": "npm run lint:frontend && npm run build:frontend && npm run ci:backend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "docker:logs": "docker-compose logs -f app",
+    "docker:shell": "docker-compose exec app sh",
+    "docker:db": "docker-compose exec postgres psql -U feedplug -d feedplug",
+    "docker:redis": "docker-compose exec redis redis-cli",
+    "docker:clean": "docker-compose down -v --remove-orphans && docker system prune -f"
+  }
+}

@@ -1,0 +1,79 @@
+steps:
+  # Build l'image Docker avec le Dockerfile du backend-marketing
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile', '-t', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID', '.']
+    dir: 'backend-marketing'
+  
+  # Push l'image vers Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID']
+  
+  # Déployer sur Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'feedplug-backend-marketing'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '1'
+      - '--cpu-throttling'
+      - '--max-instances'
+      - '10'
+      - '--timeout'
+      - '300'
+      # Scale à zéro quand pas de trafic (réduit les coûts). Premier appel après inactivité = cold start ~5-15 s.
+      - '--min-instances'
+      - '0'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,CORS_ORIGIN=https://app.feedplug.com,APP_URL=https://app.feedplug.com,API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,EMAIL_FROM=FeedPlug <noreply@feedplug.com>,MARKETING_REPLY_TO=hello@feedplug.com,RESEND_AUDIENCE_ID=18689648-4319-4fa5-a78b-2b332d4e7429,SHOPIFY_CALLBACK_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/connectors/shopify/callback,GOOGLE_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback,STRIPE_PRICE_STARTER=,STRIPE_PRICE_PROFESSIONAL=price_1T161cQ8WO9CgnnOY6LOv3Va,STRIPE_PRICE_ENTERPRISE=,LIFESTYLE_IMAGE_PROVIDER=vertex,GOOGLE_CLOUD_PROJECT=feedplug-prod,GOOGLE_CLOUD_LOCATION=europe-west1,GOOGLE_CLOUD_LOCATION_IMAGE=global,GOOGLE_GENAI_USE_VERTEXAI=true'
+      - '--update-secrets'
+      - 'JWT_SECRET=jwt-secret:latest,SECRET_ENCRYPTION_KEY=secret-encryption-key:latest,FEEDPLUG_SECRET_ENCRYPTION_KEY=secret-encryption-key:latest,DATABASE_URL=database-url-marketing:latest,GEMINI_API_KEY=feedplug-gemini-api-key:latest,STRIPE_SECRET_KEY=stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=stripe-webhook-secret:latest,FAL_KEY=FAL_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest,SHOPIFY_API_KEY=shopify-api-key:latest,SHOPIFY_API_SECRET=shopify-api-secret:latest,SCHEDULER_SECRET=scheduler-secret:latest,RESEND_API_KEY=resend-api-key:latest'
+
+  # Vérification CORS après déploiement : OPTIONS doit renvoyer 204 (sinon le front ne peut pas appeler l'API).
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        API_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app"
+        echo "Health check..."
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$API_URL/health" || echo "000")
+        [ "$$STATUS" = "200" ] || { echo "Health failed: $$STATUS"; exit 1; }
+        echo "OPTIONS (CORS preflight)..."
+        OPT_STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS "$$API_URL/api/v1/performance/dashboard" \
+          -H "Origin: https://app.feedplug.com" \
+          -H "Access-Control-Request-Method: GET" \
+          -H "Access-Control-Request-Headers: Content-Type, Authorization" || echo "000")
+        if [ "$$OPT_STATUS" != "204" ]; then
+          echo "CORS preflight failed: got $$OPT_STATUS (expected 204). Frontend will not be able to call the API."
+          exit 1
+        fi
+        echo "Smoke test OK (health=200, OPTIONS=204)."
+
+  # Garantir que 100 % du trafic va vers la révision qu'on vient de déployer (évite qu'une ancienne révision sans les derniers secrets/config continue de servir).
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - 'feedplug-backend-marketing'
+      - '--region=europe-west1'
+      - '--to-latest'
+      - '--project=$PROJECT_ID'
+
+images:
+  - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID'

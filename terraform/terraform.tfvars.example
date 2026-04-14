@@ -1,0 +1,19 @@
+# Configuration Terraform pour FeedPlug
+# Copiez ce fichier vers terraform.tfvars et remplissez les valeurs
+
+project_id   = "your-gcp-project-id"
+region       = "europe-west1"
+environment  = "staging"
+
+# Cloud SQL: ne jamais utiliser 0.0.0.0/0 en production.
+# Préférer le connecteur Cloud SQL / IP privée. En staging, ajouter une IP précise si nécessaire.
+cloud_sql_authorized_networks = []
+
+# SLO 99,99 % — URL du health check (obligatoire si l'API prod est backend-marketing)
+# GCP → Cloud Run → feedplug-backend-marketing → URL du service + /api/v1/health
+# health_check_url = "https://feedplug-backend-marketing-XXXXX.europe-west1.run.app/api/v1/health"
+
+# Secrets (à configurer dans Secret Manager)
+db_password       = "your-secure-db-password"
+jwt_secret        = "your-super-secret-jwt-key"
+pennylane_api_key = "your-pennylane-api-key"

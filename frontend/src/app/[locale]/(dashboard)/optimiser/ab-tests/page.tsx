@@ -190,45 +190,79 @@ export default function ABTestsPage() {
       />
 
       {/* Hero */}
-      <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-8 text-white mb-8">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-8">
-          <div className="flex-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 text-sm font-medium mb-4">
+      <div style={{
+        background: "linear-gradient(135deg, #0f766e 0%, #115e59 100%)",
+        borderRadius: "var(--card-radius)",
+        padding: 28,
+        marginBottom: 24,
+        color: "white",
+      }}>
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 24,
+        }}>
+          <div>
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.2)",
+              fontSize: 13,
+              marginBottom: 12,
+            }}>
               <Target size={14} />
               Data-driven optimization
             </div>
-            <h2 className="text-2xl font-bold mb-3">Testez, mesurez, améliorez</h2>
-            <p className="text-white/90 text-sm leading-relaxed max-w-xl mb-6">
+            <h2 style={{ margin: "0 0 8px", fontSize: 24, fontWeight: 700 }}>
+              Testez, mesurez, améliorez
+            </h2>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, opacity: 0.9, maxWidth: 560 }}>
               Créez des variantes de vos titles, descriptions ou images. 
               FeedPlug divise automatiquement votre trafic et vous montre 
               quelle version génère le plus de performances.
             </p>
-            <Button onClick={() => setShowCreateModal(true)} className="bg-white text-indigo-600 hover:bg-white/90 font-semibold">
+            <Button 
+              onClick={() => setShowCreateModal(true)} 
+              style={{
+                marginTop: 20,
+                backgroundColor: "white",
+                color: "var(--app-accent)",
+                fontWeight: 600,
+              }}
+            >
               <Plus size={16} />
               Nouveau test
             </Button>
           </div>
 
           {/* Visual Example */}
-          <div className="w-full lg:w-96 bg-white/10 backdrop-blur rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-green-300" />
-              <span className="text-sm font-medium">Exemple d&apos;impact</span>
+          <div style={{
+            backgroundColor: "rgba(255,255,255,0.1)",
+            backdropFilter: "blur(10px)",
+            borderRadius: 16,
+            padding: 20,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <TrendingUp size={18} style={{ color: "#86efac" }} />
+              <span style={{ fontSize: 14, fontWeight: 500 }}>Exemple d&apos;impact</span>
             </div>
-            <div className="flex gap-4">
-              <div className="flex-1 bg-white/10 rounded-xl p-4">
-                <div className="text-xs text-white/60 mb-2">Contrôle A</div>
-                <div className="font-semibold text-sm">Air Max 90</div>
-                <div className="text-xs text-white/60 mt-1">124€</div>
+            <div style={{ display: "flex", gap: 16 }}>
+              <div style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 16 }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 6 }}>Contrôle A</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Air Max 90</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>124€</div>
               </div>
-              <div className="flex items-center text-white/40 text-2xl">vs</div>
-              <div className="flex-1 bg-green-500/30 rounded-xl p-4 border border-green-400/50">
-                <div className="flex items-center gap-1.5 text-xs text-green-300 mb-2">
+              <div style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.4)", fontSize: 18 }}>vs</div>
+              <div style={{ flex: 1, backgroundColor: "rgba(52,211,153,0.3)", borderRadius: 12, padding: 16, border: "1px solid rgba(52,211,153,0.5)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#86efac", marginBottom: 6 }}>
                   <Sparkles size={10} />
                   Variante B
                 </div>
-                <div className="font-semibold text-sm">Nike Air Max 90 Premium</div>
-                <div className="text-xs text-white/60 mt-1">+23% CTR</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Nike Air Max 90 Premium</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>+23% CTR</div>
               </div>
             </div>
           </div>
