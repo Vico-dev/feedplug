@@ -514,7 +514,6 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
         cancel_url: cancelUrl || `${APP_URL}/choose-plan?checkout=cancelled`,
         subscription_data: {
           metadata: subscriptionMetadata,
-          trial_period_days: 0,
         },
         metadata: subscriptionMetadata,
       });
