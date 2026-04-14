@@ -521,8 +521,22 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
 
       res.json({ url: session.url, sessionId: session.id });
     } catch (e) {
-      console.error('Stripe checkout error:', e);
-      res.status(500).json({ message: e.message || 'Erreur Stripe' });
+      console.error('[BILLING] Stripe checkout error:', {
+        message: e.message,
+        type: e.type,
+        code: e.code,
+        param: e.param,
+        detail: e.detail,
+        stripeError: e.type ? {
+          type: e.type,
+          message: e.message,
+          code: e.code,
+          param: e.param,
+          detail: e.detail,
+          Decline_code: e.decline_code
+        } : undefined
+      });
+      res.status(500).json({ message: e.message || 'Erreur Stripe', code: e.code });
     }
   });
 
