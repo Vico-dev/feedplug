@@ -243,7 +243,7 @@ export function OnboardingTour() {
       title: 'Intelligence Artificielle',
       description: 'Optimisez vos flux avec l\'IA',
       icon: <Settings style={{ width: '24px', height: '24px', color: FEEDPLUG_BLACK }} />,
-      redirectTo: '/optimiser/ia',
+      redirectTo: '/optimiser',
       content: (
         <div style={{ padding: '16px 0' }}>
           <p style={{ fontSize: '16px', color: FEEDPLUG_BLACK, margin: '0 0 16px 0' }}>

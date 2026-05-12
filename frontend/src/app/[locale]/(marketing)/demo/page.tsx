@@ -15,6 +15,7 @@ import {
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import { apiClient } from "@/lib/api";
 import { trackEvent } from "@/components/analytics/GoogleAnalytics";
+import TurnstileWidget from "@/components/auth/turnstile-widget";
 
 type DemoFormState = {
   firstName: string;
@@ -332,6 +333,11 @@ export default function DemoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [formStartedAt] = useState(() => Date.now());
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const captchaEnabled = turnstileSiteKey.length > 0;
 
   const leadSource = useMemo<LeadSource>(() => {
     const source = (searchParams.get("source") || "").trim().toLowerCase();
@@ -363,6 +369,7 @@ export default function DemoPage() {
     form.firstName.trim().length > 0 &&
     form.company.trim().length > 0 &&
     form.email.trim().length > 0 &&
+    (!captchaEnabled || !!captchaToken) &&
     !submitting;
 
   useEffect(() => {
@@ -376,6 +383,18 @@ export default function DemoPage() {
     setSubmitting(true);
     setError("");
 
+    if (captchaEnabled && !captchaToken) {
+      setError(
+        locale === "en"
+          ? "Please validate the anti-spam check before sending your request."
+          : locale === "es"
+            ? "Valida la verificacion anti-spam antes de enviar tu solicitud."
+            : "Merci de valider la verification anti-spam avant d'envoyer votre demande."
+      );
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await apiClient.post("/marketing/early-access", {
         firstName: form.firstName.trim(),
@@ -384,6 +403,9 @@ export default function DemoPage() {
         jobTitle: form.jobTitle.trim(),
         locale,
         source: leadSource,
+        captchaToken: captchaToken || undefined,
+        companyWebsite,
+        formStartedAt,
       });
 
       trackEvent("generate_lead", {
@@ -684,6 +706,24 @@ export default function DemoPage() {
                   </p>
 
                   <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+                    <input
+                      type="text"
+                      name="website"
+                      value={companyWebsite}
+                      onChange={(event) => setCompanyWebsite(event.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute",
+                        left: "-10000px",
+                        top: "auto",
+                        width: "1px",
+                        height: "1px",
+                        opacity: 0,
+                        pointerEvents: "none",
+                      }}
+                    />
                     <Field
                       label={content.firstName}
                       value={form.firstName}
@@ -705,6 +745,22 @@ export default function DemoPage() {
                       value={form.jobTitle}
                       onChange={(jobTitle) => setForm((current) => ({ ...current, jobTitle }))}
                     />
+
+                    {captchaEnabled ? (
+                      <div
+                        style={{
+                          borderRadius: 16,
+                          border: "1px solid #e5e7eb",
+                          backgroundColor: "#f8fafc",
+                          padding: "14px 16px",
+                        }}
+                      >
+                        <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#475569" }}>
+                          {locale === "en" ? "Anti-spam check" : locale === "es" ? "Verificacion anti-spam" : "Verification anti-spam"}
+                        </div>
+                        <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />
+                      </div>
+                    ) : null}
 
                     {error ? (
                       <div

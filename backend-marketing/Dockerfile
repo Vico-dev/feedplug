@@ -14,6 +14,7 @@ COPY optimization ./optimization/
 COPY enrichment ./enrichment/
 COPY ai ./ai/
 COPY email ./email/
+COPY config ./config/
 COPY domains ./domains/
 COPY lib ./lib/
 COPY rules ./rules/

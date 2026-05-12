@@ -183,6 +183,7 @@ interface RuleModalProps {
   rule: Rule | null;
   feeds: { id: string; name: string }[];
   channels: { key: string; label: string }[];
+  destinations: { id: string; label: string; platformKey: string }[];
 }
 
 interface ApiError {
@@ -223,6 +224,20 @@ interface FieldPickerProps {
   options?: FieldOption[];
   placeholder?: string;
   className?: string;
+}
+
+function resolveAbTestPlatform(
+  channels: { key: string; label: string }[],
+  destinations: { id: string; label: string; platformKey: string }[],
+  channelIds: string[] = [],
+  destinationIds: string[] = [],
+): string {
+  if (channelIds.length > 0) return channelIds[0];
+  const destinationPlatform = destinations.find((destination) => destination.id === destinationIds[0])?.platformKey;
+  if (!destinationPlatform) return channels[0]?.key || "";
+  const directMatch = channels.find((channel) => channel.key === destinationPlatform)?.key;
+  if (directMatch) return directMatch;
+  return channels.find((channel) => channel.key.startsWith(`${destinationPlatform}_`))?.key || destinationPlatform;
 }
 
 function humanizeField(field: string) {
@@ -450,6 +465,7 @@ export function RuleModal({
   rule,
   feeds,
   channels,
+  destinations,
 }: RuleModalProps) {
   const [name, setName] = useState("");
   const [conditionJson, setConditionJson] = useState<ConditionJson>({
@@ -462,6 +478,7 @@ export function RuleModal({
   });
   const [feedIds, setFeedIds] = useState<string[]>([]);
   const [channelIds, setChannelIds] = useState<string[]>([]);
+  const [destinationIds, setDestinationIds] = useState<string[]>([]);
   const [runOnIngestion, setRunOnIngestion] = useState(true);
   const [priority, setPriority] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -492,11 +509,12 @@ export function RuleModal({
       setActionJson(rule.actionJson || { type: "set_value", params: { field: "title", value: "" } });
       setFeedIds(rule.feedIds || []);
       setChannelIds(rule.channelIds || []);
+      setDestinationIds(rule.destinationIds || []);
       setRunOnIngestion(rule.runOnIngestion !== false);
       setPriority(rule.priority ?? 0);
       setCreateAbTest(false);
       setAbTestName(rule.name ? `${rule.name} – A/B` : "");
-      setAbTestPlatform(rule.channelIds?.[0] || channels[0]?.key || "");
+      setAbTestPlatform(resolveAbTestPlatform(channels, destinations, rule.channelIds || [], rule.destinationIds || []));
       setAbTestControlPercent(50);
       setAbTestVariantPercent(50);
     } else {
@@ -505,11 +523,12 @@ export function RuleModal({
       setActionJson({ type: "set_value", params: { field: "title", value: "" } });
       setFeedIds([]);
       setChannelIds([]);
+      setDestinationIds([]);
       setRunOnIngestion(true);
       setPriority(0);
       setCreateAbTest(false);
       setAbTestName("");
-      setAbTestPlatform(channels[0]?.key || "");
+      setAbTestPlatform(resolveAbTestPlatform(channels, destinations));
       setAbTestControlPercent(50);
       setAbTestVariantPercent(50);
     }
@@ -517,15 +536,15 @@ export function RuleModal({
     setCurrentStep(1);
     setError(null);
     setPreviewData(null);
-  }, [rule, open, channels]);
+  }, [channels, destinations, open, rule]);
 
   const stepSummary = useMemo(() => {
     return {
       when: conditionSummary(conditionJson),
       action: actionSummary(actionJson),
-      scope: `${feedIds.length > 0 ? `${feedIds.length} flux` : "tous les flux"} · ${channelIds.length > 0 ? `${channelIds.length} canaux` : "tous les canaux"}`,
+      scope: `${feedIds.length > 0 ? `${feedIds.length} flux` : "tous les flux"} · ${channelIds.length > 0 ? `${channelIds.length} canaux` : "tous les canaux"} · ${destinationIds.length > 0 ? `${destinationIds.length} destinations` : "toutes les destinations"}`,
     };
-  }, [actionJson, channelIds.length, conditionJson, feedIds.length]);
+  }, [actionJson, channelIds.length, conditionJson, destinationIds.length, feedIds.length]);
 
   const availableFieldOptions = useMemo(() => {
     const merged = new Map(FIELD_OPTIONS.map((field) => [field.value, field]));
@@ -593,6 +612,10 @@ export function RuleModal({
     };
   }, [feedIds, open]);
 
+  useEffect(() => {
+    setAbTestPlatform(resolveAbTestPlatform(channels, destinations, channelIds, destinationIds));
+  }, [channelIds, channels, destinationIds, destinations]);
+
   const updateCondition = (index: number, updates: Partial<Rule["conditionJson"]["conditions"][0]>) => {
     setConditionJson((current) => ({
       ...current,
@@ -645,6 +668,7 @@ export function RuleModal({
         actionJson,
         feedIds,
         channelIds,
+        destinationIds,
         runOnIngestion,
         priority,
       });
@@ -686,12 +710,14 @@ export function RuleModal({
           actionJson,
           feedIds,
           channelIds,
+          destinationIds,
           runOnIngestion,
           priority,
         },
         limit: 5,
         feedId: feedIds[0],
         channelId: channelIds[0],
+        destinationId: destinationIds[0],
       });
       setPreviewData({
         affectedCount: response.data.affectedCount || 0,
@@ -1069,7 +1095,7 @@ export function RuleModal({
                   </p>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setFeedIds([])}
@@ -1098,9 +1124,23 @@ export function RuleModal({
                       Pas de canal spécifique, la règle reste globale.
                     </p>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setDestinationIds([])}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      destinationIds.length === 0
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">Toutes les destinations</p>
+                    <p className={`mt-1 text-xs ${destinationIds.length === 0 ? "text-slate-200" : "text-slate-500"}`}>
+                      Ideal pour une regle globale avant specialisation par marche.
+                    </p>
+                  </button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div>
                     <label className="mb-1 block text-xs text-gray-500">Flux concernés (vide = tous)</label>
                     <select
@@ -1134,6 +1174,26 @@ export function RuleModal({
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">Destinations concernées (vide = toutes)</label>
+                    <select
+                      multiple
+                      value={destinationIds}
+                      onChange={(event) =>
+                        setDestinationIds(Array.from(event.target.selectedOptions, (option) => option.value))
+                      }
+                      className="h-28 w-full rounded border p-3 text-sm"
+                    >
+                      {destinations.map((destination) => (
+                        <option key={destination.id} value={destination.id}>
+                          {destination.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Utilisez ce niveau pour cibler un marche ou une langue precise sans dupliquer vos flux.
+                    </p>
                   </div>
                 </div>
 

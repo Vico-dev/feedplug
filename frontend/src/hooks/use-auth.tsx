@@ -30,6 +30,7 @@ const SESSION_AWARE_SEGMENTS = new Set([
   'facturation',
   'flux',
   'ia',
+  'markets',
   'notifications',
   'oauth',
   'onboarding',
@@ -223,4 +224,3 @@ export function useRequireRole(role: string) {
 
   return { hasRole: hasRole(role), isLoading };
 }
-

@@ -19,7 +19,8 @@ import { useCallback, useEffect, useState } from "react";
 import { FluxGuide } from "@/components/onboarding/contextual-guide";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import Link from "next/link";
-import { getFeeds, getFeedAudit, exportFeedAsCsv, exportFeedAsCsvMeta, exportFeedAsCsvAmazon, exportFeedAsCsvCdiscount, exportFeedAsCsvRakuten, exportFeedAsChatGPT, exportFeedAsCsvBing, exportFeedAsCsvPinterest, exportFeedAsCsvTikTok, exportFeedAsCsvSnapchat, exportFeedAsCsvYandex, exportFeedAsCsvBaidu, exportFeedAsCsvPerplexity, exportFeedAsCsvGemini, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
+import { getFeeds, getFeedAudit, exportFeedAsCsv, exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
+import { getMarkets, type Market } from "@/lib/services/markets.service";
 import { CreateExportModal } from "@/components/forms/create-export-modal";
 import { usePlanCapabilities } from "@/hooks/use-plan-capabilities";
 import {
@@ -38,6 +39,7 @@ import {
 } from "@/components/layout";
 import { apiClient } from "@/lib/api";
 import { CHANNEL_FAMILY_META, SUPPORTED_CHANNELS } from "@/lib/channels/catalog";
+import { formatLocaleLabel } from "@/lib/markets";
 
 interface PushResult {
   total?: number;
@@ -70,6 +72,12 @@ interface GmcSelectionState {
   selectedMerchantId: string;
 }
 
+interface PushTargetOption {
+  destinationId: string;
+  label: string;
+  channelKey?: (typeof AMAZON_EXPORT_CHANNELS)[number]["channelKey"];
+}
+
 export default function FluxPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
@@ -94,11 +102,13 @@ export default function FluxPage() {
   const [gmcLoading, setGmcLoading] = useState(false);
   const [gmcSelection, setGmcSelection] = useState<GmcSelectionState | null>(null);
   const [gmcSelectionLoading, setGmcSelectionLoading] = useState(false);
+  const [gmcPushMenuFeedId, setGmcPushMenuFeedId] = useState<string | null>(null);
 
   // Amazon connection
   const [amazonStatus, setAmazonStatus] = useState<{ connected: boolean; sellerId?: string }>({ connected: false });
   const [amazonLoading, setAmazonLoading] = useState(false);
   const [amazonPushMenuFeedId, setAmazonPushMenuFeedId] = useState<string | null>(null);
+  const [markets, setMarkets] = useState<Market[]>([]);
   const fluxPath = `/${locale}/flux`;
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -189,6 +199,15 @@ export default function FluxPage() {
         const { data } = await apiClient.get<{ connected?: boolean; sellerId?: string }>('/platforms/amazon/status');
         if (!cancelled && data) setAmazonStatus({ connected: !!data.connected, sellerId: data.sellerId });
       } catch {}
+    })();
+
+    (async () => {
+      try {
+        const data = await getMarkets();
+        if (!cancelled) setMarkets(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setMarkets([]);
+      }
     })();
 
     // Vérifier si on revient du callback OAuth
@@ -298,11 +317,13 @@ export default function FluxPage() {
     }
   };
 
-  const handlePushGMC = async (feedId: string) => {
+  const handlePushGMC = async (feedId: string, target?: PushTargetOption | null) => {
+    setGmcPushMenuFeedId(null);
     setPushingId(feedId);
     setPushResult(null);
     try {
-      const { data } = await apiClient.post<PushResult>(`/platforms/gmc/push/${feedId}`);
+      const query = target?.destinationId ? `?destinationId=${encodeURIComponent(target.destinationId)}` : '';
+      const { data } = await apiClient.post<PushResult>(`/platforms/gmc/push/${feedId}${query}`);
       if (data) {
         setPushResult(data);
         const succeeded = data.succeeded ?? 0;
@@ -314,9 +335,9 @@ export default function FluxPage() {
           const firstError = data.errors?.[0]?.errors?.[0] || data.errors?.[0]?.error || 'Erreur Google Merchant Center';
           showToast(`Push GMC échoué: ${failed} erreurs — ${firstError}`, 'error');
         } else if (failed > 0) {
-          showToast(`Push GMC partiel: ${succeeded} envoyés, ${failed} erreurs.`, 'error');
+          showToast(data.message || `Push GMC partiel: ${succeeded} envoyés, ${failed} erreurs.`, 'error');
         } else {
-          showToast(`Push GMC terminé: ${succeeded} produits envoyés.`, 'success');
+          showToast(data.message || `Push GMC terminé: ${succeeded} produits envoyés.`, 'success');
         }
       }
     } catch (e) {
@@ -368,15 +389,18 @@ export default function FluxPage() {
     await handleDisconnectAmazon();
   };
 
-  const handlePushAmazon = async (feedId: string, channel: (typeof AMAZON_EXPORT_CHANNELS)[number]['channelKey']) => {
+  const handlePushAmazon = async (feedId: string, target: PushTargetOption) => {
     setAmazonPushMenuFeedId(null);
     setPushingId(feedId);
     setPushResult(null);
     try {
-      const { data } = await apiClient.post<PushResult>(`/platforms/amazon/push/${feedId}?channel=${channel}`);
+      const query = target.destinationId
+        ? `?destinationId=${encodeURIComponent(target.destinationId)}`
+        : `?channel=${encodeURIComponent(target.channelKey || 'amazon_fr')}`;
+      const { data } = await apiClient.post<PushResult>(`/platforms/amazon/push/${feedId}${query}`);
       if (data) {
         setPushResult(data);
-        showToast(`Push Amazon terminé: ${data.succeeded ?? 0} produits envoyés.`, 'success');
+        showToast(data.message || `Push Amazon terminé: ${data.succeeded ?? 0} produits envoyés.`, 'success');
       }
     } catch (e) {
       const message = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message || 'Erreur') : 'Erreur';
@@ -395,12 +419,26 @@ export default function FluxPage() {
   };
 
   const handleExportCsv = async (feedId: string) => {
+    setExportMenuFeedId(null);
     setExportingId(feedId);
     try {
       await exportFeedAsCsv(feedId);
       showToast('Export Google Merchant Center téléchargé.', 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Export impossible', 'error');
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  const handleExportGmcTarget = async (feedId: string, target: PushTargetOption) => {
+    setExportMenuFeedId(null);
+    setExportingId(feedId);
+    try {
+      await exportFeedAsCsvForDestination(feedId, target.destinationId);
+      showToast(`Export Google Merchant Center · ${target.label} téléchargé.`, 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Export Google Merchant Center impossible', 'error');
     } finally {
       setExportingId(null);
     }
@@ -425,6 +463,19 @@ export default function FluxPage() {
     try {
       await exportFeedAsCsvAmazon(feedId, channel);
       showToast(`Export ${channel.toUpperCase()} téléchargé.`, 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Export Amazon impossible', 'error');
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  const handleExportAmazonTarget = async (feedId: string, target: PushTargetOption) => {
+    setExportMenuFeedId(null);
+    setExportingId(feedId);
+    try {
+      await exportFeedAsCsvAmazonForDestination(feedId, target.destinationId, target.channelKey || 'amazon_fr');
+      showToast(`Export ${target.label} téléchargé.`, 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Export Amazon impossible', 'error');
     } finally {
@@ -492,6 +543,37 @@ export default function FluxPage() {
   const connectedChannelsCount = connectedChannels.length;
   const availableChannelsLabel = connectedChannels.join(' et ');
   const directPushChannels = SUPPORTED_CHANNELS.filter((channel) => channel.delivery === 'push' || channel.delivery === 'both');
+  const gmcPushTargets: PushTargetOption[] = markets.flatMap((market) => {
+    const localeById = new Map(market.locales.map((entry) => [entry.id, entry.localeCode]));
+    return market.channels
+      .filter((channel) => channel.platformKey === 'gmc' && channel.isEnabled)
+      .flatMap((channel) => channel.destinations.map((destination) => {
+        const localeCode = destination.marketLocaleId ? localeById.get(destination.marketLocaleId) : null;
+        const suffix = localeCode ? ` · ${formatLocaleLabel(locale, localeCode)}` : '';
+        return {
+          destinationId: destination.id,
+          label: `${market.name}${suffix}`,
+        };
+      }));
+  });
+  const amazonPushTargets: Array<PushTargetOption & { channelKey?: (typeof AMAZON_EXPORT_CHANNELS)[number]['channelKey'] }> = markets.flatMap((market) => {
+    const localeById = new Map(market.locales.map((entry) => [entry.id, entry.localeCode]));
+    return market.channels
+      .filter((channel) => channel.platformKey === 'amazon' && channel.isEnabled)
+      .flatMap((channel) => channel.destinations.map((destination) => {
+        const localeCode = destination.marketLocaleId ? localeById.get(destination.marketLocaleId) : null;
+        const suffix = localeCode ? ` · ${formatLocaleLabel(locale, localeCode)}` : '';
+        const fallbackLabel = destination.externalScopeLabel || market.name;
+        const legacyChannelKey = typeof destination.config?.legacyChannelKey === 'string'
+          ? destination.config.legacyChannelKey as (typeof AMAZON_EXPORT_CHANNELS)[number]['channelKey']
+          : undefined;
+        return {
+          destinationId: destination.id,
+          label: `${fallbackLabel}${suffix}`,
+          channelKey: legacyChannelKey,
+        };
+      }));
+  });
   const exportReadyChannels = SUPPORTED_CHANNELS.filter((channel) => channel.delivery === 'export' || channel.delivery === 'both');
   const aiChannels = SUPPORTED_CHANNELS.filter((channel) => channel.family === 'ai');
   const distributionFamilies = Object.entries(CHANNEL_FAMILY_META).map(([familyKey, meta]) => ({
@@ -1298,9 +1380,17 @@ export default function FluxPage() {
                           <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Moteurs de recherche
                           </div>
-                          <button type="button" onClick={() => handleExportCsv(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
-                            Google Merchant Center
-                          </button>
+                          {gmcPushTargets.length > 0 ? (
+                            gmcPushTargets.map((target) => (
+                              <button key={target.destinationId} type="button" onClick={() => handleExportGmcTarget(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                                {`Google Merchant Center · ${target.label}`}
+                              </button>
+                            ))
+                          ) : (
+                            <button type="button" onClick={() => handleExportCsv(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                              Google Merchant Center
+                            </button>
+                          )}
                           <button type="button" onClick={() => handleExportPlatform(feed.id, 'Bing', () => exportFeedAsCsvBing(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
                             Bing / Microsoft
                           </button>
@@ -1324,9 +1414,21 @@ export default function FluxPage() {
                           <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Marketplaces
                           </div>
-                          {AMAZON_EXPORT_CHANNELS.map((ch) => (
-                            <button key={ch.channelKey} type="button" onClick={() => handleExportCsvAmazon(feed.id, ch.channelKey)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
-                              {ch.label}
+                          {(amazonPushTargets.length > 0
+                            ? amazonPushTargets
+                            : AMAZON_EXPORT_CHANNELS.map((ch) => ({
+                                destinationId: '',
+                                label: ch.label,
+                                channelKey: ch.channelKey,
+                              }))
+                          ).map((target) => (
+                            <button
+                              key={target.destinationId || target.channelKey}
+                              type="button"
+                              onClick={() => target.destinationId ? handleExportAmazonTarget(feed.id, target) : handleExportCsvAmazon(feed.id, target.channelKey || 'amazon_fr')}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}
+                            >
+                              {target.label}
                             </button>
                           ))}
                           <button type="button" onClick={() => handleExportCsvCdiscount(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
@@ -1361,26 +1463,60 @@ export default function FluxPage() {
                       )}
                     </div>
                     {gmcStatus.connected && (
-                      <button 
-                        onClick={() => handlePushGMC(feed.id)}
-                        disabled={!!pushingId}
-                        style={{ 
-                            border: '1px solid #16a34a', 
-                            color: '#16a34a', 
-                            padding: '6px 12px', 
-                            borderRadius: '10px', 
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          backgroundColor: 'white',
-                          cursor: pushingId ? 'wait' : 'pointer',
-                          fontWeight: '600'
-                        }}
-                      >
-                        <Play style={{ width: '12px', height: '12px' }} />
-                        {pushingId === feed.id ? 'Push...' : 'Push GMC'}
-                      </button>
+                      gmcPushTargets.length > 1 ? (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setGmcPushMenuFeedId(gmcPushMenuFeedId === feed.id ? null : feed.id)}
+                            disabled={!!pushingId}
+                            style={{
+                              border: '1px solid #16a34a',
+                              color: '#16a34a',
+                              padding: '6px 12px',
+                              borderRadius: '10px',
+                              fontSize: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: 'white',
+                              cursor: pushingId ? 'wait' : 'pointer',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <Play style={{ width: '12px', height: '12px' }} />
+                            {pushingId === feed.id ? 'Push...' : 'Push Google'}
+                          </button>
+                          {gmcPushMenuFeedId === feed.id && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '220px', padding: '4px 0' }}>
+                              {gmcPushTargets.map((target) => (
+                                <button key={target.destinationId} type="button" onClick={() => handlePushGMC(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                                  {target.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handlePushGMC(feed.id, gmcPushTargets[0] || null)}
+                          disabled={!!pushingId}
+                          style={{
+                              border: '1px solid #16a34a',
+                              color: '#16a34a',
+                              padding: '6px 12px',
+                              borderRadius: '10px',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            backgroundColor: 'white',
+                            cursor: pushingId ? 'wait' : 'pointer',
+                            fontWeight: '600'
+                          }}
+                        >
+                          <Play style={{ width: '12px', height: '12px' }} />
+                          {pushingId === feed.id ? 'Push...' : 'Push GMC'}
+                        </button>
+                      )
                     )}
                     {amazonStatus.connected && (
                       <div style={{ position: 'relative' }}>
@@ -1406,9 +1542,16 @@ export default function FluxPage() {
                         </button>
                         {amazonPushMenuFeedId === feed.id && (
                           <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '160px', padding: '4px 0' }}>
-                            {AMAZON_EXPORT_CHANNELS.map((ch) => (
-                              <button key={ch.channelKey} type="button" onClick={() => handlePushAmazon(feed.id, ch.channelKey)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
-                                {ch.label}
+                            {(amazonPushTargets.length > 0
+                              ? amazonPushTargets
+                              : AMAZON_EXPORT_CHANNELS.map((ch) => ({
+                                  destinationId: '',
+                                  label: ch.label,
+                                  channelKey: ch.channelKey,
+                                }))
+                            ).map((target) => (
+                              <button key={target.destinationId || target.channelKey} type="button" onClick={() => handlePushAmazon(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                                {target.label}
                               </button>
                             ))}
                           </div>

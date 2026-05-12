@@ -9,6 +9,7 @@ import {
   Database,
   FileText,
   Filter,
+  Globe2,
   Key,
   LayoutDashboard,
   Lightbulb,
@@ -37,9 +38,9 @@ export const dashboardNavigation: DashboardNavigationItem[] = [
   { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, section: "workspace", description: "Vue d'ensemble de l'activite du compte." },
   { nameKey: "sources", href: "/sources", icon: Database, section: "workspace", description: "Connexions, imports et qualite des donnees source." },
   { nameKey: "catalogue", href: "/catalogue", icon: Package, section: "workspace", description: "Pilotage du catalogue produit et actions en masse." },
+  { nameKey: "markets", href: "/markets", icon: Globe2, section: "workspace", description: "Ouverture de nouveaux marches, langues et canaux depuis une configuration unique." },
   { nameKey: "flux", href: "/flux", icon: FileText, badge: "3", section: "workspace", description: "Parametrage et suivi des flux de diffusion." },
   { nameKey: "optimiser", href: "/optimiser", icon: Filter, section: "workspace", description: "Priorisation des correctifs et opportunites de gain." },
-  { nameKey: "ia", href: "/optimiser/ia", icon: Sparkles, section: "workspace", description: "Enrichissements et recommandations assistes par IA." },
   { nameKey: "rapports", href: "/rapports", icon: TrendingUp, section: "workspace", description: "Lecture des performances et des tendances." },
   { nameKey: "performance", href: "/performance", icon: BarChart3, section: "workspace", description: "Mesures detaillees par canal et par flux." },
   { nameKey: "scoringChannels", href: "/scoring-canaux", icon: Sliders, section: "workspace", description: "Comparaison des scores de diffusion par canal." },
@@ -67,10 +68,7 @@ export function getNormalizedDashboardPath(pathname?: string | null, localePrefi
 
 export function isDashboardItemActive(normalizedPathname: string, href: string) {
   if (href === "/optimiser") {
-    return normalizedPathname === "/optimiser";
-  }
-  if (href === "/optimiser/ia") {
-    return normalizedPathname.startsWith("/optimiser/ia");
+    return normalizedPathname.startsWith("/optimiser");
   }
   return normalizedPathname === href || normalizedPathname.startsWith(`${href}/`);
 }

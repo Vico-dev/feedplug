@@ -14,6 +14,11 @@
 
 const { callAIWithCache } = require('../ai/ai-wrapper');
 const { GMC_TITLE_RULES, applyGmcTitlePostCheck } = require('./gmc-guidelines');
+const {
+  buildLocalizationPrompt,
+  buildOptimizationTargetCacheKey,
+  resolveOptimizationTarget,
+} = require('./destination-prompt-context');
 
 // Limites de caractères par plateforme
 const PLATFORM_LIMITS = {
@@ -250,6 +255,7 @@ async function optimizeTitleWithAI(prisma, product, options = {}) {
   const platform = options.platform || 'GMC';
   const forceRefresh = options.forceRefresh || false;
   const manualIndustry = options.industry || null;
+  const targetContext = resolveOptimizationTarget(options);
   
   // Validation des inputs
   if (!product || !product.id) {
@@ -282,7 +288,7 @@ async function optimizeTitleWithAI(prisma, product, options = {}) {
     ? template.systemPrompt + GMC_TITLE_RULES
     : template.systemPrompt;
   const baseUserPrompt = template.userPromptTemplate(product);
-  const userPrompt = `${baseUserPrompt}\n\n[Contexte plateforme] ${platformHint}\nLimite : ${maxLength} caractères max.`;
+  const userPrompt = `${baseUserPrompt}\n\n[Contexte plateforme] ${platformHint}${buildLocalizationPrompt(targetContext)}\nLimite : ${maxLength} caractères max.`;
   
   try {
     // Appeler l'IA avec cache
@@ -295,7 +301,8 @@ async function optimizeTitleWithAI(prisma, product, options = {}) {
         brand: product.brand || product.customfields?.brand,
         category: product.customfields?.google_product_category,
         industry: industry,
-        platform: platform
+        platform: platform,
+        target: buildOptimizationTargetCacheKey(targetContext),
       },
       systemPrompt,
       userPrompt,

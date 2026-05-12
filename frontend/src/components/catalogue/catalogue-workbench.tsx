@@ -3,6 +3,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { usePathname } from "next/navigation";
+import { useLocale } from "next-intl";
 import {
   AlertCircle,
   ArrowRight,
@@ -50,6 +51,13 @@ import {
 import { getAvailableFields, getFieldLabel } from "@/lib/catalogue-field-labels";
 import { cn } from "@/lib/utils";
 import { getIngestionEmptyFileMessage, getIngestionSyncToastMessage } from "@/lib/ingestion-sync-message";
+import { formatLocaleLabel, getPlatformLabel } from "@/lib/markets";
+import { getMarkets, type Market } from "@/lib/services/markets.service";
+import {
+  getOptimizedPlatformContent as getStoredOptimizedPlatformContent,
+  hasStoredOptimizedContent as hasStoredOptimizedPlatformContent,
+  parseProductCustomFields,
+} from "@/lib/optimized-product-content";
 
 interface FeedItem {
   id: string;
@@ -75,12 +83,40 @@ interface FeedItem {
       connector: string;
     };
   };
+  _selectedDestinationId?: string | null;
+  _selectedDestinationLabel?: string | null;
+  _selectedDestinationPlatformKey?: string | null;
+  _selectedDestinationPlatformLabel?: string | null;
+  _selectedDestinationMarketCode?: string | null;
+  _selectedDestinationLocaleCode?: string | null;
+  _selectedDestinationIsEnabled?: boolean;
+  _selectedDestinationActivationSource?: string | null;
+  _selectedDestinationActivationStatus?: string | null;
+  _selectedDestinationHasOptimizedContent?: boolean;
+  _selectedDestinationCategory?: string | null;
 }
 
 interface FeedOption {
   id: string;
   name: string;
   source?: { id: string; name: string; connector: string };
+}
+
+interface CatalogueDestinationOption {
+  id: string;
+  label: string;
+  platformKey: BulkPlatform;
+  marketCode: string;
+  localeCode: string | null;
+}
+
+interface CatalogueDestinationContext {
+  id: string;
+  label: string;
+  platformKey: string;
+  platformLabel: string;
+  marketCode: string;
+  localeCode: string | null;
 }
 
 type SortOption = "date_desc" | "date_asc" | "title_asc" | "title_desc" | "price_asc" | "price_desc";
@@ -178,18 +214,20 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function parseCustomFields(value: FeedItem["customfields"]): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  }
-  return typeof value === "object" ? value : {};
+  return parseProductCustomFields(value);
 }
 
 function hasOptimizedContent(item: FeedItem): boolean {
+  if (item._selectedDestinationId && item._selectedDestinationPlatformKey) {
+    const selectedPlatform = item._selectedDestinationPlatformKey as BulkPlatform;
+    if (typeof item._selectedDestinationHasOptimizedContent === "boolean") {
+      return item._selectedDestinationHasOptimizedContent;
+    }
+    return hasStoredOptimizedPlatformContent(item.customfields, selectedPlatform, {
+      destinationId: item._selectedDestinationId,
+      allowPlatformFallback: false,
+    });
+  }
   const customfields = parseCustomFields(item.customfields);
   if (typeof customfields.optimized_title === "string" && customfields.optimized_title.trim()) return true;
   if (typeof customfields.optimized_description === "string" && customfields.optimized_description.trim()) return true;
@@ -206,6 +244,9 @@ function hasOptimizedContent(item: FeedItem): boolean {
 }
 
 function isGoogleEnabled(item: FeedItem): boolean {
+  if (typeof item._selectedDestinationIsEnabled === "boolean") {
+    return item._selectedDestinationIsEnabled;
+  }
   const customfields = parseCustomFields(item.customfields);
   const overrides = customfields._channelOverrides;
   if (!overrides || typeof overrides !== "object") return true;
@@ -213,6 +254,9 @@ function isGoogleEnabled(item: FeedItem): boolean {
 }
 
 function getItemCategory(item: FeedItem): string {
+  if (typeof item._selectedDestinationCategory === "string" && item._selectedDestinationCategory.trim()) {
+    return item._selectedDestinationCategory.trim();
+  }
   const customfields = parseCustomFields(item.customfields);
   const raw = customfields.product_type ?? customfields.google_product_category ?? customfields.category;
   return typeof raw === "string" ? raw.trim() : "";
@@ -233,31 +277,39 @@ function getOptimizedPlatformContent(item: FeedItem, platform: BulkPlatform): {
   description: string;
   highlights: string[];
 } {
-  const customfields = parseCustomFields(item.customfields);
-  const optimized = customfields.optimized;
-  if (!optimized || typeof optimized !== "object") {
-    return {
-      title: typeof customfields.optimized_title === "string" ? customfields.optimized_title : "",
-      description: typeof customfields.optimized_description === "string" ? customfields.optimized_description : "",
-      highlights: [],
-    };
-  }
-  const platformContent = (optimized as Record<string, unknown>)[platform];
-  if (!platformContent || typeof platformContent !== "object") {
-    return {
-      title: typeof customfields.optimized_title === "string" ? customfields.optimized_title : "",
-      description: typeof customfields.optimized_description === "string" ? customfields.optimized_description : "",
-      highlights: [],
-    };
-  }
-  const content = platformContent as Record<string, unknown>;
+  const destinationId = item._selectedDestinationId;
+  const content = getStoredOptimizedPlatformContent(item.customfields, platform, destinationId ? {
+    destinationId,
+    allowPlatformFallback: false,
+  } : undefined);
   return {
     title: typeof content.title === "string" ? content.title : "",
     description: typeof content.description === "string" ? content.description : "",
-    highlights: Array.isArray(content.highlights)
-      ? content.highlights.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-      : [],
+    highlights: Array.isArray(content.highlights) ? content.highlights : [],
   };
+}
+
+function buildCatalogueDestinationOptions(markets: Market[], locale: string): CatalogueDestinationOption[] {
+  return markets.flatMap((market) => {
+    const localeById = new Map(market.locales.map((entry) => [entry.id, entry.localeCode]));
+    return market.channels
+      .filter((channel) => channel.isEnabled)
+      .flatMap((channel) =>
+        channel.destinations
+          .filter((destination) => ["gmc", "meta", "amazon", "chatgpt"].includes(destination.platformKey))
+          .map((destination) => {
+            const localeCode = destination.marketLocaleId ? localeById.get(destination.marketLocaleId) ?? null : null;
+            const localeSuffix = localeCode ? ` · ${formatLocaleLabel(locale, localeCode)}` : "";
+            return {
+              id: destination.id,
+              label: `${getPlatformLabel(destination.platformKey)} · ${market.name}${localeSuffix}`,
+              platformKey: destination.platformKey as BulkPlatform,
+              marketCode: market.code,
+              localeCode,
+            };
+          })
+      );
+  });
 }
 
 function hasCoreMerchantData(item: FeedItem): boolean {
@@ -464,6 +516,7 @@ const BulkGridRow = memo(function BulkGridRow({
 
 export function CatalogueWorkbench() {
   const pathname = usePathname();
+  const locale = useLocale();
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const columnsPanelRef = useRef<HTMLDivElement>(null);
   const gridColumnsPanelRef = useRef<HTMLDivElement>(null);
@@ -477,6 +530,7 @@ export function CatalogueWorkbench() {
   const localePrefix = useMemo(() => getLocalePrefixFromPathname(pathname), [pathname]);
 
   const [feedsList, setFeedsList] = useState<FeedOption[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<CatalogueDestinationOption[]>([]);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [locationSearch, setLocationSearch] = useState(() => (typeof window !== "undefined" ? window.location.search : ""));
   const [loading, setLoading] = useState(true);
@@ -494,6 +548,8 @@ export function CatalogueWorkbench() {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("feed");
   });
+  const [selectedDestinationId, setSelectedDestinationId] = useState<string>("all");
+  const [selectedDestinationContext, setSelectedDestinationContext] = useState<CatalogueDestinationContext | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -763,6 +819,10 @@ export function CatalogueWorkbench() {
   }, []);
 
   useEffect(() => {
+    void fetchMarketsForCatalogue();
+  }, [locale]);
+
+  useEffect(() => {
     const onFocus = () => {
       void fetchFeeds(false);
     };
@@ -806,6 +866,7 @@ export function CatalogueWorkbench() {
     filterSource,
     filterStock,
     filterUpdatedRecent,
+    selectedDestinationId,
     selectedFeedId,
     sortBy,
   ]);
@@ -875,6 +936,21 @@ export function CatalogueWorkbench() {
       if (status === 401 || status === 403) {
         setError(status === 401 ? "Session expirée. Déconnectez-vous puis reconnectez-vous." : "Accès refusé aux flux.");
       }
+    }
+  };
+
+  const fetchMarketsForCatalogue = async () => {
+    try {
+      const markets = await getMarkets();
+      const nextOptions = buildCatalogueDestinationOptions(markets, locale);
+      setDestinationOptions(nextOptions);
+      setSelectedDestinationId((current) => {
+        if (current === "all") return current;
+        return nextOptions.some((option) => option.id === current) ? current : "all";
+      });
+    } catch {
+      setDestinationOptions([]);
+      setSelectedDestinationId("all");
     }
   };
 
@@ -966,6 +1042,7 @@ export function CatalogueWorkbench() {
       const searchParams = new URLSearchParams();
       searchParams.set("limit", String(PAGE_SIZE));
       searchParams.set("offset", String(offset));
+      if (selectedDestinationId !== "all") searchParams.set("destinationId", selectedDestinationId);
       if (query) searchParams.set("q", query);
       if (activeSmartView !== "all") searchParams.set("smartView", activeSmartView);
       if (filterImage !== "all") searchParams.set("imageFilter", filterImage);
@@ -997,6 +1074,7 @@ export function CatalogueWorkbench() {
           brands?: string[];
           categories?: string[];
         };
+        destination?: CatalogueDestinationContext | null;
       }>(`/ingestion/feeds/${feedId}/items?${searchParams.toString()}`);
 
       const data = response.data;
@@ -1032,10 +1110,12 @@ export function CatalogueWorkbench() {
           brands: data.filterOptions?.brands ?? [],
           categories: data.filterOptions?.categories ?? [],
         });
+        setSelectedDestinationContext(data.destination ?? null);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erreur lors du chargement des produits"));
       if (!append) setItems([]);
+      if (!append) setSelectedDestinationContext(null);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -1173,6 +1253,17 @@ export function CatalogueWorkbench() {
   }, [hardNavigate, localePrefix, prepareProductNavigation]);
 
   const filteredItems = items;
+  const selectedDestinationOption = useMemo(
+    () => destinationOptions.find((option) => option.id === selectedDestinationId) ?? null,
+    [destinationOptions, selectedDestinationId]
+  );
+  const activeDistributionLabel = selectedDestinationContext?.label || selectedDestinationOption?.label || null;
+
+  useEffect(() => {
+    if (selectedDestinationOption) {
+      setBulkAiPlatform(selectedDestinationOption.platformKey);
+    }
+  }, [selectedDestinationOption]);
 
   const searchSuggestions = useMemo(
     () => getSearchSuggestions(items, searchQuery, searchFocused),
@@ -1227,11 +1318,11 @@ export function CatalogueWorkbench() {
       case "optimized_highlights":
         return "Highlights";
       case "googleEnabled":
-        return "Google";
+        return activeDistributionLabel ? "Diffusion" : "Google";
       default:
         return getFieldLabel(field);
     }
-  }, []);
+  }, [activeDistributionLabel]);
   const dirtyGridRowCount = selectedItems.filter((item) => {
     const draft = bulkGridDrafts[item.id];
     if (!draft) return false;
@@ -1295,9 +1386,9 @@ export function CatalogueWorkbench() {
         { label: "Titres IA", value: gridChangeSummary.optimizedTitle },
         { label: "Descriptions IA", value: gridChangeSummary.optimizedDescription },
         { label: "Highlights", value: gridChangeSummary.highlights },
-        { label: "Google", value: gridChangeSummary.google },
+        { label: activeDistributionLabel ? "Diffusion" : "Google", value: gridChangeSummary.google },
       ].filter((entry) => entry.value > 0),
-    [gridChangeSummary]
+    [activeDistributionLabel, gridChangeSummary]
   );
   const visibleGridAttributeSummary = useMemo(
     () =>
@@ -1493,7 +1584,7 @@ export function CatalogueWorkbench() {
         key: "ready_google",
         label: "Prets a diffuser",
         value: smartViewStats.ready_google,
-        hint: "eligibles Google",
+        hint: activeDistributionLabel ? activeDistributionLabel.toLowerCase() : "eligibles Google",
         icon: CheckCircle,
         accent: "text-emerald-700",
         badge: "bg-emerald-100 text-emerald-700",
@@ -1517,7 +1608,7 @@ export function CatalogueWorkbench() {
         badge: "bg-amber-100 text-amber-700",
       },
     ],
-    [selectionStats.optimized, smartViewStats.all, smartViewStats.ready_google, smartViewStats.to_fix]
+    [activeDistributionLabel, selectionStats.optimized, smartViewStats.all, smartViewStats.ready_google, smartViewStats.to_fix]
   );
 
   const brandOptions = useMemo(
@@ -2045,6 +2136,7 @@ export function CatalogueWorkbench() {
       ? `Aucun produit ne correspond actuellement${activeSmartViewLabel ? ` a la vue "${activeSmartViewLabel}"` : ""}${hasSecondaryFilters ? " et aux filtres actifs" : ""}.`
       : "Ajoute une source ou synchronise un flux pour remplir le catalogue.";
   const activeContextBadges = [
+    activeDistributionLabel ? `Destination: ${activeDistributionLabel}` : null,
     hasViewContext && activeSmartViewLabel ? `Vue: ${activeSmartViewLabel}` : null,
     hasSearchContext ? `Recherche: ${debouncedSearchQuery}` : null,
     filterImage !== "all" ? `Image: ${filterImage === "with" ? "Avec image" : "Sans image"}` : null,
@@ -2111,9 +2203,12 @@ export function CatalogueWorkbench() {
     if (selectedItemIds.length === 0) return;
     try {
       setBulkActionLoading(enabled ? "google_on" : "google_off");
-      await Promise.all(
-        selectedItemIds.map((itemId) => apiClient.patch(`/ingestion/items/${itemId}/channels`, { google: enabled }))
-      );
+      await Promise.all(selectedItemIds.map((itemId) => {
+        if (selectedDestinationId !== "all") {
+          return apiClient.patch(`/ingestion/items/${itemId}/destinations/${selectedDestinationId}`, { isEnabled: enabled });
+        }
+        return apiClient.patch(`/ingestion/items/${itemId}/channels`, { google: enabled });
+      }));
       if (selectedFeedId) {
         await fetchItems(selectedFeedId, false, debouncedSearchQuery);
       }
@@ -2125,7 +2220,13 @@ export function CatalogueWorkbench() {
       );
       clearSelection();
     } catch (err: unknown) {
-      showToast(getErrorMessage(err, "Impossible d'appliquer le canal Google"), "error");
+      showToast(
+        getErrorMessage(
+          err,
+          selectedDestinationId !== "all" ? "Impossible de mettre a jour la diffusion sur cette destination" : "Impossible d'appliquer le canal Google"
+        ),
+        "error"
+      );
     } finally {
       setBulkActionLoading(null);
     }
@@ -2154,6 +2255,7 @@ export function CatalogueWorkbench() {
           },
           platform: bulkAiPlatform,
           saveToCatalog: true,
+          saveDestinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
         });
         savedTitles = response.data.saved?.titles ?? 0;
         savedDescriptions = response.data.saved?.descriptions ?? 0;
@@ -2165,6 +2267,7 @@ export function CatalogueWorkbench() {
             itemId,
             platform: bulkAiPlatform,
             savePlatform: bulkAiPlatform,
+            saveDestinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
           });
           if (Array.isArray(response.data.highlights) && response.data.highlights.length > 0) {
             savedHighlights += 1;
@@ -2204,7 +2307,10 @@ export function CatalogueWorkbench() {
       setBulkActionLoading("bulk_edit");
       if (bulkEditField === "optimized_title" || bulkEditField === "optimized_description" || bulkEditField === "optimized_highlights") {
         for (const item of targets) {
-          const payload: { platform: BulkPlatform; title?: string; description?: string; highlights?: string[] } = { platform: bulkAiPlatform };
+          const payload: { platform: BulkPlatform; destinationId?: string; title?: string; description?: string; highlights?: string[] } = {
+            platform: bulkAiPlatform,
+            destinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
+          };
           if (bulkEditField === "optimized_title") payload.title = bulkEditValue.trim();
           if (bulkEditField === "optimized_description") payload.description = bulkEditValue.trim();
           if (bulkEditField === "optimized_highlights") {
@@ -2297,6 +2403,7 @@ export function CatalogueWorkbench() {
         });
         await apiClient.patch(`/ingestion/items/${item.id}/optimized`, {
           platform: bulkAiPlatform,
+          destinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
           title: draft.optimized_title.trim(),
           description: draft.optimized_description.trim(),
           highlights: draft.optimized_highlights
@@ -2304,9 +2411,15 @@ export function CatalogueWorkbench() {
             .map((line) => line.trim())
             .filter(Boolean),
         });
-        await apiClient.patch(`/ingestion/items/${item.id}/channels`, {
-          google: draft.googleEnabled,
-        });
+        if (selectedDestinationId !== "all") {
+          await apiClient.patch(`/ingestion/items/${item.id}/destinations/${selectedDestinationId}`, {
+            isEnabled: draft.googleEnabled,
+          });
+        } else {
+          await apiClient.patch(`/ingestion/items/${item.id}/channels`, {
+            google: draft.googleEnabled,
+          });
+        }
       }
       if (selectedFeedId) {
         await fetchItems(selectedFeedId, false, debouncedSearchQuery);
@@ -2400,6 +2513,14 @@ export function CatalogueWorkbench() {
                           ))}
                         </Select>
                       )}
+                      {destinationOptions.length > 0 && (
+                        <Select value={selectedDestinationId} onChange={(event) => setSelectedDestinationId(event.target.value)} className="w-full sm:w-[300px]">
+                          <option value="all">Toutes les destinations</option>
+                          {destinationOptions.map((destination) => (
+                            <option key={destination.id} value={destination.id}>{destination.label}</option>
+                          ))}
+                        </Select>
+                      )}
                       <Button variant="outline" size="sm" onClick={recalculateAllScores} disabled={loadingScore}>
                         {loadingScore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Recalculer
@@ -2411,6 +2532,11 @@ export function CatalogueWorkbench() {
                     <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-foreground">
                       Source: {currentSourceName}
                     </span>
+                    {activeDistributionLabel && (
+                      <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-foreground">
+                        Destination: {activeDistributionLabel}
+                      </span>
+                    )}
                     <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-foreground">
                       Vue: {activeSmartViewLabel ?? "Tous les produits"}
                     </span>
@@ -2854,6 +2980,11 @@ export function CatalogueWorkbench() {
                 <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 font-medium text-blue-700">
                   {selectedItemIds.length} selectionne{selectedItemIds.length > 1 ? "s" : ""}
                 </span>
+                {activeDistributionLabel && (
+                  <span className="rounded-full border border-border bg-white px-3 py-1.5 font-medium text-foreground">
+                    {activeDistributionLabel}
+                  </span>
+                )}
                 <span className="text-muted-foreground">
                   Passe dans l&apos;editeur pour modifier proprement la selection.
                 </span>
@@ -3342,18 +3473,25 @@ export function CatalogueWorkbench() {
                 {selectedItemIds.length} produit{selectedItemIds.length > 1 ? "s" : ""} seront traites
               </div>
               <div className="mt-1 text-sm text-muted-foreground">
-                La sauvegarde ecrit directement dans le catalogue FeedPlug et alimente les optimisations par plateforme.
+                {activeDistributionLabel
+                  ? `La sauvegarde ecrit directement dans ${activeDistributionLabel} sans toucher aux autres marches.`
+                  : "La sauvegarde ecrit directement dans le catalogue FeedPlug et alimente les optimisations par plateforme."}
               </div>
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">Plateforme cible</label>
-              <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)}>
+              <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} disabled={Boolean(selectedDestinationOption)}>
                 <option value="gmc">Google Merchant Center</option>
                 <option value="meta">Meta</option>
                 <option value="amazon">Amazon</option>
                 <option value="chatgpt">ChatGPT / LLM</option>
               </Select>
+              {activeDistributionLabel && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  La destination choisie impose cette plateforme: {activeDistributionLabel}.
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -3398,10 +3536,11 @@ export function CatalogueWorkbench() {
                     <span>{dirtyGridRowCount} modifiee{dirtyGridRowCount > 1 ? "s" : ""}</span>
                     <span>{gridSelectionSummary}</span>
                     <span>{bulkAiPlatform.toUpperCase()}</span>
+                    {activeDistributionLabel ? <span>{activeDistributionLabel}</span> : null}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} className="min-w-[210px]">
+                  <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} className="min-w-[210px]" disabled={Boolean(selectedDestinationOption)}>
                     <option value="gmc">Google Merchant Center</option>
                     <option value="meta">Meta</option>
                     <option value="amazon">Amazon</option>
@@ -3495,7 +3634,7 @@ export function CatalogueWorkbench() {
                           <option value="optimized_title">Titre optimise</option>
                           <option value="optimized_description">Description optimisee</option>
                           <option value="optimized_highlights">Highlights</option>
-                          <option value="googleEnabled">Google on/off</option>
+                          <option value="googleEnabled">{activeDistributionLabel ? "Diffusion on/off" : "Google on/off"}</option>
                         </Select>
                         <Button variant="outline" onClick={applyGridValueToSelection}>
                           Copier
@@ -3524,7 +3663,7 @@ export function CatalogueWorkbench() {
                     {gridAttributeColumns.map((field) => (
                       <th key={field} className="px-3 py-3">{getFieldLabel(field)}</th>
                     ))}
-                    <th className="px-3 py-3">Google</th>
+                    <th className="px-3 py-3">{activeDistributionLabel ? "Diffusion" : "Google"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3652,12 +3791,17 @@ export function CatalogueWorkbench() {
             {(bulkEditField === "optimized_title" || bulkEditField === "optimized_description" || bulkEditField === "optimized_highlights") && (
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Plateforme cible</label>
-                <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)}>
+                <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} disabled={Boolean(selectedDestinationOption)}>
                   <option value="gmc">Google Merchant Center</option>
                   <option value="meta">Meta</option>
                   <option value="amazon">Amazon</option>
                   <option value="chatgpt">ChatGPT / LLM</option>
                 </Select>
+                {activeDistributionLabel ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Edition ciblee sur {activeDistributionLabel}.
+                  </p>
+                ) : null}
               </div>
             )}
 

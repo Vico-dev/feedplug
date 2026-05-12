@@ -233,6 +233,9 @@ model Account {
   users              User[]
   sources            FeedSource[]
   feeds              Feed[]
+  markets            Market[]
+  platformAccounts   PlatformAccount[]
+  destinations       Destination[]
   platformConnections PlatformConnection[]
   exportLogs         ExportLog[]
   exportChannels     ExportChannel[]
@@ -301,6 +304,141 @@ model OnboardingProgress {
   account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
+}
+
+model Market {
+  id                      String   @id @default(cuid())
+  accountId               String   @map("accountid")
+  sourceMarketId          String?  @map("sourcemarketid")
+  code                    String
+  name                    String
+  countryCodesJson        Json     @default("[]") @map("countrycodesjson")
+  defaultCurrencyCode     String   @map("defaultcurrencycode")
+  status                  String   @default("draft")
+  pricingPolicyJson       Json     @default("{}") @map("pricingpolicyjson")
+  shippingPolicyJson      Json     @default("{}") @map("shippingpolicyjson")
+  taxPolicyJson           Json     @default("{}") @map("taxpolicyjson")
+  contentStrategyJson     Json     @default("{}") @map("contentstrategyjson")
+  publicationDefaultsJson Json     @default("{}") @map("publicationdefaultsjson")
+  createdAt               DateTime @default(now()) @map("createdat")
+  updatedAt               DateTime @updatedAt @map("updatedat")
+
+  account                 Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceMarket            Market?  @relation("MarketCloneSource", fields: [sourceMarketId], references: [id])
+  clonedMarkets           Market[] @relation("MarketCloneSource")
+  locales                 MarketLocale[]
+  channels                MarketChannel[]
+  destinations            Destination[]
+
+  @@unique([accountId, code])
+  @@index([accountId])
+}
+
+model MarketLocale {
+  id               String   @id @default(cuid())
+  marketId         String   @map("marketid")
+  localeCode       String   @map("localecode")
+  languageCode     String   @map("languagecode")
+  countryCode      String   @map("countrycode")
+  isDefault        Boolean  @default(false) @map("isdefault")
+  isRequiredLaunch Boolean  @default(false) @map("isrequiredlaunch")
+  translationMode  String   @default("translate") @map("translationmode")
+  createdAt        DateTime @default(now()) @map("createdat")
+  updatedAt        DateTime @updatedAt @map("updatedat")
+
+  market           Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  destinations     Destination[]
+
+  @@unique([marketId, localeCode])
+  @@index([marketId])
+}
+
+model PlatformAccount {
+  id                    String   @id @default(cuid())
+  accountId             String   @map("accountid")
+  platformKey           String   @map("platformkey")
+  externalAccountId     String?  @map("externalaccountid")
+  externalAccountName   String?  @map("externalaccountname")
+  credentialsCiphertext String?  @map("credentialsciphertext")
+  credentialsVersion    Int      @default(1) @map("credentialsversion")
+  status                String   @default("active")
+  metadataJson          Json     @default("{}") @map("metadatajson")
+  createdAt             DateTime @default(now()) @map("createdat")
+  updatedAt             DateTime @updatedAt @map("updatedat")
+
+  account               Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  channels              MarketChannel[]
+  destinations          Destination[]
+
+  @@index([accountId])
+  @@index([platformKey])
+}
+
+model MarketChannel {
+  id                String   @id @default(cuid())
+  marketId          String   @map("marketid")
+  platformKey       String   @map("platformkey")
+  platformAccountId String?  @map("platformaccountid")
+  status            String   @default("draft")
+  isEnabled         Boolean  @default(true) @map("isenabled")
+  settingsJson      Json     @default("{}") @map("settingsjson")
+  createdAt         DateTime @default(now()) @map("createdat")
+  updatedAt         DateTime @updatedAt @map("updatedat")
+
+  market            Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  platformAccount   PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
+  destinations      Destination[]
+
+  @@unique([marketId, platformKey])
+  @@index([marketId])
+}
+
+model Destination {
+  id                 String   @id @default(cuid())
+  accountId          String   @map("accountid")
+  marketId           String   @map("marketid")
+  marketChannelId    String   @map("marketchannelid")
+  marketLocaleId     String?  @map("marketlocaleid")
+  platformKey        String   @map("platformkey")
+  platformAccountId  String?  @map("platformaccountid")
+  currencyCode       String   @map("currencycode")
+  externalScopeType  String   @map("externalscopetype")
+  externalScopeId    String?  @map("externalscopeid")
+  externalScopeLabel String?  @map("externalscopelabel")
+  slug               String
+  status             String   @default("draft")
+  isPrimary          Boolean  @default(false) @map("isprimary")
+  configJson         Json     @default("{}") @map("configjson")
+  createdAt          DateTime @default(now()) @map("createdat")
+  updatedAt          DateTime @updatedAt @map("updatedat")
+
+  account            Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  market             Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  marketChannel      MarketChannel    @relation(fields: [marketChannelId], references: [id], onDelete: Cascade)
+  marketLocale       MarketLocale?    @relation(fields: [marketLocaleId], references: [id], onDelete: SetNull)
+  platformAccount    PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
+  activations        ProductActivation[]
+
+  @@unique([accountId, slug])
+  @@index([marketId])
+  @@index([marketChannelId])
+}
+
+model ProductActivation {
+  id               String   @id @default(cuid())
+  productId        String   @map("productid")
+  destinationId    String   @map("destinationid")
+  isEnabled        Boolean  @default(true) @map("isenabled")
+  activationStatus String   @default("active") @map("activationstatus")
+  excludedReason   String?  @map("excludedreason")
+  manualOverride   Boolean  @default(false) @map("manualoverride")
+  createdAt        DateTime @default(now()) @map("createdat")
+  updatedAt        DateTime @updatedAt @map("updatedat")
+
+  destination      Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, destinationId])
+  @@index([destinationId])
 }
 
 model ExportChannel {

@@ -7,11 +7,12 @@ const { validateRule } = require('./schemas');
 const { applyRules, getActiveRules, batchUpdateFeedItems } = require('./engine');
 const { executeAiFillTasks } = require('./ai-fill');
 const { createRevision, buildItemSnapshot } = require('../lib/revisions');
+const { splitScopeIds, mergeScopeIds } = require('./scope');
 
 function registerRulesRoutes(app, prisma, getPrismaReady) {
   if (!app || !prisma) return;
 
-  async function buildRulePreview({ rule, accountId, limit = 5, feedId, channelId }) {
+  async function buildRulePreview({ rule, accountId, limit = 5, feedId, channelId, destinationId }) {
     const previewLimit = Math.min(Number(limit) || 5, 20);
     const feedFilter = feedId ? `AND i.feedid = $3::text` : '';
     const params = feedId ? [accountId, previewLimit, feedId] : [accountId, previewLimit];
@@ -31,8 +32,29 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
     const conditionJson = typeof rule.conditionjson === 'string' ? JSON.parse(rule.conditionjson || '{}') : (rule.conditionjson || rule.conditionJson || {});
     const actionJson = typeof rule.actionjson === 'string' ? JSON.parse(rule.actionjson || '{}') : (rule.actionjson || rule.actionJson || {});
     const actionField = actionJson?.params?.field || null;
+    const storedScopeIds = rule.channelids || mergeScopeIds(rule.channelIds || [], rule.destinationIds || []);
+    const { channelIds, destinationIds } = splitScopeIds(storedScopeIds);
+    const channelScopeOk = channelIds.length === 0 || (channelId && channelIds.includes(channelId));
+    const destinationScopeOk = destinationIds.length === 0 || (destinationId && destinationIds.includes(destinationId));
     const preview = [];
     let affectedCount = 0;
+
+    if (!channelScopeOk || !destinationScopeOk) {
+      return {
+        preview: items.map((item) => ({
+          itemId: item.id,
+          originId: item.originid,
+          title: item.title,
+          matches: false,
+          before: null,
+          after: null,
+        })),
+        affectedCount: 0,
+        message: destinationIds.length > 0
+          ? 'Cette règle est rattachée à une destination précise. Sélectionnez la bonne destination pour la prévisualiser.'
+          : 'Cette règle est limitée à un autre canal.',
+      };
+    }
 
     for (const it of items) {
       const customfields = typeof it.customfields === 'string' ? JSON.parse(it.customfields || '{}') : (it.customfields || {});
@@ -90,7 +112,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
       const accountId = req.accountId || 'default-account';
-      const { feedIds = [], channelIds = [], itemIds, channelId } = req.body || {};
+      const { feedIds = [], channelIds = [], destinationIds = [], itemIds, channelId, destinationId } = req.body || {};
       const rules = await prisma.$queryRawUnsafe(`
         SELECT id, name, conditionjson, actionjson, feedids, channelids, priority, isactive, startdate, enddate
         FROM "Rule"
@@ -125,12 +147,16 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         return res.json({ message: 'Aucun item à traiter', applied: 0, excluded: 0 });
       }
       const targetChannelId = channelId || (Array.isArray(channelIds) && channelIds[0]) || null;
+      const targetDestinationId = destinationId || (Array.isArray(destinationIds) && destinationIds[0]) || null;
       const itemsToProcess = items.map(it => {
         const customfields = typeof it.customfields === 'string' ? JSON.parse(it.customfields || '{}') : (it.customfields || {});
         return { ...it, customfields };
       });
       const aiFillTasks = [];
-      const { applied, excluded, aiQueued } = applyRules(itemsToProcess, activeRules, null, targetChannelId, { aiFillTasks });
+      const { applied, excluded, aiQueued } = applyRules(itemsToProcess, activeRules, null, targetChannelId, {
+        aiFillTasks,
+        destinationId: targetDestinationId,
+      });
       const aiResult = aiFillTasks.length > 0
         ? await executeAiFillTasks(prisma, aiFillTasks, { channelId: targetChannelId })
         : { applied: 0, skipped: 0, failed: 0, totalCost: 0 };
@@ -185,7 +211,8 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         conditionJson: r.conditionjson,
         actionJson: r.actionjson,
         feedIds: r.feedids || [],
-        channelIds: r.channelids || [],
+        channelIds: splitScopeIds(r.channelids || []).channelIds,
+        destinationIds: splitScopeIds(r.channelids || []).destinationIds,
         startDate: r.startdate,
         endDate: r.enddate,
         runOnIngestion: r.runoningestion,
@@ -200,6 +227,10 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       }
       if (channelId) {
         filtered = filtered.filter(r => r.channelIds.length === 0 || r.channelIds.includes(channelId));
+      }
+      if (req.query.destinationId) {
+        const requestedDestinationId = String(req.query.destinationId);
+        filtered = filtered.filter(r => (r.destinationIds || []).length === 0 || (r.destinationIds || []).includes(requestedDestinationId));
       }
       if (isActive !== undefined) {
         const active = isActive === 'true' || isActive === true;
@@ -251,7 +282,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const feedIds = JSON.stringify(body.feedIds || []);
-      const channelIds = JSON.stringify(body.channelIds || []);
+      const channelIds = JSON.stringify(mergeScopeIds(body.channelIds || [], body.destinationIds || []));
       const conditionJson = JSON.stringify(body.conditionJson || {});
       const actionJson = JSON.stringify(body.actionJson || {});
       await prisma.$executeRawUnsafe(`
@@ -269,7 +300,8 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         conditionJson: created.conditionjson,
         actionJson: created.actionjson,
         feedIds: created.feedids || [],
-        channelIds: created.channelids || [],
+        channelIds: splitScopeIds(created.channelids || []).channelIds,
+        destinationIds: splitScopeIds(created.channelids || []).destinationIds,
         startDate: created.startdate,
         endDate: created.enddate,
         runOnIngestion: created.runoningestion,
@@ -291,7 +323,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
       const accountId = req.accountId || 'default-account';
-      const { draftRule, limit = 5, feedId, channelId } = req.body || {};
+      const { draftRule, limit = 5, feedId, channelId, destinationId } = req.body || {};
       if (!draftRule || typeof draftRule !== 'object') {
         return res.status(400).json({ message: 'draftRule requis' });
       }
@@ -309,7 +341,8 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         accountId,
         limit,
         feedId,
-        channelId
+        channelId,
+        destinationId: destinationId || (Array.isArray(draftRule.destinationIds) ? draftRule.destinationIds[0] : null),
       });
 
       res.json({
@@ -342,7 +375,8 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         conditionJson: rule.conditionjson,
         actionJson: rule.actionjson,
         feedIds: rule.feedids || [],
-        channelIds: rule.channelids || [],
+        channelIds: splitScopeIds(rule.channelids || []).channelIds,
+        destinationIds: splitScopeIds(rule.channelids || []).destinationIds,
         startDate: rule.startdate,
         endDate: rule.enddate,
         runOnIngestion: rule.runoningestion,
@@ -384,7 +418,14 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (body.conditionJson !== undefined) { updates.push(`conditionjson = $${idx++}::jsonb`); params.push(JSON.stringify(body.conditionJson)); }
       if (body.actionJson !== undefined) { updates.push(`actionjson = $${idx++}::jsonb`); params.push(JSON.stringify(body.actionJson)); }
       if (body.feedIds !== undefined) { updates.push(`feedids = $${idx++}::jsonb`); params.push(JSON.stringify(body.feedIds)); }
-      if (body.channelIds !== undefined) { updates.push(`channelids = $${idx++}::jsonb`); params.push(JSON.stringify(body.channelIds)); }
+      if (body.channelIds !== undefined || body.destinationIds !== undefined) {
+        const existingScope = await prisma.$queryRawUnsafe(`SELECT channelids FROM "Rule" WHERE id = $1::text LIMIT 1`, id);
+        const existingScopeIds = splitScopeIds(existingScope?.[0]?.channelids || []);
+        const nextChannelIds = body.channelIds !== undefined ? body.channelIds : existingScopeIds.channelIds;
+        const nextDestinationIds = body.destinationIds !== undefined ? body.destinationIds : existingScopeIds.destinationIds;
+        updates.push(`channelids = $${idx++}::jsonb`);
+        params.push(JSON.stringify(mergeScopeIds(nextChannelIds, nextDestinationIds)));
+      }
       if (body.startDate !== undefined) { updates.push(`startdate = $${idx++}::timestamptz`); params.push(body.startDate || null); }
       if (body.endDate !== undefined) { updates.push(`enddate = $${idx++}::timestamptz`); params.push(body.endDate || null); }
       if (body.runOnIngestion !== undefined) { updates.push(`runoningestion = $${idx++}::boolean`); params.push(body.runOnIngestion); }
@@ -392,7 +433,22 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (body.isActive !== undefined) { updates.push(`isactive = $${idx++}::boolean`); params.push(body.isActive); }
       if (updates.length === 0) {
         const [r] = await prisma.$queryRawUnsafe(`SELECT * FROM "Rule" WHERE id = $1::text`, id);
-        return res.json(r);
+        return res.json({
+          id: r.id,
+          name: r.name,
+          conditionJson: r.conditionjson,
+          actionJson: r.actionjson,
+          feedIds: r.feedids || [],
+          channelIds: splitScopeIds(r.channelids || []).channelIds,
+          destinationIds: splitScopeIds(r.channelids || []).destinationIds,
+          startDate: r.startdate,
+          endDate: r.enddate,
+          runOnIngestion: r.runoningestion,
+          priority: r.priority,
+          isActive: r.isactive,
+          createdAt: r.createdat,
+          updatedAt: r.updatedat,
+        });
       }
       updates.push(`updatedat = NOW()`);
       params.push(id);
@@ -401,7 +457,22 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
         ...params
       );
       const [updated] = await prisma.$queryRawUnsafe(`SELECT * FROM "Rule" WHERE id = $1::text`, id);
-      res.json(updated);
+      res.json({
+        id: updated.id,
+        name: updated.name,
+        conditionJson: updated.conditionjson,
+        actionJson: updated.actionjson,
+        feedIds: updated.feedids || [],
+        channelIds: splitScopeIds(updated.channelids || []).channelIds,
+        destinationIds: splitScopeIds(updated.channelids || []).destinationIds,
+        startDate: updated.startdate,
+        endDate: updated.enddate,
+        runOnIngestion: updated.runoningestion,
+        priority: updated.priority,
+        isActive: updated.isactive,
+        createdAt: updated.createdat,
+        updatedAt: updated.updatedat,
+      });
     } catch (e) {
       console.error('PATCH /rules/:id error:', e);
       res.status(500).json({ message: 'Erreur mise à jour', error: e.message });
@@ -435,12 +506,19 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       }
       const accountId = req.accountId || 'default-account';
       const { id } = req.params;
-      const { limit = 5, feedId, channelId } = req.body || {};
+      const { limit = 5, feedId, channelId, destinationId } = req.body || {};
       const [rule] = await prisma.$queryRawUnsafe(`
         SELECT * FROM "Rule" WHERE id = $1::text AND accountid = $2::text
       `, id, accountId);
       if (!rule) return res.status(404).json({ message: 'Règle non trouvée' });
-      const previewResult = await buildRulePreview({ rule, accountId, limit, feedId, channelId });
+      const previewResult = await buildRulePreview({
+        rule,
+        accountId,
+        limit,
+        feedId,
+        channelId,
+        destinationId: destinationId || splitScopeIds(rule.channelids || []).destinationIds[0] || null,
+      });
       res.json({ ruleId: id, ruleName: rule.name, preview: previewResult.preview, affectedCount: previewResult.affectedCount, message: previewResult.message || null });
     } catch (e) {
       console.error('POST /rules/:id/preview error:', e);

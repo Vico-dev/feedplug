@@ -143,6 +143,9 @@ function validateRule(body) {
   if (body.channelIds !== undefined && !Array.isArray(body.channelIds)) {
     errors.push('channelIds doit être un tableau');
   }
+  if (body.destinationIds !== undefined && !Array.isArray(body.destinationIds)) {
+    errors.push('destinationIds doit être un tableau');
+  }
   if (body.priority !== undefined && (typeof body.priority !== 'number' || body.priority < 0)) {
     errors.push('priority doit être un nombre >= 0');
   }

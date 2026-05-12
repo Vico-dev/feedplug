@@ -13,6 +13,11 @@
 
 const { callAIWithCache } = require('../ai/ai-wrapper');
 const { PROMOTIONAL_PHRASES_DESC } = require('./gmc-guidelines');
+const {
+  buildLocalizationPrompt,
+  buildOptimizationTargetCacheKey,
+  resolveOptimizationTarget,
+} = require('./destination-prompt-context');
 
 // Nombre max de highlights par plateforme
 const PLATFORM_HIGHLIGHTS_CONFIG = {
@@ -105,7 +110,7 @@ Focus : avantages clés, caractéristiques différenciantes, bénéfices utilisa
 /**
  * Génère le prompt utilisateur pour les highlights
  */
-function buildUserPrompt(product, platform, count, maxChars) {
+function buildUserPrompt(product, platform, count, maxChars, targetContext = null) {
   const context = buildProductContext(product);
   const industry = detectIndustry(product);
 
@@ -130,10 +135,10 @@ Règles STRICTES :
 5. Pas de points promotionnels ("promo", "gratuit", "réduction")
 6. Si une information est absente, ne pas l'inventer
 7. ${platformInstructions[platform] || platformInstructions.DEFAULT}
-8. En français
+8. Utiliser la langue cible indiquée dans le contexte marché
 9. Utiliser des formulations courtes et scannables, pas de paragraphe
 
-Réponds UNIQUEMENT avec les ${count} points, un par ligne, sans aucun autre texte.`;
+Réponds UNIQUEMENT avec les ${count} points, un par ligne, sans aucun autre texte.${buildLocalizationPrompt(targetContext)}`;
 }
 
 const GENERIC_GMC_MARKETING_PATTERNS = [
@@ -315,6 +320,7 @@ function extractHighlightsFallback(product, count, maxChars) {
 async function generateHighlightsWithAI(prisma, product, options = {}) {
   const platform = (options.platform || 'GMC').toUpperCase();
   const forceRefresh = options.forceRefresh || false;
+  const targetContext = resolveOptimizationTarget(options);
 
   if (!product || !product.id) {
     throw new Error('Produit invalide (ID manquant)');
@@ -323,7 +329,7 @@ async function generateHighlightsWithAI(prisma, product, options = {}) {
   const config = PLATFORM_HIGHLIGHTS_CONFIG[platform] || PLATFORM_HIGHLIGHTS_CONFIG.DEFAULT;
   const industry = options.industry || detectIndustry(product);
   const systemPrompt = INDUSTRY_SYSTEM_PROMPTS[industry] || INDUSTRY_SYSTEM_PROMPTS.general;
-  const userPrompt = buildUserPrompt(product, platform, config.count, config.maxChars);
+  const userPrompt = buildUserPrompt(product, platform, config.count, config.maxChars, targetContext);
 
   const cf = product.customfields || product.customFields || {};
 
@@ -341,6 +347,7 @@ async function generateHighlightsWithAI(prisma, product, options = {}) {
         color: cf.color,
         size: cf.size,
         material: cf.material,
+        target: buildOptimizationTargetCacheKey(targetContext),
       },
       systemPrompt,
       userPrompt,

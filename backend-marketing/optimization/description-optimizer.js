@@ -16,6 +16,11 @@
 const { callAIWithCache } = require('../ai/ai-wrapper');
 const { detectIndustry } = require('./title-optimizer');
 const { GMC_DESCRIPTION_RULES, applyGmcDescriptionPostCheck } = require('./gmc-guidelines');
+const {
+  buildLocalizationPrompt,
+  buildOptimizationTargetCacheKey,
+  resolveOptimizationTarget,
+} = require('./destination-prompt-context');
 
 // Limites de caractères par plateforme pour descriptions
 const DESCRIPTION_LIMITS = {
@@ -371,6 +376,7 @@ async function optimizeDescriptionWithAI(prisma, product, options = {}) {
   const platform = options.platform || 'GMC';
   const forceRefresh = options.forceRefresh || false;
   const manualIndustry = options.industry || null;
+  const targetContext = resolveOptimizationTarget(options);
   
   // Validation
   if (!product || !product.id) {
@@ -408,7 +414,7 @@ async function optimizeDescriptionWithAI(prisma, product, options = {}) {
   const baseUserPrompt = platform === 'GMC'
     ? buildGmcDescriptionPrompt(product, recommendedLength)
     : template.userPromptTemplate(product, recommendedLength);
-  const userPrompt = `${baseUserPrompt}\n\n[Contexte plateforme] ${platformHint}\nLimite max : ${targetLength} caractères.`;
+  const userPrompt = `${baseUserPrompt}\n\n[Contexte plateforme] ${platformHint}${buildLocalizationPrompt(targetContext)}\nLimite max : ${targetLength} caractères.`;
   
   try {
     // Appeler l'IA avec cache
@@ -422,7 +428,8 @@ async function optimizeDescriptionWithAI(prisma, product, options = {}) {
         category: product.customfields?.google_product_category,
         industry: industry,
         platform: platform,
-        targetLength: recommendedLength
+        targetLength: recommendedLength,
+        target: buildOptimizationTargetCacheKey(targetContext),
       },
       systemPrompt,
       userPrompt,

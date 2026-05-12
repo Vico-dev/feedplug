@@ -100,15 +100,33 @@ export async function exportFeedAsCsv(feedId: string, filename?: string): Promis
   return exportFeedAsCsvForPlatform(feedId, 'gmc', undefined, filename);
 }
 
+export async function exportFeedAsCsvForDestination(
+  feedId: string,
+  destinationId: string,
+  filename?: string
+): Promise<void> {
+  return exportFeedAsCsvForPlatform(feedId, 'gmc', undefined, filename, destinationId);
+}
+
 /**
  * Télécharge le flux au format CSV pour un canal Amazon (ex. amazon_fr, amazon_uk).
  */
 export async function exportFeedAsCsvAmazon(
   feedId: string,
   channel: (typeof AMAZON_EXPORT_CHANNELS)[number]['channelKey'],
+  filename?: string,
+  destinationId?: string
+): Promise<void> {
+  return exportFeedAsCsvForPlatform(feedId, 'amazon', channel, filename, destinationId);
+}
+
+export async function exportFeedAsCsvAmazonForDestination(
+  feedId: string,
+  destinationId: string,
+  channel: (typeof AMAZON_EXPORT_CHANNELS)[number]['channelKey'] = 'amazon_fr',
   filename?: string
 ): Promise<void> {
-  return exportFeedAsCsvForPlatform(feedId, 'amazon', channel, filename);
+  return exportFeedAsCsvForPlatform(feedId, 'amazon', channel, filename, destinationId);
 }
 
 /**
@@ -205,9 +223,10 @@ async function exportFeedAsCsvForPlatform(
   feedId: string,
   platform: ExportPlatform,
   channel?: string,
-  filename?: string
+  filename?: string,
+  destinationId?: string
 ): Promise<void> {
-  return exportFeedForPlatform(feedId, platform, 'csv', channel, filename);
+  return exportFeedForPlatform(feedId, platform, 'csv', channel, filename, destinationId);
 }
 
 async function exportFeedForPlatform(
@@ -215,11 +234,15 @@ async function exportFeedForPlatform(
   platform: ExportPlatform,
   format: 'csv' | 'json',
   channel?: string,
-  filename?: string
+  filename?: string,
+  destinationId?: string
 ): Promise<void> {
   let url = `${API_BASE}/ingestion/feeds/${feedId}/export?format=${format}&platform=${platform}`;
   if (channel) {
     url += `&channel=${encodeURIComponent(channel)}`;
+  }
+  if (destinationId) {
+    url += `&destinationId=${encodeURIComponent(destinationId)}`;
   }
   const response = await fetch(url, { credentials: 'include' });
   if (!response.ok) {

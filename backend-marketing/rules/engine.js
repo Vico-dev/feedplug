@@ -4,6 +4,7 @@
  */
 const { getFieldValue, setFieldValue } = require('./field-access');
 const { executeAiFillTasks } = require('./ai-fill');
+const { splitScopeIds } = require('./scope');
 
 /**
  * Évalue une condition individuelle sur un item.
@@ -173,14 +174,16 @@ function applyAction(actionJson, item) {
 function applyRules(items, rules, feedId, channelId, options = {}) {
   const ruleAbAssignments = options.ruleAbAssignments || null;
   const aiFillTasks = options.aiFillTasks || null;
+  const destinationId = options.destinationId ? String(options.destinationId).trim() : null;
   let applied = 0;
   let excluded = 0;
   let aiQueued = 0;
   for (const rule of rules) {
     const ruleFeedIds = rule.feedIds || [];
-    const channelIds = rule.channelIds || [];
+    const { channelIds, destinationIds } = splitScopeIds(rule.channelIds || []);
     const channelOk = channelIds.length === 0 || (channelId && channelIds.includes(channelId));
-    if (!channelOk) continue;
+    const destinationOk = destinationIds.length === 0 || (destinationId && destinationIds.includes(destinationId));
+    if (!channelOk || !destinationOk) continue;
 
     const conditionJson = typeof rule.conditionJson === 'string'
       ? JSON.parse(rule.conditionJson || '{}')

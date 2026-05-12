@@ -437,7 +437,7 @@ export default function DashboardPage() {
               <ArrowRight style={{ width: "16px", height: "16px", color: "#9ca3af" }} />
             </a>
             <a
-              href={`${localePrefix}/optimiser/ia`}
+              href={`${localePrefix}/optimiser`}
               style={{
                 display: "flex",
                 alignItems: "center",

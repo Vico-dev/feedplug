@@ -6,6 +6,7 @@ import { useLocale } from "next-intl";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, ChevronLeft, Database, Link2, PhoneCall, Store } from "lucide-react";
 import MarketingHeader from "@/components/marketing/MarketingHeader";
+import TurnstileWidget from "@/components/auth/turnstile-widget";
 import {
   createMarketingAudit,
   type MarketingAuditChannel,
@@ -148,6 +149,11 @@ export default function AuditFluxPage() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [formStartedAt] = useState(() => Date.now());
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const captchaEnabled = turnstileSiteKey.length > 0;
   const [form, setForm] = useState(() => ({
     ...initialForm,
     firstName: (searchParams.get("firstName") || "").trim(),
@@ -162,7 +168,7 @@ export default function AuditFluxPage() {
   const stepOneValid = [form.firstName, form.lastName, form.jobTitle, form.company, form.email].every((value) => value.trim().length > 0);
   const stepTwoValid = form.sourceValue.trim().length > 0 && form.catalogSize > 0;
   const stepThreeValid = form.targetChannels.length > 0;
-  const canSubmit = stepOneValid && stepTwoValid && stepThreeValid && !submitting;
+  const canSubmit = stepOneValid && stepTwoValid && stepThreeValid && (!captchaEnabled || !!captchaToken) && !submitting;
 
   const nextStep = () => {
     if (step === 1 && !stepOneValid) {
@@ -201,6 +207,12 @@ export default function AuditFluxPage() {
     setSubmitting(true);
     setError("");
 
+    if (captchaEnabled && !captchaToken) {
+      setError("Merci de valider la verification anti-spam avant d'envoyer votre demande.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const isGmc = selectedSource.connectorType === "GMC";
       const audit = await createMarketingAudit({
@@ -218,6 +230,9 @@ export default function AuditFluxPage() {
         catalogSize: form.catalogSize,
         targetChannels: form.targetChannels,
         goal: "audit_flux",
+        captchaToken: captchaToken || undefined,
+        companyWebsite,
+        formStartedAt,
       });
       router.push(`/${locale}/audit-flux/${audit.shareToken}?new=1`);
     } catch (submissionError) {
@@ -279,6 +294,24 @@ export default function AuditFluxPage() {
 
             <div style={{ display: "grid", gap: 24, gridTemplateColumns: "minmax(0, 1.25fr) minmax(320px, 0.75fr)", alignItems: "start" }}>
               <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 32, padding: 28, boxShadow: "0 24px 60px rgba(15,23,42,0.08)" }}>
+                <input
+                  type="text"
+                  name="website"
+                  value={companyWebsite}
+                  onChange={(event) => setCompanyWebsite(event.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    left: "-10000px",
+                    top: "auto",
+                    width: "1px",
+                    height: "1px",
+                    opacity: 0,
+                    pointerEvents: "none",
+                  }}
+                />
                 <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 28 }}>
                   {STEPS.map((item) => {
                     const active = item.id === step;
@@ -424,6 +457,23 @@ export default function AuditFluxPage() {
                       </p>
                     </div>
                   </section>
+                ) : null}
+
+                {step === 3 && captchaEnabled ? (
+                  <div
+                    style={{
+                      marginTop: 22,
+                      borderRadius: 20,
+                      border: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                      padding: 18,
+                    }}
+                  >
+                    <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#475569" }}>
+                      Verification anti-spam
+                    </div>
+                    <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />
+                  </div>
                 ) : null}
 
                 {error ? (

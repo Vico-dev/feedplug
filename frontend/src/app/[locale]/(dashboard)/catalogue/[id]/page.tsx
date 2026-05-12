@@ -139,6 +139,37 @@ interface ChannelCard {
   onAction: () => void;
 }
 
+interface ProductDestinationActivation {
+  destinationId: string;
+  destinationSlug: string;
+  status: string;
+  platformKey: string;
+  platformLabel: string;
+  marketId: string;
+  marketCode: string;
+  marketName: string;
+  localeCode: string | null;
+  languageCode?: string | null;
+  countryCode?: string | null;
+  currencyCode?: string | null;
+  externalScopeLabel?: string | null;
+  isEnabled: boolean;
+  activationSource: 'destination' | 'legacy' | string;
+  activationStatus: string;
+  excludedReason?: string | null;
+}
+
+interface ProductDestinationActivationResponse {
+  itemId: string;
+  channelOverrides?: Record<string, boolean>;
+  summary?: {
+    totalDestinations: number;
+    activeDestinations: number;
+    marketCount: number;
+  };
+  destinations?: ProductDestinationActivation[];
+}
+
 function getDisplayFieldValue(value: unknown): string | number | null | undefined {
   if (value == null) return value as null | undefined;
   if (typeof value === 'string' || typeof value === 'number') return value;
@@ -202,7 +233,7 @@ function isLifestyleStorageUrl(value: string | null | undefined): value is strin
 }
 
 function getChannelLogo(channelKey: string) {
-  if (channelKey === 'google') {
+  if (channelKey === 'google' || channelKey === 'gmc') {
     return <FaGoogle className="h-5 w-5 text-[#4285F4]" aria-hidden />;
   }
   if (channelKey === 'amazon') {
@@ -280,10 +311,15 @@ export default function ProductDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [optimizerMenuOpen, setOptimizerMenuOpen] = useState(false);
   const [savingChannels, setSavingChannels] = useState(false);
+  const [destinationActivations, setDestinationActivations] = useState<ProductDestinationActivation[]>([]);
+  const [destinationActivationSummary, setDestinationActivationSummary] = useState<{ totalDestinations: number; activeDestinations: number; marketCount: number } | null>(null);
+  const [loadingDestinationActivations, setLoadingDestinationActivations] = useState(false);
+  const [savingDestinationId, setSavingDestinationId] = useState<string | null>(null);
   const [scoreHistory, setScoreHistory] = useState<{ itemId: string; history: Array<{ qualityScore: number; recordedAt: string }> } | null>(null);
   const [loadingScoreHistory, setLoadingScoreHistory] = useState(false);
   const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
   const [autoGenerateAiOnOpen, setAutoGenerateAiOnOpen] = useState(false);
+  const [aiDestinationId, setAiDestinationId] = useState<string | null>(null);
   const [outputSummary, setOutputSummary] = useState<ProductOutputSummary>({
     google: { connected: false },
     amazon: { connected: false, channels: [] },
@@ -449,6 +485,26 @@ export default function ProductDetailPage() {
     }
   }, []);
 
+  const fetchDestinationActivations = useCallback(async () => {
+    try {
+      setLoadingDestinationActivations(true);
+      const response = await apiClient.get<ProductDestinationActivationResponse>(`/ingestion/items/${params.id}/destinations`);
+      setDestinationActivations(Array.isArray(response.data?.destinations) ? response.data.destinations : []);
+      setDestinationActivationSummary(response.data?.summary ?? null);
+      if (response.data?.channelOverrides) {
+        setChannelOverrides(response.data.channelOverrides);
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Destinations produit non disponibles:', err);
+      }
+      setDestinationActivations([]);
+      setDestinationActivationSummary(null);
+    } finally {
+      setLoadingDestinationActivations(false);
+    }
+  }, [params.id]);
+
   const clearSupplementalDataLoadQueue = useCallback(() => {
     supplementalDataTimeouts.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     supplementalDataTimeouts.current = [];
@@ -462,12 +518,13 @@ export default function ProductDetailPage() {
       [() => { void fetchRevisions(); }, 450],
       [() => { void fetchScoreHistory(); }, 700],
       [() => { void fetchOutputSummary(); }, 900],
+      [() => { void fetchDestinationActivations(); }, 1100],
     ];
     steps.forEach(([task, delay]) => {
       const timeoutId = window.setTimeout(task, delay);
       supplementalDataTimeouts.current.push(timeoutId);
     });
-  }, [clearSupplementalDataLoadQueue, fetchEnrichmentAnalysis, fetchOutputSummary, fetchRevisions, fetchScoreHistory]);
+  }, [clearSupplementalDataLoadQueue, fetchDestinationActivations, fetchEnrichmentAnalysis, fetchOutputSummary, fetchRevisions, fetchScoreHistory]);
 
   useEffect(() => () => {
     clearSupplementalDataLoadQueue();
@@ -688,6 +745,7 @@ export default function ProductDetailPage() {
   /** Ouvre l'optimisation IA unifiée ou scroll vers Enrichissement pour les champs techniques. */
   const handleOptimizeField = (fieldKey: 'title' | 'description' | 'brand' | 'gtin' | 'mpn' | 'google_product_category') => {
     if (fieldKey === 'title' || fieldKey === 'description') {
+      setAiDestinationId(null);
       setAutoGenerateAiOnOpen(false);
       setShowAiOptimizationModal(true);
       return;
@@ -848,12 +906,37 @@ export default function ProductDetailPage() {
     try {
       setSavingChannels(true);
       await apiClient.patch(`/ingestion/items/${params.id}/channels`, { [channelKey]: checked });
+      void fetchDestinationActivations();
     } catch {
       setToast({ type: 'error', message: t('catalogue.errorPreference') });
       setTimeout(() => setToast(null), 5000);
       setChannelOverrides((prev) => ({ ...prev, [channelKey]: previousValue ?? !checked }));
     } finally {
       setSavingChannels(false);
+    }
+  };
+
+  const setDestinationEnabled = async (destinationId: string, checked: boolean) => {
+    const previousDestinations = destinationActivations;
+    setDestinationActivations((prev) =>
+      prev.map((entry) => entry.destinationId === destinationId ? { ...entry, isEnabled: checked, activationSource: 'destination' } : entry)
+    );
+    try {
+      setSavingDestinationId(destinationId);
+      const response = await apiClient.patch<{ channelOverrides?: Record<string, boolean> }>(
+        `/ingestion/items/${params.id}/destinations/${destinationId}`,
+        { isEnabled: checked }
+      );
+      if (response.data?.channelOverrides) {
+        setChannelOverrides(response.data.channelOverrides);
+      }
+      void fetchDestinationActivations();
+    } catch {
+      setToast({ type: 'error', message: "Erreur lors de la mise à jour du marché de diffusion." });
+      setTimeout(() => setToast(null), 5000);
+      setDestinationActivations(previousDestinations);
+    } finally {
+      setSavingDestinationId(null);
     }
   };
 
@@ -977,6 +1060,52 @@ export default function ProductDetailPage() {
     })),
   ];
   const activeOutputCount = channelCards.filter((channel) => channel.statusLabel === 'Actif').length;
+  const destinationActivationGroups = Object.values(
+    destinationActivations.reduce<Record<string, { marketId: string; marketName: string; marketCode: string; items: ProductDestinationActivation[] }>>((acc, entry) => {
+      if (!acc[entry.marketId]) {
+        acc[entry.marketId] = {
+          marketId: entry.marketId,
+          marketName: entry.marketName,
+          marketCode: entry.marketCode,
+          items: [],
+        };
+      }
+      acc[entry.marketId].items.push(entry);
+      return acc;
+    }, {})
+  )
+    .sort((left, right) => left.marketName.localeCompare(right.marketName, 'fr'))
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((left, right) => {
+        const leftKey = `${left.platformLabel}-${left.localeCode || ''}-${left.externalScopeLabel || ''}`;
+        const rightKey = `${right.platformLabel}-${right.localeCode || ''}-${right.externalScopeLabel || ''}`;
+        return leftKey.localeCompare(rightKey, 'fr');
+      }),
+    }));
+  const totalDestinationCount = destinationActivationSummary?.totalDestinations ?? destinationActivations.length;
+  const activeDestinationCount = destinationActivationSummary?.activeDestinations ?? destinationActivations.filter((entry) => entry.isEnabled).length;
+  const destinationMarketCount = destinationActivationSummary?.marketCount ?? destinationActivationGroups.length;
+  const aiDestinationOptions = destinationActivations
+    .filter((entry) => ['gmc', 'amazon', 'meta', 'chatgpt'].includes(entry.platformKey))
+    .sort((left, right) => {
+      const leftKey = `${left.marketName}-${left.platformLabel}-${left.localeCode || ''}`;
+      const rightKey = `${right.marketName}-${right.platformLabel}-${right.localeCode || ''}`;
+      return leftKey.localeCompare(rightKey, 'fr');
+    })
+    .map((entry) => {
+      const summary = [
+        entry.localeCode ? `Langue ${entry.localeCode}` : null,
+        entry.currencyCode ? `Devise ${entry.currencyCode}` : null,
+        entry.externalScopeLabel || null,
+      ].filter(Boolean).join(' · ');
+      return {
+        id: entry.destinationId,
+        label: `${entry.platformLabel} · ${entry.marketName}${entry.localeCode ? ` · ${entry.localeCode}` : ''}`,
+        platformKey: entry.platformKey as 'gmc' | 'amazon' | 'meta' | 'chatgpt',
+        summary,
+      };
+    });
   const scoreFastTrackActions = [
     needsMerchantCopy
       ? {
@@ -988,7 +1117,7 @@ export default function ProductDetailPage() {
           impact: 'Fort impact',
           channel: 'IA texte',
           actionLabel: 'Tout optimiser avec l’IA',
-          onClick: () => { setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); },
+          onClick: () => { setAiDestinationId(null); setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); },
         }
       : null,
     technicalEnrichmentFields.length > 0
@@ -1020,7 +1149,7 @@ export default function ProductDetailPage() {
           impact: 'Gain additionnel',
           channel: 'IA diffusion',
           actionLabel: 'Générer les highlights',
-          onClick: () => { setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); },
+          onClick: () => { setAiDestinationId(null); setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); },
         }
       : null,
   ].filter((entry): entry is {
@@ -1090,8 +1219,8 @@ export default function ProductDetailPage() {
                 {optimizerMenuOpen && (
                   <>
                     <div className="absolute right-0 top-full mt-1 min-w-[220px] rounded-md border border-border bg-background py-1 shadow-lg z-20">
-                      <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); setOptimizerMenuOpen(false); }}>Tout optimiser avec l&apos;IA</button>
-                      <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); setOptimizerMenuOpen(false); }}>Ouvrir l&apos;atelier IA</button>
+                      <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { setAiDestinationId(null); setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); setOptimizerMenuOpen(false); }}>Tout optimiser avec l&apos;IA</button>
+                      <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { setAiDestinationId(null); setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); setOptimizerMenuOpen(false); }}>Ouvrir l&apos;atelier IA</button>
                       <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { scrollToSection('enrichissement'); setOptimizerMenuOpen(false); }}>Aller à l&apos;enrichissement</button>
                       <button type="button" className="w-full px-3 py-2 text-left text-sm leading-5 hover:bg-muted" onClick={() => { void handleEnrich(); setOptimizerMenuOpen(false); }}>Compléter les champs techniques</button>
                     </div>
@@ -1133,7 +1262,7 @@ export default function ProductDetailPage() {
                 )}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                <Button type="button" className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5" onClick={() => { setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); }}>
+                <Button type="button" className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5" onClick={() => { setAiDestinationId(null); setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); }}>
                   <Sparkles className="mr-2 h-4 w-4" />
                   Tout optimiser avec l&apos;IA
                 </Button>
@@ -1232,7 +1361,7 @@ export default function ProductDetailPage() {
                         {optimizedContentInfo ? ` (${optimizedContentInfo.platform.toUpperCase()})` : ''}.
                       </p>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); }}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setAiDestinationId(null); setAutoGenerateAiOnOpen(false); setShowAiOptimizationModal(true); }}>
                       Modifier
                     </Button>
                   </div>
@@ -1314,7 +1443,7 @@ export default function ProductDetailPage() {
                   </div>
 
                   <div className="mt-4 grid gap-2">
-                    <Button variant="outline" className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-left leading-5" onClick={() => { setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); }}>
+                    <Button variant="outline" className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-left leading-5" onClick={() => { setAiDestinationId(null); setAutoGenerateAiOnOpen(true); setShowAiOptimizationModal(true); }}>
                       <Sparkles className="mr-2 h-4 w-4" />
                       Tout optimiser avec l&apos;IA
                     </Button>
@@ -1526,6 +1655,135 @@ export default function ProductDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-4 rounded-xl border border-border/80 bg-white/80 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">Diffusion par marche</div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          {loadingDestinationActivations
+                            ? 'Chargement des marches actifs...'
+                            : totalDestinationCount > 0
+                              ? `${activeDestinationCount} destination${activeDestinationCount > 1 ? 's' : ''} active${activeDestinationCount > 1 ? 's' : ''} sur ${destinationMarketCount} marche${destinationMarketCount > 1 ? 's' : ''}.`
+                              : 'Aucun marche actif n est encore configure pour piloter cette fiche plus finement.'}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="bg-background">
+                        {totalDestinationCount > 0 ? `${activeDestinationCount}/${totalDestinationCount}` : '0'}
+                      </Badge>
+                    </div>
+
+                    {totalDestinationCount > 0 ? (
+                      <div className="mt-4 space-y-4">
+                        {destinationActivationGroups.map((group) => {
+                          const activeGroupCount = group.items.filter((entry) => entry.isEnabled).length;
+                          return (
+                            <div key={group.marketId} className="rounded-xl border border-border/70 bg-[#fafcfa] p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <div className="font-medium text-foreground">{group.marketName}</div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {activeGroupCount}/{group.items.length} destination{group.items.length > 1 ? 's' : ''} active{activeGroupCount > 1 ? 's' : ''}
+                                  </div>
+                                </div>
+                                <Badge variant="outline" className="bg-white">
+                                  {group.marketCode}
+                                </Badge>
+                              </div>
+
+                              <div className="mt-3 space-y-2">
+                                {group.items.map((destination) => {
+                                  const targetSummary = [
+                                    destination.localeCode ? `Langue ${destination.localeCode}` : null,
+                                    destination.currencyCode ? `Devise ${destination.currencyCode}` : null,
+                                    destination.externalScopeLabel || null,
+                                  ].filter(Boolean).join(' · ');
+                                  const statusLabel = destination.isEnabled ? 'Active' : 'Exclue';
+                                  const sourceLabel = destination.activationSource === 'destination'
+                                    ? 'Pilotage specifique sur ce marche.'
+                                    : 'Herite du reglage global du canal.';
+                                  return (
+                                    <div
+                                      key={destination.destinationId}
+                                      className={cn(
+                                        'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-colors',
+                                        destination.isEnabled
+                                          ? 'border-emerald-200 bg-emerald-50/50'
+                                          : 'border-slate-200 bg-slate-50'
+                                      )}
+                                    >
+                                      <div className="flex min-w-0 items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-white">
+                                          {getChannelLogo(destination.platformKey)}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-medium text-foreground">{destination.platformLabel}</span>
+                                            <Badge
+                                              variant="outline"
+                                              className={cn(
+                                                'text-[11px]',
+                                                destination.isEnabled
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                  : 'border-slate-200 bg-slate-100 text-slate-600'
+                                              )}
+                                            >
+                                              {statusLabel}
+                                            </Badge>
+                                          </div>
+                                          {targetSummary ? (
+                                            <div className="mt-1 text-sm text-muted-foreground">{targetSummary}</div>
+                                          ) : null}
+                                          <div className="mt-1 text-xs text-muted-foreground">{sourceLabel}</div>
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center justify-end gap-2">
+                                        {['gmc', 'amazon', 'meta', 'chatgpt'].includes(destination.platformKey) && (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-10 px-4"
+                                            onClick={() => {
+                                              setAiDestinationId(destination.destinationId);
+                                              setAutoGenerateAiOnOpen(false);
+                                              setShowAiOptimizationModal(true);
+                                            }}
+                                          >
+                                            Optimiser ce marche
+                                          </Button>
+                                        )}
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant={destination.isEnabled ? 'outline' : 'default'}
+                                          className={cn(
+                                            'min-w-[148px] h-10 px-4 font-semibold',
+                                            !destination.isEnabled && 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                          )}
+                                          disabled={Boolean(savingDestinationId)}
+                                          onClick={() => void setDestinationEnabled(destination.destinationId, !destination.isEnabled)}
+                                        >
+                                          {savingDestinationId === destination.destinationId
+                                            ? 'Mise a jour...'
+                                            : destination.isEnabled
+                                              ? 'Exclure ce marche'
+                                              : 'Inclure ce marche'}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-dashed border-border/80 bg-[#fafcfa] px-4 py-3 text-sm text-muted-foreground">
+                        Cree d abord un marche dans Flux pour activer une diffusion plus fine par pays, langue ou marketplace.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2181,12 +2439,16 @@ export default function ProductDetailPage() {
         customfields: item.customfields,
       }}
       isOpen={showAiOptimizationModal}
+      destinations={aiDestinationOptions}
+      initialDestinationId={aiDestinationId}
       autoGenerateOnOpen={autoGenerateAiOnOpen}
       onClose={() => {
+        setAiDestinationId(null);
         setAutoGenerateAiOnOpen(false);
         setShowAiOptimizationModal(false);
       }}
       onApplied={async () => {
+        setAiDestinationId(null);
         setAutoGenerateAiOnOpen(false);
         const previousScore = productScore?.qualityScore ?? null;
         const nextScore = await fetchItem();

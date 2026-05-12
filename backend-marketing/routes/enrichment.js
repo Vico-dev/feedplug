@@ -3,6 +3,122 @@ function registerEnrichmentRoutes(app, prisma, getPrismaReady, { authenticateTok
   const { optimizeTitleWithAI, calculateTitleScore } = require('../optimization/title-optimizer');
   const { optimizeDescriptionWithAI, calculateDescriptionScore } = require('../optimization/description-optimizer');
 
+  app.get('/api/v1/enrichment/suggestions', authenticateToken, async (req, res) => {
+    try {
+      if (!getPrismaReady() || !prisma) {
+        return res.status(503).json({ message: 'Service non disponible' });
+      }
+      const accountId = req.accountId || 'default-account';
+      const { feedId } = req.query;
+
+      const feedFilter = feedId ? `AND f.id = $2` : '';
+      const params = feedId ? [accountId, feedId] : [accountId];
+      
+      const items = await prisma.$queryRawUnsafe(`
+        SELECT i.id, i.title, i.descriptiontext, i.description, i.imageurl, i.imageUrl, 
+               i.brand, i.price, i.gtin, i.mpn, i.availability,
+               i.google_product_category, f.name as feedname
+        FROM "FeedItem" i
+        JOIN "Feed" f ON i.feedid = f.id
+        WHERE f.accountid = $1::text ${feedFilter}
+        LIMIT 5000
+      `, ...params);
+
+      const suggestions = [];
+      const stats = { total: items.length, withCategory: 0, withBrand: 0, withImage: 0, withDescription: 0 };
+
+      items.forEach(item => {
+        if (item.google_product_category) stats.withCategory++;
+        if (item.brand) stats.withBrand++;
+        if (item.imageurl || item.imageUrl) stats.withImage++;
+        if (item.descriptiontext || item.description) stats.withDescription++;
+      });
+
+      const missingCategory = items.filter(i => !i.google_product_category).length;
+      const missingBrand = items.filter(i => !i.brand).length;
+      const missingImage = items.filter(i => !i.imageurl && !i.imageUrl).length;
+      const shortTitles = items.filter(i => i.title && i.title.length < 30).length;
+      const shortDescriptions = items.filter(i => {
+        const desc = i.descriptiontext || i.description || '';
+        return desc.length < 50;
+      }).length;
+
+      const missingCategoryPct = Math.round((missingCategory / stats.total) * 100);
+      const missingBrandPct = Math.round((missingBrand / stats.total) * 100);
+      const missingImagePct = Math.round((missingImage / stats.total) * 100);
+
+      if (missingCategory > 0) {
+        suggestions.push({
+          id: 'missing-category',
+          type: 'category',
+          title: 'Catégories Google manquantes',
+          description: `${missingCategory} produits (${missingCategoryPct}%) n'ont pas de catégorie Google Shopping. L'IA peut les compléter automatiquement.`,
+          impact: missingCategoryPct > 30 ? 'high' : missingCategoryPct > 15 ? 'medium' : 'low',
+          affectedProducts: missingCategory,
+          actionLabel: 'Compléter les catégories',
+          example: { before: 'Chaussures', after: 'Apparel & Accessories > Shoes' }
+        });
+      }
+
+      if (missingBrand > 0) {
+        suggestions.push({
+          id: 'missing-brand',
+          type: 'title',
+          title: 'Marque manquante dans les titres',
+          description: `${missingBrand} produits (${missingBrandPct}%) n'ont pas la marque dans leur titre. Ajouter la marque améliore le CTR.`,
+          impact: missingBrandPct > 40 ? 'high' : missingBrandPct > 20 ? 'medium' : 'low',
+          affectedProducts: missingBrand,
+          actionLabel: 'Enrichir les titres',
+          example: { before: 'Air Max 90', after: 'Nike Air Max 90' }
+        });
+      }
+
+      if (shortTitles > 0) {
+        suggestions.push({
+          id: 'short-titles',
+          type: 'title',
+          title: 'Titres trop courts',
+          description: `${shortTitles} produits ont des titres de moins de 30 caractères. Des titres plus descriptifs performent mieux.`,
+          impact: shortTitles / stats.total > 0.2 ? 'medium' : 'low',
+          affectedProducts: shortTitles,
+          actionLabel: 'Optimiser les titres',
+          example: { before: 'T-shirt', after: 'T-shirt coton bio blanc - Taille M' }
+        });
+      }
+
+      if (shortDescriptions > 0) {
+        suggestions.push({
+          id: 'short-descriptions',
+          type: 'description',
+          title: 'Descriptions courtes',
+          description: `${shortDescriptions} produits ont des descriptions de moins de 50 caractères. Des descriptions détaillées convertissent mieux.`,
+          impact: shortDescriptions / stats.total > 0.3 ? 'medium' : 'low',
+          affectedProducts: shortDescriptions,
+          actionLabel: 'Générer des descriptions',
+          example: { before: 'Bonne qualité.', after: '✓ Coton bio\n✓ Coupe classique\n✓ Lavable en machine' }
+        });
+      }
+
+      if (missingImage > 0) {
+        suggestions.push({
+          id: 'missing-images',
+          type: 'image',
+          title: 'Images manquantes',
+          description: `${missingImage} produits (${missingImagePct}%) n'ont pas d'image. Les produits avec image convertissent 3x plus.`,
+          impact: missingImagePct > 20 ? 'high' : missingImagePct > 10 ? 'medium' : 'low',
+          affectedProducts: missingImage,
+          actionLabel: 'Voir les produits',
+          example: { before: 'Sans image', after: 'Photo produit haute résolution' }
+        });
+      }
+
+      res.json({ suggestions, stats });
+    } catch (e) {
+      console.error('Erreur suggestions:', e);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get('/api/v1/ingestion/items/:id/enrichment-analysis', async (req, res) => {
     try {
       const { id } = req.params;

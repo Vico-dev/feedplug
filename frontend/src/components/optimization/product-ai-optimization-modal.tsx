@@ -11,6 +11,7 @@ import { usePlanCapabilities } from "@/hooks/use-plan-capabilities";
 import { API_BASE_URL, apiClient, authFetch } from "@/lib/api";
 import {
   getOptimizedPlatformContent,
+  hasStoredOptimizedContent,
   parseProductCustomFields,
   type OptimizedPlatformKey,
 } from "@/lib/optimized-product-content";
@@ -35,6 +36,13 @@ interface ProductAiOptimizationModalProps {
   onClose: () => void;
   onApplied?: () => Promise<void> | void;
   autoGenerateOnOpen?: boolean;
+  destinations?: Array<{
+    id: string;
+    label: string;
+    platformKey: OptimizedPlatformKey;
+    summary?: string | null;
+  }>;
+  initialDestinationId?: string | null;
 }
 
 const PLATFORMS: Array<{ value: OptimizedPlatformKey; label: string }> = [
@@ -190,9 +198,12 @@ export function ProductAiOptimizationModal({
   onClose,
   onApplied,
   autoGenerateOnOpen = false,
+  destinations = [],
+  initialDestinationId = null,
 }: ProductAiOptimizationModalProps) {
   const { canUseAddonIA } = usePlanCapabilities();
   const [platform, setPlatform] = useState<OptimizedPlatformKey>("gmc");
+  const [selectedDestinationId, setSelectedDestinationId] = useState<string>("global");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [highlightsText, setHighlightsText] = useState("");
@@ -214,10 +225,32 @@ export function ProductAiOptimizationModal({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const pasteZoneRef = useRef<HTMLDivElement>(null);
   const autoGenerateTriggeredRef = useRef(false);
+  const scopeBootstrapPendingRef = useRef(false);
+  const scopeBootstrappedRef = useRef(false);
   const generateAllRef = useRef<() => Promise<void>>(async () => {});
 
   const customfields = useMemo(() => parseProductCustomFields(product.customfields), [product.customfields]);
-  const currentPlatformContent = useMemo(() => getOptimizedPlatformContent(customfields, platform), [customfields, platform]);
+  const selectedDestination = useMemo(
+    () => destinations.find((destination) => destination.id === selectedDestinationId) ?? null,
+    [destinations, selectedDestinationId]
+  );
+  const currentPlatformContent = useMemo(
+    () => getOptimizedPlatformContent(
+      customfields,
+      platform,
+      selectedDestination ? { destinationId: selectedDestination.id } : undefined
+    ),
+    [customfields, platform, selectedDestination]
+  );
+  const hasScopedDestinationContent = useMemo(
+    () => selectedDestination
+      ? hasStoredOptimizedContent(customfields, platform, {
+          destinationId: selectedDestination.id,
+          allowPlatformFallback: false,
+        })
+      : false,
+    [customfields, platform, selectedDestination]
+  );
   const currentLifestyleUrl = useMemo(() => {
     const urls = getLifestyleUrls(customfields);
     const target = getLifestyleChannel(platform);
@@ -248,6 +281,7 @@ export function ProductAiOptimizationModal({
     () => normalizeHighlightsText(currentPlatformContent.highlights.join("\n")),
     [currentPlatformContent.highlights]
   );
+  const selectedScopeLabel = selectedDestination ? selectedDestination.label : "Version globale FeedPlug";
   const hasUnappliedChanges = useMemo(() => {
     return (
       title.trim() !== baselineTitle ||
@@ -258,7 +292,35 @@ export function ProductAiOptimizationModal({
   }, [title, baselineTitle, description, baselineDescription, highlightsText, baselineHighlightsText, imageUrl, currentLifestyleUrl]);
 
   useEffect(() => {
+    if (!isOpen) {
+      scopeBootstrapPendingRef.current = false;
+      scopeBootstrappedRef.current = false;
+      return;
+    }
+    if (scopeBootstrappedRef.current) return;
+
+    scopeBootstrappedRef.current = true;
+    const nextDestinationId = initialDestinationId || "global";
+    const nextDestination = destinations.find((destination) => destination.id === nextDestinationId) ?? null;
+    const nextPlatform = nextDestination?.platformKey ?? platform;
+    const needsScopeSync = selectedDestinationId !== nextDestinationId || nextPlatform !== platform;
+
+    if (selectedDestinationId !== nextDestinationId) {
+      setSelectedDestinationId(nextDestinationId);
+    }
+    if (nextPlatform !== platform) {
+      setPlatform(nextPlatform);
+    }
+    scopeBootstrapPendingRef.current = needsScopeSync;
+  }, [destinations, initialDestinationId, isOpen, platform, selectedDestinationId]);
+
+  useEffect(() => {
     if (!isOpen) return;
+    if (scopeBootstrapPendingRef.current) {
+      scopeBootstrapPendingRef.current = false;
+      return;
+    }
+    setSelectedDestinationId(initialDestinationId || "global");
     setError(null);
     setTitle(currentPlatformContent.title ?? product.title ?? "");
     setDescription(currentPlatformContent.description ?? stripHtml(product.description));
@@ -269,12 +331,19 @@ export function ProductAiOptimizationModal({
     setCustomSceneInput("");
     setUploadedBase64(null);
     setUploadedMimeType("image/jpeg");
-  }, [isOpen, currentPlatformContent, currentLifestyleUrl, product.title, product.description]);
+  }, [currentLifestyleUrl, currentPlatformContent, initialDestinationId, isOpen, product.title, product.description]);
 
   useEffect(() => {
     if (!isOpen) return;
     setRenderMode("auto");
   }, [isOpen, product.id]);
+
+  useEffect(() => {
+    if (!selectedDestination) return;
+    if (platform !== selectedDestination.platformKey) {
+      setPlatform(selectedDestination.platformKey);
+    }
+  }, [platform, selectedDestination]);
 
   useEffect(() => {
     if (!availablePresets.some((preset) => preset.value === lifestylePreset)) {
@@ -325,6 +394,7 @@ export function ProductAiOptimizationModal({
         itemId: product.id,
         platform: toApiPlatform(platform),
         forceRefresh: true,
+        saveDestinationId: selectedDestination?.id,
       });
       if (data.optimizedTitle?.trim()) {
         setTitle(data.optimizedTitle);
@@ -346,6 +416,7 @@ export function ProductAiOptimizationModal({
         itemId: product.id,
         platform: toApiPlatform(platform),
         forceRefresh: true,
+        saveDestinationId: selectedDestination?.id,
       });
       if (data.optimizedDescription?.trim()) {
         setDescription(data.optimizedDescription);
@@ -367,6 +438,7 @@ export function ProductAiOptimizationModal({
         itemId: product.id,
         platform: toApiPlatform(platform),
         forceRefresh: true,
+        saveDestinationId: selectedDestination?.id,
       });
       if (Array.isArray(data.highlights) && data.highlights.length > 0) {
         setHighlightsText(data.highlights.join("\n"));
@@ -492,23 +564,16 @@ export function ProductAiOptimizationModal({
         .split("\n")
         .map((entry) => entry.replace(/^[\s\-•]+/, "").trim())
         .filter(Boolean);
-      const nextCustomfields = { ...customfields };
-      const optimized = nextCustomfields.optimized && typeof nextCustomfields.optimized === "object"
-        ? { ...(nextCustomfields.optimized as Record<string, unknown>) }
-        : {};
-      const existingPlatform = optimized[platform] && typeof optimized[platform] === "object"
-        ? { ...(optimized[platform] as Record<string, unknown>) }
-        : {};
-      optimized[platform] = {
-        ...existingPlatform,
+      await apiClient.patch(`/ingestion/items/${product.id}/optimized`, {
+        platform,
+        destinationId: selectedDestination?.id,
         title: title.trim(),
         description: description.trim(),
         highlights,
-        updatedAt: new Date().toISOString(),
-      };
-      nextCustomfields.optimized = optimized;
+      });
 
       const persistedImageUrl = normalizeStoredAssetUrl(imageUrl);
+      const nextCustomfields = { ...customfields };
 
       if (imageChanged && persistedImageUrl) {
         const lifestyleUrls = getLifestyleUrls(nextCustomfields);
@@ -520,15 +585,20 @@ export function ProductAiOptimizationModal({
         };
       }
 
-      const payload: Record<string, unknown> = {
-        title: title.trim() || product.title || "",
-        descriptionText: description.trim(),
-        customfields: nextCustomfields,
-      };
-      if (imageChanged && persistedImageUrl) {
-        payload.imageUrl = persistedImageUrl;
+      const payload: Record<string, unknown> = {};
+      if (!selectedDestination) {
+        payload.title = title.trim() || product.title || "";
+        payload.descriptionText = description.trim();
       }
-      await apiClient.put(`/ingestion/items/${product.id}`, payload);
+      if (imageChanged) {
+        payload.customfields = nextCustomfields;
+        if (persistedImageUrl) {
+          payload.imageUrl = persistedImageUrl;
+        }
+      }
+      if (Object.keys(payload).length > 0) {
+        await apiClient.put(`/ingestion/items/${product.id}`, payload);
+      }
       await onApplied?.();
       onClose();
     } catch (err: unknown) {
@@ -578,9 +648,20 @@ export function ProductAiOptimizationModal({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
+                  value={selectedDestinationId}
+                  onChange={(event) => setSelectedDestinationId(event.target.value)}
+                  className="h-10 max-w-[320px] rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="global">Version globale FeedPlug</option>
+                  {destinations.map((destination) => (
+                    <option key={destination.id} value={destination.id}>{destination.label}</option>
+                  ))}
+                </select>
+                <select
                   value={platform}
                   onChange={(event) => setPlatform(event.target.value as OptimizedPlatformKey)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  disabled={Boolean(selectedDestination)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {PLATFORMS.map((entry) => (
                     <option key={entry.value} value={entry.value}>{entry.label}</option>
@@ -621,6 +702,16 @@ export function ProductAiOptimizationModal({
                 </AlertDescription>
               </Alert>
             )}
+            <Alert className="mt-4 border-sky-200 bg-sky-50 text-sky-950">
+              <AlertDescription>
+                <strong>{selectedScopeLabel}</strong>
+                {selectedDestination
+                  ? hasScopedDestinationContent
+                    ? " dispose déjà d'une version dédiée. Les changements resteront limités à cette destination."
+                    : " n'a pas encore de version dédiée. FeedPlug part de la meilleure version existante pour vous laisser l'adapter sans toucher à la fiche source."
+                  : " reste la base commune partagée entre vos différents marchés."}
+              </AlertDescription>
+            </Alert>
           </div>
 
           <div className="grid flex-1 gap-0 overflow-y-auto lg:grid-cols-[1.15fr_0.85fr]">
@@ -629,7 +720,11 @@ export function ProductAiOptimizationModal({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Titre produit</h3>
-                    <p className="text-xs text-muted-foreground">Version appliquée à la fiche et mémorisée pour {PLATFORMS.find((entry) => entry.value === platform)?.label}.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedDestination
+                        ? `Version mémorisée pour ${selectedScopeLabel}, sans écraser le titre source.`
+                        : `Version appliquée à la fiche et mémorisée pour ${PLATFORMS.find((entry) => entry.value === platform)?.label}.`}
+                    </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={() => void generateTitle()} disabled={!canUseAddonIA || titleLoading}>
                     {titleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -651,7 +746,9 @@ export function ProductAiOptimizationModal({
                     <p className="text-xs text-muted-foreground">
                       {platform === "gmc"
                         ? "Texte factuel, lisible et conforme au style Google Merchant Center. Pas de ✓, pas de blocs marketing."
-                        : "Texte long optimisé pour la fiche produit et la plateforme cible."}
+                        : selectedDestination
+                          ? "Texte localisé pour cette destination, sans modifier la description source."
+                          : "Texte long optimisé pour la fiche produit et la plateforme cible."}
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={() => void generateDescription()} disabled={!canUseAddonIA || descriptionLoading}>
@@ -675,7 +772,9 @@ export function ProductAiOptimizationModal({
                     <p className="text-xs text-muted-foreground">
                       {platform === "gmc"
                         ? "Un fragment par ligne. Pour GMC: 4 à 6 points courts, concrets, sans promo ni information magasin."
-                        : "Un point par ligne. Ils sont stockés dans la couche optimisée par plateforme."}
+                        : selectedDestination
+                          ? "Un point par ligne. Ils seront stockés dans la couche optimisée de cette destination."
+                          : "Un point par ligne. Ils sont stockés dans la couche optimisée par plateforme."}
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={() => void generateHighlights()} disabled={!canUseAddonIA || highlightsLoading}>
@@ -716,7 +815,7 @@ export function ProductAiOptimizationModal({
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Image produit</h3>
                     <p className="text-xs text-muted-foreground">
-                      Mise en situation générée et réutilisable sur la fiche. Pour le rendu le plus réaliste, préfère Imagen.
+                      Mise en situation générée et réutilisable sur la fiche. Pour l&apos;instant, le visuel reste partagé entre les destinations.
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={() => void generateImage()} disabled={!canUseAddonIA || imageLoading}>
@@ -873,7 +972,11 @@ export function ProductAiOptimizationModal({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4">
-            <p className="text-sm text-muted-foreground">La sauvegarde met à jour la fiche produit et conserve la version optimisée par plateforme.</p>
+            <p className="text-sm text-muted-foreground">
+              {selectedDestination
+                ? "La sauvegarde conserve une version dédiée pour cette destination. La fiche source n'est pas réécrite."
+                : "La sauvegarde met à jour la fiche produit et conserve la version optimisée par plateforme."}
+            </p>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" onClick={handleRequestClose} disabled={saving}>
                 Annuler

@@ -85,7 +85,7 @@ export function AutomationCard({
             <p className="mt-1 text-sm font-medium text-slate-700">{feedLabel}</p>
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Canal</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Canal / destination</p>
             <p className="mt-1 text-sm font-medium text-slate-700">{channelLabel}</p>
           </div>
           <div>

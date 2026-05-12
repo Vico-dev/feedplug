@@ -31,6 +31,8 @@ export default function MarketingLandingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [companyWebsite, setCompanyWebsite] = useState('');
+  const [formStartedAt] = useState(() => Date.now());
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -54,7 +56,12 @@ export default function MarketingLandingPage() {
     setError(null);
 
     try {
-      await apiClient.post('/marketing/early-access', { email: trimmedEmail, locale });
+      await apiClient.post('/marketing/early-access', {
+        email: trimmedEmail,
+        locale,
+        companyWebsite,
+        formStartedAt,
+      });
       trackEvent('generate_lead', { currency: 'EUR', value: 0, source: 'landing_page' });
     } catch (err: unknown) {
       console.error('Lead capture failed on marketing homepage:', err);
@@ -339,6 +346,24 @@ export default function MarketingLandingPage() {
               </p>
 
               <form onSubmit={handleEarlyAccess} className="hero-f" style={{ maxWidth: '560px' }}>
+                <input
+                  type="text"
+                  name="website"
+                  value={companyWebsite}
+                  onChange={(e) => setCompanyWebsite(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '-10000px',
+                    top: 'auto',
+                    width: '1px',
+                    height: '1px',
+                    opacity: 0,
+                    pointerEvents: 'none',
+                  }}
+                />
                 <div
                   className="rform"
                   style={{

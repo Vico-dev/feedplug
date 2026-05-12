@@ -13,9 +13,12 @@
 - ✅ Colonnes personnalisées
 - ✅ **Catalogue** : pagination (50 par page, un flux à la fois), virtualisation liste, recherche serveur (`?q=`), filtres (image, prix, mis à jour), tri (titre, date, prix), suggestions recherche, URL partageable
 - ✅ **Une seule page Sources** : `/sources` (redirection `/admin/sources` → `/sources`)
-- ✅ **Fiche produit** : onglets (Résumé, Qualité, Champs, Enrichissement), barre d’actions sticky, choix par champ « Valeur du flux » ou « Autre valeur » en édition
+- ✅ **Fiche produit** : onglets (Résumé, Qualité, Champs, Enrichissement), barre d'actions sticky, choix par champ "Valeur du flux" ou "Autre valeur" en édition
 - ✅ **Sentry** : erreurs fiche produit (chargement, sauvegarde, enrichissement) remontées avec tags `area` / `itemId`
 - ✅ **Tests E2E** : Playwright (catalogue + fiche produit + onglets)
+- ✅ **Export des Flux** : Google Merchant Center, Amazon Seller Central, Meta Catalog, Cdiscount, Rakuten, Bing, Pinterest, TikTok, Snapchat, Yandex, Baidu, Perplexity, Gemini
+- ✅ **Optimisation IA** : Gemini/Mistral API, optimisation titres/descriptions, suggestions dans l'interface, application en masse
+- ✅ **Facturation Stripe** : configurateur (produits × canaux), grille tarifaire, checkout session, billing portal, webhook, factures
 
 ### ❌ Fonctionnalités Manquantes (Priorité)
 
@@ -23,43 +26,48 @@
 
 ## 🎯 Phase 1 : MVP Fonctionnel (2-3 semaines)
 
-### 1.1 Export des Flux (PRIORITÉ HAUTE) 🔥
+### 1.1 Export des Flux (PRIORITÉ HAUTE) ✅
 **Objectif** : Permettre aux clients d'exporter leurs produits optimisés vers les plateformes
 
-**À implémenter :**
-- [ ] Page "Flux" dans la sidebar (actuellement badge "3")
-- [ ] Création de flux d'export (Google Merchant Center, Meta Catalog, etc.)
-- [ ] Génération de fichiers CSV/XML selon les spécifications de chaque plateforme
-- [ ] Téléchargement des flux générés
-- [ ] Historique des exports
+**Implémenté :**
+- [x] Page "Flux" dans la sidebar
+- [x] Création de flux d'export (Google Merchant Center, Meta Catalog, etc.)
+- [x] Génération de fichiers CSV/XML selon les spécifications de chaque plateforme
+- [x] Téléchargement des flux générés
+- [x] Push automatique vers Google Merchant Center
+- [x] Push automatique vers Amazon Seller Central
+- [x] Historique des exports
 
 **Valeur métier** : C'est le cœur du produit - sans export, pas de valeur pour le client
 
 ---
 
-### 1.2 Optimisation IA des Produits (PRIORITÉ HAUTE) 🔥
+### 1.2 Optimisation IA des Produits (PRIORITÉ HAUTE) ✅
 **Objectif** : Améliorer automatiquement les titres et descriptions pour chaque plateforme
 
-**À implémenter :**
-- [ ] Intégration avec Gemini/Mistral API
-- [ ] Optimisation des titres (SEO, longueur optimale, mots-clés)
-- [ ] Optimisation des descriptions (longueur, structure, mots-clés)
-- [ ] Suggestions d'amélioration dans l'interface
-- [ ] Application en masse des optimisations
+**Implémenté :**
+- [x] Intégration avec Gemini/Mistral API
+- [x] Optimisation des titres (SEO, longueur optimale, mots-clés)
+- [x] Optimisation des descriptions (longueur, structure, mots-clés)
+- [x] Suggestions d'amélioration dans l'interface
+- [x] Application en masse des optimisations
+- [x] Automatisation de règles (automation cards)
 
 **Valeur métier** : Différenciation concurrentielle, amélioration des performances
 
 ---
 
-### 1.3 Score de Performance Média (PRIORITÉ MOYENNE)
+### 1.3 Score de Performance Média (PRIORITÉ MOYENNE) ✅
 **Objectif** : Afficher les performances réelles des produits par canal
 
-**À implémenter :**
-- [ ] Intégration Google Ads API (impressions, clics, conversions)
-- [ ] Intégration Meta Ads API (impressions, clics, conversions)
-- [ ] Calcul du score de performance par canal
-- [ ] Affichage dans le catalogue et détails produit
-- [ ] Graphiques d'évolution dans le temps
+**Implémenté :**
+- [x] Intégration Google Ads API (impressions, clics, conversions)
+- [x] Intégration Meta Ads API (impressions, clics, conversions)
+- [x] Intégration Amazon Ads API (SP par ASIN)
+- [x] Calcul du score de performance par canal
+- [x] Page Performance avec dashboard agrégé (par canal, top produits, par catégorie)
+- [x] Affichage dans le catalogue et détails produit
+- [x] Historique et évolution dans le temps
 
 **Valeur métier** : Insights actionnables pour optimiser les campagnes
 
@@ -69,15 +77,15 @@
 
 ## 🚀 Phase 2 : Amélioration UX & Performance (2 semaines)
 
-### 2.1 Page Rapports & Analytics (PRIORITÉ MOYENNE)
+### 2.1 Page Rapports & Analytics (PRIORITÉ MOYENNE) ✅
 **Objectif** : Dashboard avec métriques clés
 
-**À implémenter :**
-- [ ] Vue d'ensemble des scores (qualité moyenne, performance moyenne)
-- [ ] Graphiques d'évolution des scores
-- [ ] Top produits performants / à améliorer
-- [ ] Statistiques par source
-- [ ] Export des rapports
+**Implémenté :**
+- [x] Vue d'ensemble des scores (qualité moyenne, performance moyenne)
+- [x] Graphiques d'évolution des scores
+- [x] Top produits performants / à améliorer
+- [x] Statistiques par source
+- [x] Export des rapports
 
 ---
 
@@ -105,15 +113,18 @@
 
 ## 💰 Phase 3 : Monétisation (1-2 semaines)
 
-### 3.1 Facturation Automatique (PRIORITÉ HAUTE) 🔥
+### 3.1 Facturation Stripe (PRIORITÉ HAUTE) ✅
 **Objectif** : Facturer les clients selon leur usage
 
-**À implémenter :**
-- [ ] Intégration Pennylane API
-- [ ] Plans tarifaires (Starter, Pro, Enterprise)
-- [ ] Compteur de produits traités
-- [ ] Génération automatique de factures
-- [ ] Page de facturation dans l'interface
+**Implémenté :**
+- [x] Intégration Stripe
+- [x] Grille tarifaire dynamique (produits × canaux + addon IA)
+- [x] Plans tarifaires (Starter, Professional, Enterprise)
+- [x] Checkout session Stripe
+- [x] Billing Portal (gestion des-abonnements)
+- [x] Webhooks Stripe (subscription, invoice, payment)
+- [x] Génération automatique de factures
+- [x] Page de facturation dans l'interface
 
 **Valeur métier** : Nécessaire pour générer des revenus
 
@@ -178,22 +189,16 @@
 
 ---
 
-## 📝 Recommandations Prioritaires
+## 🎯 Prochaines priorités
 
-### 🔥 À faire IMMÉDIATEMENT (Semaine 1-2)
-1. **Export des flux** - C'est la fonctionnalité principale du produit
-2. **Optimisation IA** - Différenciation concurrentielle
-3. **Facturation** - Nécessaire pour générer des revenus
+### Haute
+1. **Planification cron** - imports/exports automatisés
+2. **Page Sources** - refonte UX
 
-### ⚡ À faire ENSUITE (Semaine 3-4)
-4. **Score de performance média** - Complète la valeur du scoring
-5. **Page Rapports** - Donne de la visibilité sur les résultats
-6. **Planification automatique** - Automatise les tâches répétitives
-
-### 📌 À faire PLUS TARD
-- Support de plus de sources (WooCommerce, PrestaShop, etc.)
-- 2FA et conformité RGPD
-- Améliorations UX
+### Moyenne
+- Support WooCommerce/PrestaShop
+- 2FA + RGPD
+- Gestion-abonnements (Stripe portal already handles this)
 
 ---
 
@@ -201,12 +206,23 @@
 
 Un MVP complet devrait permettre à un client de :
 1. ✅ Importer ses produits (CSV ou Shopify)
-2. ⏳ Optimiser automatiquement ses produits avec l'IA
-3. ⏳ Exporter ses produits optimisés vers Google Merchant Center et Meta
-4. ⏳ Voir les performances de ses produits
-5. ⏳ Être facturé automatiquement
+2. ✅ Optimiser automatiquement ses produits avec l'IA
+3. ✅ Exporter ses produits optimisés vers Google Merchant Center, Amazon, Meta et autres marketplaces
+4. ✅ Voir les performances de ses produits (Google Ads, Meta Ads, Amazon Ads)
+5. ✅ Être facturé automatiquement via Stripe
 
-**Statut actuel** : ~40% du MVP complet
+**Statut actuel** : ~95% du MVP complet**
+
+### ⏳ Ce qu'il reste à faire
+
+#### Priorité Haute
+- **Planification cron** : imports/exports automatisés
+- **Page Sources** : refonte UX
+
+#### Priorité Moyenne
+- Support de nouvelles sources (WooCommerce, PrestaShop)
+- 2FA + Conformité RGPD
+- Gestion des-abonnements (upgrade/downgrade)
 
 
 

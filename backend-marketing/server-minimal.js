@@ -81,6 +81,7 @@ const {
   sendInvitationEmail,
   sendMarketingNurtureEmail,
   sendMarketingAuditEmail,
+  notifyInternalMarketingFormSubmission,
   syncMarketingContact,
   verifyMarketingClickToken,
   verifyMarketingUnsubscribeToken,
@@ -96,6 +97,20 @@ const {
   encryptSecret,
   redactObjectSecrets,
 } = require('./lib/secret-crypto');
+const {
+  buildDestinationScope,
+  buildDestinationSlug,
+  getDefaultLocalesForMarket,
+  getMarketCurrency,
+  getMarketName,
+  getPlatformLabel,
+  inferAmazonChannelKeyForMarket,
+  inferMarketCodeFromAmazonChannelKey,
+  normalizeLocaleCode,
+  normalizeMarketCode,
+  normalizePlatformKey,
+  platformUsesLocales,
+} = require('./lib/markets');
 const chaos = require('./lib/chaos-monkey');
 
 const port = process.env.PORT || 8080;
@@ -1152,6 +1167,665 @@ async function verifyItemAccess(itemId, accountId) {
     return result && result.length > 0;
   } catch {
     return false;
+  }
+}
+
+const MARKET_PLATFORM_OPTIONS = [
+  'gmc',
+  'amazon',
+  'meta',
+  'tiktok',
+  'pinterest',
+  'snapchat',
+  'bing',
+  'cdiscount',
+  'rakuten',
+  'chatgpt',
+  'perplexity',
+  'gemini',
+];
+
+function parseJsonArray(value, fallback = []) {
+  if (!value) return [...fallback];
+  if (Array.isArray(value)) return [...value];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [...fallback];
+    } catch {
+      return [...fallback];
+    }
+  }
+  return [...fallback];
+}
+
+function canManageMarkets(req) {
+  const role = (req.user && req.user.role) || '';
+  return ['OWNER', 'MANAGER'].includes(role);
+}
+
+function isMarketsSchemaMissingError(error) {
+  const message = error?.message || '';
+  return (
+    /42P01|42703/.test(message) ||
+    /relation .*"(Market|MarketLocale|PlatformAccount|MarketChannel|Destination|ProductActivation)".* does not exist/i.test(message) ||
+    /column .*"(countrycodesjson|platformkey|marketchannelid|marketlocaleid)".* does not exist/i.test(message)
+  );
+}
+
+function getMarketsUnavailableResponse(res, error) {
+  if (isMarketsSchemaMissingError(error)) {
+    return res.status(503).json({
+      message: 'Le module Markets n’est pas encore disponible sur cet environnement. Appliquez les migrations Markets puis réessayez.',
+      code: 'markets_schema_missing',
+    });
+  }
+  return null;
+}
+
+function normalizeMarketLocaleInput(entry, marketCode, index = 0) {
+  const localeCode = normalizeLocaleCode(
+    entry?.localeCode || entry?.locale || entry?.languageCode || '',
+    marketCode
+  );
+  const [languageCode = 'en', countryPart] = localeCode.split('-');
+  return {
+    localeCode,
+    languageCode: String(entry?.languageCode || languageCode).toLowerCase(),
+    countryCode: normalizeMarketCode(entry?.countryCode || countryPart || marketCode),
+    isDefault: entry?.isDefault === true || index === 0,
+    isRequiredLaunch: entry?.isRequiredLaunch === true,
+    translationMode: String(entry?.translationMode || 'translate').trim() || 'translate',
+  };
+}
+
+function normalizeMarketChannelInput(entry, marketCode) {
+  const source = typeof entry === 'string' ? { platformKey: entry } : (entry || {});
+  const platformKey = normalizePlatformKey(source.platformKey || source.platform || source.key || '');
+  const settingsJson = parseJsonObject(source.settingsJson || source.settings || {});
+  if (platformKey === 'amazon' && !settingsJson.legacyChannelKey) {
+    const legacyChannelKey = inferAmazonChannelKeyForMarket(marketCode);
+    if (legacyChannelKey) settingsJson.legacyChannelKey = legacyChannelKey;
+  }
+  return {
+    platformKey,
+    platformAccountId: source.platformAccountId || source.accountId || null,
+    status: String(source.status || 'draft').trim() || 'draft',
+    isEnabled: source.isEnabled !== false,
+    settingsJson,
+  };
+}
+
+function platformRequiresConnection(platformKey) {
+  return ['gmc', 'amazon'].includes(normalizePlatformKey(platformKey));
+}
+
+async function listPlatformAccountsForAccount(accountId) {
+  return prisma.$queryRawUnsafe(
+    `SELECT * FROM "PlatformAccount" WHERE accountid = $1::text ORDER BY createdat ASC`,
+    accountId
+  );
+}
+
+async function getLegacyMarketContext(accountId) {
+  const [billingRows, exportChannels, platformConnections] = await Promise.all([
+    prisma.$queryRawUnsafe(
+      `SELECT country FROM "Billing" WHERE accountid = $1::text LIMIT 1`,
+      accountId
+    ).catch(() => []),
+    prisma.$queryRawUnsafe(
+      `SELECT * FROM "ExportChannel" WHERE accountid = $1::text AND isactive = true ORDER BY createdat ASC`,
+      accountId
+    ).catch(() => []),
+    prisma.$queryRawUnsafe(
+      `SELECT * FROM "PlatformConnection" WHERE accountid = $1::text ORDER BY createdat ASC`,
+      accountId
+    ).catch(() => []),
+  ]);
+
+  return {
+    billingCountry: normalizeMarketCode(billingRows?.[0]?.country || ''),
+    exportChannels: exportChannels || [],
+    platformConnections: platformConnections || [],
+  };
+}
+
+async function backfillPlatformAccountsForAccount(accountId, legacyContext = null) {
+  const context = legacyContext || await getLegacyMarketContext(accountId);
+  const existing = await listPlatformAccountsForAccount(accountId);
+  const existingIndex = new Map(
+    (existing || []).map((row) => {
+      const key = `${normalizePlatformKey(row.platformkey)}::${row.externalaccountid || ''}`;
+      return [key, row];
+    })
+  );
+
+  for (const connection of context.platformConnections || []) {
+    const platformKey = normalizePlatformKey(connection.platform);
+    if (!platformKey) continue;
+    const metadataJson = parseJsonObject(connection.metadata);
+    const externalAccountId = connection.merchantid || metadataJson.catalogId || connection.email || null;
+    const lookupKey = `${platformKey}::${externalAccountId || ''}`;
+    if (existingIndex.has(lookupKey)) continue;
+
+    const insertedId = crypto.randomUUID();
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "PlatformAccount" (
+          id, accountid, platformkey, externalaccountid, externalaccountname,
+          credentialsciphertext, credentialsversion, status, metadatajson, createdat, updatedat
+        )
+        VALUES (
+          $1::text, $2::text, $3::text, $4::text, $5::text,
+          NULL, 1, $6::text, $7::jsonb, NOW(), NOW()
+        )
+      `,
+      insertedId,
+      accountId,
+      platformKey,
+      externalAccountId,
+      metadataJson.accountName || metadataJson.catalogName || connection.email || getPlatformLabel(platformKey),
+      connection.status || 'active',
+      JSON.stringify({
+        legacyConnectionId: connection.id,
+        merchantId: connection.merchantid || null,
+        email: connection.email || null,
+        metadata: metadataJson,
+      })
+    );
+    existingIndex.set(lookupKey, {
+      id: insertedId,
+      accountid: accountId,
+      platformkey: platformKey,
+      externalaccountid: externalAccountId,
+      externalaccountname: metadataJson.accountName || metadataJson.catalogName || connection.email || getPlatformLabel(platformKey),
+      status: connection.status || 'active',
+      metadatajson: {
+        legacyConnectionId: connection.id,
+        merchantId: connection.merchantid || null,
+        email: connection.email || null,
+        metadata: metadataJson,
+      },
+    });
+  }
+
+  return listPlatformAccountsForAccount(accountId);
+}
+
+async function createMarket(accountId, payload) {
+  const marketId = crypto.randomUUID();
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "Market" (
+        id, accountid, sourcemarketid, code, name, countrycodesjson, defaultcurrencycode, status,
+        pricingpolicyjson, shippingpolicyjson, taxpolicyjson, contentstrategyjson, publicationdefaultsjson,
+        createdat, updatedat
+      )
+      VALUES (
+        $1::text, $2::text, $3::text, $4::text, $5::text, $6::jsonb, $7::text, $8::text,
+        $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, NOW(), NOW()
+      )
+    `,
+    marketId,
+    accountId,
+    payload.sourceMarketId || null,
+    payload.code,
+    payload.name,
+    JSON.stringify(payload.countryCodes || [payload.code]),
+    payload.defaultCurrencyCode,
+    payload.status || 'draft',
+    JSON.stringify(payload.pricingPolicyJson || {}),
+    JSON.stringify(payload.shippingPolicyJson || {}),
+    JSON.stringify(payload.taxPolicyJson || {}),
+    JSON.stringify(payload.contentStrategyJson || {}),
+    JSON.stringify(payload.publicationDefaultsJson || {})
+  );
+  return marketId;
+}
+
+async function ensureMarketLocales(marketId, marketCode, localesInput = []) {
+  const existingLocales = await prisma.$queryRawUnsafe(
+    `SELECT id, localecode FROM "MarketLocale" WHERE marketid = $1::text`,
+    marketId
+  );
+  const existingByCode = new Map((existingLocales || []).map((row) => [String(row.localecode).toLowerCase(), row]));
+  const desiredLocales = (Array.isArray(localesInput) && localesInput.length > 0 ? localesInput : getDefaultLocalesForMarket(marketCode))
+    .map((entry, index) => normalizeMarketLocaleInput(entry, marketCode, index))
+    .filter((entry) => entry.localeCode);
+
+  for (let index = 0; index < desiredLocales.length; index += 1) {
+    const locale = desiredLocales[index];
+    if (existingByCode.has(locale.localeCode.toLowerCase())) continue;
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "MarketLocale" (
+          id, marketid, localecode, languagecode, countrycode, isdefault,
+          isrequiredlaunch, translationmode, createdat, updatedat
+        )
+        VALUES (
+          $1::text, $2::text, $3::text, $4::text, $5::text, $6::boolean,
+          $7::boolean, $8::text, NOW(), NOW()
+        )
+      `,
+      crypto.randomUUID(),
+      marketId,
+      locale.localeCode,
+      locale.languageCode,
+      locale.countryCode,
+      locale.isDefault === true || index === 0,
+      locale.isRequiredLaunch === true,
+      locale.translationMode
+    );
+  }
+
+  return prisma.$queryRawUnsafe(
+    `SELECT * FROM "MarketLocale" WHERE marketid = $1::text ORDER BY isdefault DESC, localecode ASC`,
+    marketId
+  );
+}
+
+function pickPlatformAccountId(platformAccounts, platformKey, explicitId = null) {
+  const normalizedPlatformKey = normalizePlatformKey(platformKey);
+  if (explicitId) {
+    const explicit = (platformAccounts || []).find((row) => row.id === explicitId && normalizePlatformKey(row.platformkey) === normalizedPlatformKey);
+    if (explicit) return explicit.id;
+  }
+  return (platformAccounts || []).find((row) => normalizePlatformKey(row.platformkey) === normalizedPlatformKey)?.id || null;
+}
+
+async function upsertMarketChannels(marketRow, channelsInput = [], platformAccounts = []) {
+  const marketCode = normalizeMarketCode(marketRow.code);
+  const marketId = marketRow.id;
+  const existingChannels = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "MarketChannel" WHERE marketid = $1::text`,
+    marketId
+  );
+  const existingByPlatform = new Map((existingChannels || []).map((row) => [normalizePlatformKey(row.platformkey), row]));
+  const desiredChannels = (channelsInput || [])
+    .map((entry) => normalizeMarketChannelInput(entry, marketCode))
+    .filter((entry) => MARKET_PLATFORM_OPTIONS.includes(entry.platformKey));
+
+  for (const channel of desiredChannels) {
+    const platformAccountId = pickPlatformAccountId(platformAccounts, channel.platformKey, channel.platformAccountId);
+    const existing = existingByPlatform.get(channel.platformKey);
+    if (existing) {
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE "MarketChannel"
+          SET platformaccountid = $1::text,
+              status = $2::text,
+              isenabled = $3::boolean,
+              settingsjson = $4::jsonb,
+              updatedat = NOW()
+          WHERE id = $5::text
+        `,
+        platformAccountId,
+        channel.status,
+        channel.isEnabled,
+        JSON.stringify(channel.settingsJson || {}),
+        existing.id
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `
+          INSERT INTO "MarketChannel" (
+            id, marketid, platformkey, platformaccountid, status, isenabled, settingsjson, createdat, updatedat
+          )
+          VALUES (
+            $1::text, $2::text, $3::text, $4::text, $5::text, $6::boolean, $7::jsonb, NOW(), NOW()
+          )
+        `,
+        crypto.randomUUID(),
+        marketId,
+        channel.platformKey,
+        platformAccountId,
+        channel.status,
+        channel.isEnabled,
+        JSON.stringify(channel.settingsJson || {})
+      );
+    }
+  }
+
+  return prisma.$queryRawUnsafe(
+    `SELECT * FROM "MarketChannel" WHERE marketid = $1::text ORDER BY createdat ASC`,
+    marketId
+  );
+}
+
+async function ensureLegacyBackfillForMarket(accountId, marketRow, legacyContext, platformAccounts) {
+  const channels = [];
+  const marketCode = normalizeMarketCode(marketRow.code);
+  const exportChannels = legacyContext.exportChannels || [];
+  const platformConnections = legacyContext.platformConnections || [];
+
+  const hasGmcExport = exportChannels.some((row) => String(row.platform || '').toLowerCase() === 'gmc');
+  const hasGmcConnection = platformConnections.some((row) => normalizePlatformKey(row.platform) === 'gmc' && String(row.status || 'active').toLowerCase() !== 'disabled');
+  if (hasGmcExport || hasGmcConnection) {
+    channels.push({
+      platformKey: 'gmc',
+      status: 'active',
+      isEnabled: true,
+      settingsJson: { legacyChannelKeys: ['gmc'] },
+    });
+  }
+
+  const marketAmazonChannels = exportChannels
+    .filter((row) => normalizePlatformKey(row.platform) === 'amazon')
+    .filter((row) => inferMarketCodeFromAmazonChannelKey(row.channelkey) === marketCode);
+  if (marketAmazonChannels.length > 0 || platformConnections.some((row) => normalizePlatformKey(row.platform) === 'amazon')) {
+    const legacyChannelKey = marketAmazonChannels[0]?.channelkey || inferAmazonChannelKeyForMarket(marketCode);
+    channels.push({
+      platformKey: 'amazon',
+      status: 'active',
+      isEnabled: true,
+      settingsJson: {
+        legacyChannelKey: legacyChannelKey || null,
+        legacyChannelKeys: marketAmazonChannels.map((row) => row.channelkey).filter(Boolean),
+        legacyConfig: parseJsonObject(marketAmazonChannels[0]?.config),
+      },
+    });
+  }
+
+  if (platformConnections.some((row) => normalizePlatformKey(row.platform) === 'meta')) {
+    channels.push({
+      platformKey: 'meta',
+      status: 'draft',
+      isEnabled: true,
+      settingsJson: {},
+    });
+  }
+
+  if (channels.length > 0) {
+    await upsertMarketChannels(marketRow, channels, platformAccounts);
+  }
+}
+
+async function syncDestinationsForMarket(accountId, marketId) {
+  const [marketRows, locales, channels, existingDestinations] = await Promise.all([
+    prisma.$queryRawUnsafe(`SELECT * FROM "Market" WHERE id = $1::text AND accountid = $2::text LIMIT 1`, marketId, accountId),
+    prisma.$queryRawUnsafe(`SELECT * FROM "MarketLocale" WHERE marketid = $1::text ORDER BY isdefault DESC, localecode ASC`, marketId),
+    prisma.$queryRawUnsafe(`SELECT * FROM "MarketChannel" WHERE marketid = $1::text ORDER BY createdat ASC`, marketId),
+    prisma.$queryRawUnsafe(`SELECT * FROM "Destination" WHERE marketid = $1::text ORDER BY createdat ASC`, marketId),
+  ]);
+
+  const marketRow = marketRows?.[0];
+  if (!marketRow) return [];
+
+  const availableLocales = locales && locales.length > 0 ? locales : await ensureMarketLocales(marketId, marketRow.code, []);
+  const existingBySlug = new Map((existingDestinations || []).map((row) => [String(row.slug), row]));
+
+  for (const channel of channels || []) {
+    const settingsJson = parseJsonObject(channel.settingsjson);
+    const scope = buildDestinationScope(channel.platformkey, marketRow.code, settingsJson);
+    const targetLocales = platformUsesLocales(channel.platformkey) ? availableLocales : [null];
+
+    for (let index = 0; index < targetLocales.length; index += 1) {
+      const locale = targetLocales[index];
+      const slug = buildDestinationSlug({
+        platformKey: channel.platformkey,
+        marketCode: marketRow.code,
+        localeCode: locale?.localecode || null,
+        externalScopeId: settingsJson.legacyChannelKey || scope.externalScopeId || null,
+      });
+      const existing = existingBySlug.get(slug);
+      const configJson = {
+        legacyChannelKey: settingsJson.legacyChannelKey || null,
+        legacyChannelKeys: parseJsonArray(settingsJson.legacyChannelKeys || [], []),
+        marketCode: marketRow.code,
+        localeCode: locale?.localecode || null,
+        platformLabel: getPlatformLabel(channel.platformkey),
+      };
+
+      if (existing) {
+        await prisma.$executeRawUnsafe(
+          `
+            UPDATE "Destination"
+            SET marketchannelid = $1::text,
+                marketlocaleid = $2::text,
+                platformkey = $3::text,
+                platformaccountid = $4::text,
+                currencycode = $5::text,
+                externalscopetype = $6::text,
+                externalscopeid = $7::text,
+                externalscopelabel = $8::text,
+                status = $9::text,
+                isprimary = $10::boolean,
+                configjson = $11::jsonb,
+                updatedat = NOW()
+            WHERE id = $12::text
+          `,
+          channel.id,
+          locale?.id || null,
+          normalizePlatformKey(channel.platformkey),
+          channel.platformaccountid || null,
+          scope.currencyCode || getMarketCurrency(marketRow.code),
+          scope.externalScopeType,
+          scope.externalScopeId || null,
+          scope.externalScopeLabel || getPlatformLabel(channel.platformkey),
+          channel.status || 'draft',
+          index === 0,
+          JSON.stringify(configJson),
+          existing.id
+        );
+      } else {
+        await prisma.$executeRawUnsafe(
+          `
+            INSERT INTO "Destination" (
+              id, accountid, marketid, marketchannelid, marketlocaleid,
+              platformkey, platformaccountid, currencycode,
+              externalscopetype, externalscopeid, externalscopelabel,
+              slug, status, isprimary, configjson, createdat, updatedat
+            )
+            VALUES (
+              $1::text, $2::text, $3::text, $4::text, $5::text,
+              $6::text, $7::text, $8::text,
+              $9::text, $10::text, $11::text,
+              $12::text, $13::text, $14::boolean, $15::jsonb, NOW(), NOW()
+            )
+          `,
+          crypto.randomUUID(),
+          accountId,
+          marketId,
+          channel.id,
+          locale?.id || null,
+          normalizePlatformKey(channel.platformkey),
+          channel.platformaccountid || null,
+          scope.currencyCode || getMarketCurrency(marketRow.code),
+          scope.externalScopeType,
+          scope.externalScopeId || null,
+          scope.externalScopeLabel || getPlatformLabel(channel.platformkey),
+          slug,
+          channel.status || 'draft',
+          index === 0,
+          JSON.stringify(configJson)
+        );
+      }
+    }
+  }
+
+  return prisma.$queryRawUnsafe(
+    `SELECT * FROM "Destination" WHERE marketid = $1::text ORDER BY createdat ASC`,
+    marketId
+  );
+}
+
+function buildMarketReadiness(market) {
+  const locales = Array.isArray(market.locales) ? market.locales : [];
+  const channels = Array.isArray(market.channels) ? market.channels : [];
+  const destinationCount = channels.reduce((sum, channel) => sum + (channel.destinations?.length || 0), 0);
+  const missingConnections = channels.filter((channel) => channel.isEnabled && platformRequiresConnection(channel.platformKey) && !channel.platformAccountId).length;
+  const enabledChannels = channels.filter((channel) => channel.isEnabled);
+  const readyChannels = enabledChannels.filter((channel) => {
+    if (platformRequiresConnection(channel.platformKey) && !channel.platformAccountId) return false;
+    return (channel.destinations?.length || 0) > 0;
+  }).length;
+  const status = missingConnections > 0
+    ? 'action_required'
+    : destinationCount === 0
+      ? 'draft'
+      : readyChannels === enabledChannels.length
+        ? 'ready'
+        : 'in_progress';
+
+  return {
+    status,
+    localeCount: locales.length,
+    channelCount: channels.length,
+    destinationCount,
+    readyChannels,
+    missingConnections,
+  };
+}
+
+async function getHydratedMarketsForAccount(accountId) {
+  const markets = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "Market" WHERE accountid = $1::text ORDER BY createdat ASC, code ASC`,
+    accountId
+  );
+  if (!markets || markets.length === 0) return [];
+
+  const marketIds = markets.map((row) => row.id);
+  const locales = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "MarketLocale" WHERE marketid = ANY($1::text[]) ORDER BY isdefault DESC, localecode ASC`,
+    marketIds
+  );
+  const channels = await prisma.$queryRawUnsafe(
+    `
+      SELECT mc.*, pa.externalaccountname, pa.externalaccountid, pa.status AS platformaccountstatus
+      FROM "MarketChannel" mc
+      LEFT JOIN "PlatformAccount" pa ON pa.id = mc.platformaccountid
+      WHERE mc.marketid = ANY($1::text[])
+      ORDER BY mc.createdat ASC
+    `,
+    marketIds
+  );
+  const channelIds = (channels || []).map((row) => row.id);
+  const destinations = channelIds.length > 0
+    ? await prisma.$queryRawUnsafe(
+      `SELECT * FROM "Destination" WHERE marketchannelid = ANY($1::text[]) ORDER BY createdat ASC`,
+      channelIds
+    )
+    : [];
+
+  const localesByMarket = new Map();
+  for (const locale of locales || []) {
+    const list = localesByMarket.get(locale.marketid) || [];
+    list.push({
+      id: locale.id,
+      localeCode: locale.localecode,
+      languageCode: locale.languagecode,
+      countryCode: locale.countrycode,
+      isDefault: locale.isdefault === true,
+      isRequiredLaunch: locale.isrequiredlaunch === true,
+      translationMode: locale.translationmode || 'translate',
+    });
+    localesByMarket.set(locale.marketid, list);
+  }
+
+  const destinationsByChannel = new Map();
+  for (const destination of destinations || []) {
+    const list = destinationsByChannel.get(destination.marketchannelid) || [];
+    list.push({
+      id: destination.id,
+      marketLocaleId: destination.marketlocaleid || null,
+      platformKey: normalizePlatformKey(destination.platformkey),
+      currencyCode: destination.currencycode,
+      externalScopeType: destination.externalscopetype,
+      externalScopeId: destination.externalscopeid || null,
+      externalScopeLabel: destination.externalscopelabel || null,
+      slug: destination.slug,
+      status: destination.status,
+      isPrimary: destination.isprimary === true,
+      config: parseJsonObject(destination.configjson),
+    });
+    destinationsByChannel.set(destination.marketchannelid, list);
+  }
+
+  const channelsByMarket = new Map();
+  for (const channel of channels || []) {
+    const list = channelsByMarket.get(channel.marketid) || [];
+    list.push({
+      id: channel.id,
+      platformKey: normalizePlatformKey(channel.platformkey),
+      label: getPlatformLabel(channel.platformkey),
+      platformAccountId: channel.platformaccountid || null,
+      platformAccountName: channel.externalaccountname || null,
+      platformAccountExternalId: channel.externalaccountid || null,
+      platformAccountStatus: channel.platformaccountstatus || null,
+      status: channel.status || 'draft',
+      isEnabled: channel.isenabled !== false,
+      settings: parseJsonObject(channel.settingsjson),
+      destinations: destinationsByChannel.get(channel.id) || [],
+    });
+    channelsByMarket.set(channel.marketid, list);
+  }
+
+  return (markets || []).map((market) => {
+    const payload = {
+      id: market.id,
+      code: market.code,
+      name: market.name,
+      status: market.status || 'draft',
+      sourceMarketId: market.sourcemarketid || null,
+      countryCodes: parseJsonArray(market.countrycodesjson, []),
+      defaultCurrencyCode: market.defaultcurrencycode || 'EUR',
+      pricingPolicy: parseJsonObject(market.pricingpolicyjson),
+      shippingPolicy: parseJsonObject(market.shippingpolicyjson),
+      taxPolicy: parseJsonObject(market.taxpolicyjson),
+      contentStrategy: parseJsonObject(market.contentstrategyjson),
+      publicationDefaults: parseJsonObject(market.publicationdefaultsjson),
+      createdAt: market.createdat,
+      updatedAt: market.updatedat,
+      locales: localesByMarket.get(market.id) || [],
+      channels: channelsByMarket.get(market.id) || [],
+    };
+    return {
+      ...payload,
+      readiness: buildMarketReadiness(payload),
+    };
+  });
+}
+
+async function ensureMarketsBackfillForAccount(accountId) {
+  const legacyContext = await getLegacyMarketContext(accountId);
+  const platformAccounts = await backfillPlatformAccountsForAccount(accountId, legacyContext);
+  const existingMarkets = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "Market" WHERE accountid = $1::text ORDER BY createdat ASC`,
+    accountId
+  );
+  const existingCodes = new Set((existingMarkets || []).map((row) => normalizeMarketCode(row.code)));
+  const targetCodes = new Set();
+
+  if (legacyContext.billingCountry) targetCodes.add(legacyContext.billingCountry);
+  for (const channel of legacyContext.exportChannels || []) {
+    if (normalizePlatformKey(channel.platform) === 'amazon') {
+      const inferredCode = inferMarketCodeFromAmazonChannelKey(channel.channelkey);
+      if (inferredCode) targetCodes.add(inferredCode);
+    }
+  }
+  if (targetCodes.size === 0) targetCodes.add('FR');
+
+  for (const marketCode of targetCodes) {
+    if (!marketCode || existingCodes.has(marketCode)) continue;
+    const marketId = await createMarket(accountId, {
+      code: marketCode,
+      name: getMarketName(marketCode),
+      countryCodes: [marketCode],
+      defaultCurrencyCode: getMarketCurrency(marketCode),
+      status: 'active',
+    });
+    await ensureMarketLocales(marketId, marketCode, []);
+    existingCodes.add(marketCode);
+  }
+
+  const refreshedMarkets = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "Market" WHERE accountid = $1::text ORDER BY createdat ASC`,
+    accountId
+  );
+  for (const market of refreshedMarkets || []) {
+    await ensureMarketLocales(market.id, market.code, []);
+    await ensureLegacyBackfillForMarket(accountId, market, legacyContext, platformAccounts);
+    await syncDestinationsForMarket(accountId, market.id);
   }
 }
 
@@ -3278,6 +3952,7 @@ app.get('/api/v1/ingestion/feeds/:id/items', async (req, res) => {
     const categoryFilter = typeof req.query.categoryFilter === 'string' ? req.query.categoryFilter.trim() : 'all';
     const updatedRecent = req.query.updatedRecent === 'true';
     const sortBy = typeof req.query.sortBy === 'string' ? req.query.sortBy : 'date_desc';
+    const requestedDestinationId = typeof req.query.destinationId === 'string' ? req.query.destinationId.trim() : '';
 
     if (!(await ensurePrismaReady()) || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
@@ -3285,6 +3960,9 @@ app.get('/api/v1/ingestion/feeds/:id/items', async (req, res) => {
     if (!(await verifyFeedAccess(id, req.accountId))) {
       return res.status(403).json({ message: 'Accès refusé à ce flux' });
     }
+    const destinationContext = requestedDestinationId
+      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId)
+      : null;
 
     const hasSearch = q.length > 0;
     const searchPattern = hasSearch ? `%${q.replace(/%/g, '\\%')}%` : null;
@@ -3317,6 +3995,179 @@ app.get('/api/v1/ingestion/feeds/:id/items', async (req, res) => {
       OR brand IS NULL OR BTRIM(brand) = ''
       OR ${categoryExpr} IS NULL
     )`;
+
+    if (destinationContext) {
+      const allRows = await prisma.$queryRawUnsafe(`
+        SELECT *
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+      `, id);
+      const itemIds = (allRows || []).map((row) => row.id).filter(Boolean);
+      const activationRows = itemIds.length > 0
+        ? await prisma.$queryRawUnsafe(
+            `
+              SELECT *
+              FROM "ProductActivation"
+              WHERE destinationid = $1::text
+                AND productid = ANY($2::text[])
+            `,
+            destinationContext.id,
+            itemIds
+          )
+        : [];
+      const activationByItemId = new Map((activationRows || []).map((row) => [row.productid, row]));
+      const destinationLabel = [destinationContext.marketName || destinationContext.marketCode, destinationContext.localeCode || null]
+        .filter(Boolean)
+        .join(' · ');
+      const destinationPlatformKey = normalizePlatformKey(destinationContext.platformKey);
+      const updatedRecentCutoffTs = new Date(updatedRecentCutoff).getTime();
+
+      const getCategoryValue = (customFields) => {
+        const productType = typeof customFields.product_type === 'string' ? customFields.product_type.trim() : '';
+        if (productType) return productType;
+        const googleCategory = typeof customFields.google_product_category === 'string' ? customFields.google_product_category.trim() : '';
+        if (googleCategory) return googleCategory;
+        const fallbackCategory = typeof customFields.category === 'string' ? customFields.category.trim() : '';
+        return fallbackCategory;
+      };
+
+      const normalizedItems = (allRows || []).map((row) => {
+        const customFields = parseJsonObject(row.customfields);
+        const activationRow = activationByItemId.get(row.id);
+        const isEnabled = isDestinationEffectivelyEnabled(destinationContext, activationRow, customFields);
+        return {
+          ...row,
+          customfields: customFields,
+          _selectedDestinationId: destinationContext.id,
+          _selectedDestinationLabel: destinationLabel,
+          _selectedDestinationPlatformKey: destinationPlatformKey,
+          _selectedDestinationPlatformLabel: getPlatformLabel(destinationPlatformKey),
+          _selectedDestinationMarketCode: destinationContext.marketCode,
+          _selectedDestinationLocaleCode: destinationContext.localeCode || null,
+          _selectedDestinationIsEnabled: isEnabled,
+          _selectedDestinationActivationSource: activationRow ? 'destination' : 'legacy',
+          _selectedDestinationActivationStatus: activationRow?.activationstatus || (isEnabled ? 'active' : 'excluded'),
+          _selectedDestinationHasOptimizedContent: hasStoredOptimizedContent(customFields, destinationPlatformKey, { destinationId: destinationContext.id }),
+          _selectedDestinationCategory: getCategoryValue(customFields),
+        };
+      });
+
+      const hasMissingCoreFields = (item) => (
+        !String(item.title || '').trim()
+        || !(item.imageurl || item.imageUrl)
+        || !String(item.brand || '').trim()
+        || !String(item._selectedDestinationCategory || '').trim()
+      );
+
+      const summary = {
+        total: normalizedItems.length,
+        toFix: normalizedItems.filter((item) => hasMissingCoreFields(item)).length,
+        toOptimize: normalizedItems.filter((item) => !item._selectedDestinationHasOptimizedContent).length,
+        readyToPublish: normalizedItems.filter((item) => item._selectedDestinationIsEnabled && !hasMissingCoreFields(item)).length,
+        notPublished: normalizedItems.filter((item) => !item._selectedDestinationIsEnabled).length,
+        missingCategory: normalizedItems.filter((item) => !String(item._selectedDestinationCategory || '').trim()).length,
+        missingBrand: normalizedItems.filter((item) => !String(item.brand || '').trim()).length,
+        missingImage: normalizedItems.filter((item) => !(item.imageurl || item.imageUrl)).length,
+        withImage: normalizedItems.filter((item) => Boolean(item.imageurl || item.imageUrl)).length,
+        published: normalizedItems.filter((item) => item._selectedDestinationIsEnabled).length,
+      };
+
+      const filterOptions = {
+        brands: Array.from(new Set(
+          normalizedItems
+            .map((item) => String(item.brand || '').trim())
+            .filter(Boolean)
+        )).sort((left, right) => left.localeCompare(right, 'fr')),
+        categories: Array.from(new Set(
+          normalizedItems
+            .map((item) => String(item._selectedDestinationCategory || '').trim())
+            .filter(Boolean)
+        )).sort((left, right) => left.localeCompare(right, 'fr')),
+      };
+
+      let filteredItems = normalizedItems.filter((item) => {
+        if (hasSearch) {
+          const haystack = [item.title, item.sku, item.brand]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+          if (!haystack.includes(q.toLowerCase())) return false;
+        }
+
+        switch (smartView) {
+          case 'to_fix':
+            if (!hasMissingCoreFields(item)) return false;
+            break;
+          case 'to_optimize':
+            if (item._selectedDestinationHasOptimizedContent) return false;
+            break;
+          case 'ready_google':
+            if (!item._selectedDestinationIsEnabled || hasMissingCoreFields(item)) return false;
+            break;
+          case 'google_off':
+            if (item._selectedDestinationIsEnabled) return false;
+            break;
+          case 'missing_category':
+            if (String(item._selectedDestinationCategory || '').trim()) return false;
+            break;
+          case 'missing_brand':
+            if (String(item.brand || '').trim()) return false;
+            break;
+          case 'missing_image':
+            if (item.imageurl || item.imageUrl) return false;
+            break;
+          default:
+            break;
+        }
+
+        if (imageFilter === 'with' && !(item.imageurl || item.imageUrl)) return false;
+        if (imageFilter === 'without' && (item.imageurl || item.imageUrl)) return false;
+        if (optimizedFilter === 'optimized' && !item._selectedDestinationHasOptimizedContent) return false;
+        if (optimizedFilter === 'not_optimized' && item._selectedDestinationHasOptimizedContent) return false;
+        if (channelFilter === 'google_on' && !item._selectedDestinationIsEnabled) return false;
+        if (channelFilter === 'google_off' && item._selectedDestinationIsEnabled) return false;
+        if (stockFilter === 'in_stock' && !(Number(item.inventory || 0) > 0)) return false;
+        if (stockFilter === 'out_of_stock' && Number(item.inventory || 0) > 0) return false;
+        if (brandFilter === '__missing__' && String(item.brand || '').trim()) return false;
+        if (brandFilter !== 'all' && brandFilter !== '__missing__' && String(item.brand || '').trim() !== brandFilter.trim()) return false;
+        if (categoryFilter === '__missing__' && String(item._selectedDestinationCategory || '').trim()) return false;
+        if (categoryFilter !== 'all' && categoryFilter !== '__missing__' && String(item._selectedDestinationCategory || '').trim() !== categoryFilter.trim()) return false;
+        if (updatedRecent) {
+          const updatedTs = new Date(item.updatedat || item.updatedAt || 0).getTime();
+          if (!Number.isFinite(updatedTs) || updatedTs < updatedRecentCutoffTs) return false;
+        }
+
+        return true;
+      });
+
+      filteredItems = filteredItems.sort((left, right) => {
+        if (sortBy === 'title_asc') return String(left.title || '').localeCompare(String(right.title || ''), 'fr');
+        if (sortBy === 'title_desc') return String(right.title || '').localeCompare(String(left.title || ''), 'fr');
+        if (sortBy === 'price_asc') return Number(left.price ?? Number.POSITIVE_INFINITY) - Number(right.price ?? Number.POSITIVE_INFINITY);
+        if (sortBy === 'price_desc') return Number(right.price ?? Number.NEGATIVE_INFINITY) - Number(left.price ?? Number.NEGATIVE_INFINITY);
+        if (sortBy === 'date_asc') return new Date(left.updatedat || left.createdat || 0).getTime() - new Date(right.updatedat || right.createdat || 0).getTime();
+        return new Date(right.updatedat || right.createdat || 0).getTime() - new Date(left.updatedat || left.createdat || 0).getTime();
+      });
+
+      const paginatedItems = filteredItems.slice(offset, offset + limit);
+
+      return res.json({
+        items: paginatedItems,
+        total: filteredItems.length,
+        limit,
+        offset,
+        hasMore: offset + paginatedItems.length < filteredItems.length,
+        summary,
+        filterOptions,
+        destination: {
+          id: destinationContext.id,
+          label: destinationLabel,
+          platformKey: destinationPlatformKey,
+          platformLabel: getPlatformLabel(destinationPlatformKey),
+          marketCode: destinationContext.marketCode,
+          localeCode: destinationContext.localeCode || null,
+        },
+      });
+    }
     const summaryRows = await prisma.$queryRawUnsafe(`
       SELECT
         COUNT(*)::int AS total,
@@ -4430,7 +5281,7 @@ function normalizeConditionForRakuten(raw) {
   return 'N';
 }
 
-const { getOptimizedContentForPlatform, mergeOptimizedContent } = require('./utils/platform-content');
+const { getOptimizedContentForPlatform, mergeOptimizedContent, hasStoredOptimizedContent } = require('./utils/platform-content');
 
 /** Normalise la disponibilité pour ChatGPT Product Feed Spec : in_stock, out_of_stock, pre_order, backorder, unknown. */
 function normalizeAvailabilityForChatGPT(raw, inventory) {
@@ -4566,9 +5417,9 @@ function normalizeForMeta(item) {
 }
 
 /** Normalise un FeedItem pour l'export Amazon (CSV / Listings). Limites : item_name 200 car., bullet 500, etc. */
-function normalizeForAmazon(item, channelConfig) {
+function normalizeForAmazon(item, channelConfig, options = {}) {
   const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
-  const { title: optTitle, description: optDesc, highlights } = getOptimizedContentForPlatform(item, 'amazon');
+  const { title: optTitle, description: optDesc, highlights } = getOptimizedContentForPlatform(item, 'amazon', options);
   const descRaw = optDesc.replace(/<[^>]*>/g, '').trim();
   const currency = channelConfig?.currency || item.currency || cf.currency || 'EUR';
   const price = item.price != null ? Number(item.price).toFixed(2) : '';
@@ -4811,9 +5662,19 @@ function normalizeForGemini(item) {
 app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
   try {
     const { id } = req.params;
-    const platform = (req.query.platform || 'gmc').toLowerCase();
+    const requestedPlatform = String(req.query.platform || '').toLowerCase();
+    const requestedDestinationId = String(req.query.destinationId || '').trim();
+    const destinationContext = requestedDestinationId
+      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId, requestedPlatform || null)
+      : null;
+    const platform = destinationContext?.platformKey || requestedPlatform || 'gmc';
     const format = (req.query.format || (platform === 'chatgpt' ? 'json' : 'csv')).toLowerCase();
-    const channel = (req.query.channel || '').toLowerCase();
+    const channel = String(
+      req.query.channel
+      || destinationContext?.settings?.legacyChannelKey
+      || (platform === 'amazon' ? inferAmazonChannelKeyForMarket(destinationContext?.marketCode || '') : '')
+      || ''
+    ).toLowerCase();
 
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
@@ -4839,9 +5700,9 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     }
 
     // Exclure les produits dont le canal est désactivé (_channelOverrides)
-    const overrideKeyMap = { gmc: 'google', meta: 'meta', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
+    const overrideKeyMap = { gmc: 'google', meta: 'meta', amazon: 'amazon', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
     const overrideKey = overrideKeyMap[platform] || null;
-    const excludeOverrides = overrideKey
+    const excludeOverrides = overrideKey && !destinationContext
       ? `AND (customfields->'_channelOverrides'->>'${overrideKey}' IS NULL OR customfields->'_channelOverrides'->>'${overrideKey}' != 'false')`
       : '';
     let items = await prisma.$queryRawUnsafe(`
@@ -4855,6 +5716,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
       ORDER BY createdat DESC
       LIMIT $2::int
     `, id, limit);
+    items = await filterItemsForDestinationActivation(items, destinationContext);
 
     // Appliquer les règles Optimiser à la volée (sans modifier la DB) pour cet export
     const channelKey = platform === 'gmc' ? 'gmc' : (platform === 'amazon' ? (channel || 'amazon') : (platform === 'chatgpt' ? 'chatgpt' : platform));
@@ -4888,7 +5750,10 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         const cf = typeof it.customfields === 'string' ? JSON.parse(it.customfields || '{}') : (it.customfields || {});
         return { ...it, customfields: cf, feedid: it.feedid || it.feedId };
       });
-      applyRules(itemsCopy, activeRules, id, channelKey, { ruleAbAssignments });
+      applyRules(itemsCopy, activeRules, id, channelKey, {
+        ruleAbAssignments,
+        destinationId: destinationContext?.id || null,
+      });
       items = itemsCopy.filter(it => !it._excluded);
     } catch (rulesErr) {
       console.warn('⚠️ Règles non appliquées à l\'export:', rulesErr.message);
@@ -4952,14 +5817,14 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
 
       rows = items.map(item => {
         const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
-        const titleForExport = abTitleMap.get(item.id) ?? getOptimizedContentForPlatform(item, 'gmc').title;
+        const titleForExport = abTitleMap.get(item.id) ?? getOptimizedContentForPlatform(item, 'gmc', { destinationId: destinationContext?.id || null }).title;
         const optTitle = titleForExport;
-        const { description: optDesc } = getOptimizedContentForPlatform(item, 'gmc');
+        const { description: optDesc } = getOptimizedContentForPlatform(item, 'gmc', { destinationId: destinationContext?.id || null });
         let desc = (typeof optDesc === 'string' ? optDesc.replace(/<[^>]*>/g, '').trim() : '') || '';
         if (abDescriptionMap.has(item.id)) desc = String(abDescriptionMap.get(item.id)).replace(/<[^>]*>/g, '').trim().substring(0, 5000);
         const inv = item.inventory;
         const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, inv);
-        const currencyCode = item.currency || cf.currency || 'EUR';
+        const currencyCode = item.currency || cf.currency || destinationContext?.currencyCode || 'EUR';
         const priceStr = item.price != null ? `${Number(item.price).toFixed(2)} ${currencyCode}` : '';
         const salePriceStr = cf.sale_price ? `${Number(cf.sale_price).toFixed(2)} ${currencyCode}` : '';
         const gtin = item.gtin || cf.gtin || cf.GTIN || '';
@@ -5006,7 +5871,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
           identifierExists
         ];
       });
-      filename = `feed-gmc-${id}.csv`;
+      filename = `feed-gmc-${id}${destinationContext?.slug ? `-${destinationContext.slug}` : ''}.csv`;
     } else if (platform === 'meta') {
       // Meta (Facebook Commerce / Catalogue) : colonnes attendues par le format CSV Meta
       headers = ['id', 'title', 'description', 'link', 'image_link', 'availability', 'condition', 'price', 'brand', 'gtin', 'mpn'];
@@ -5027,7 +5892,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         'external_product_id', 'external_product_id_type', 'link'
       ];
       rows = items.map(item => {
-        const n = normalizeForAmazon(item, channelConfig);
+        const n = normalizeForAmazon(item, channelConfig, { destinationId: destinationContext?.id || null });
         return [
           n.product_id,
           n.sku,
@@ -5045,7 +5910,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
           n.link
         ];
       });
-      filename = `feed-amazon-${channel}-${id}.csv`;
+      filename = `feed-amazon-${channel}-${id}${destinationContext?.slug ? `-${destinationContext.slug}` : ''}.csv`;
     } else if (platform === 'cdiscount') {
       headers = [
         'SellerProductId', 'ProductEan', 'Price', 'Stock', 'ProductCondition',
@@ -6654,6 +7519,8 @@ const MARKETING_STAGE_J3 = 'pending_j3';
 const MARKETING_STAGE_J6 = 'pending_j6';
 const MARKETING_STAGE_J10 = 'pending_j10';
 const MARKETING_STAGE_DONE = 'completed';
+const MARKETING_FORM_MIN_AGE_MS = 2500;
+const MARKETING_FORM_MAX_AGE_MS = 1000 * 60 * 60 * 6;
 const MARKETING_LEAD_SOURCE_WHITELIST = new Set([
   'landing_page',
   'demo_page',
@@ -6695,6 +7562,124 @@ function normalizeMarketingLeadSource(source, fallback = 'landing_page') {
     return normalized;
   }
   return fallback;
+}
+
+function hasUrlLikeContent(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  return /(https?:\/\/|www\.|<a\b|href=|\.com\b|\.net\b|\.io\b)/i.test(raw);
+}
+
+function isLikelyGibberishToken(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.length < 10 || /\s/.test(raw)) return false;
+
+  const lettersOnly = raw.replace(/[^a-z]/gi, '');
+  if (lettersOnly.length < 10) return false;
+
+  const vowelCount = (lettersOnly.match(/[aeiouy]/gi) || []).length;
+  const vowelRatio = vowelCount / lettersOnly.length;
+  const hasLongConsonantRun = /[bcdfghjklmnpqrstvwxz]{5,}/i.test(lettersOnly);
+  const alternatingCaseNoise = (raw.match(/[a-z][A-Z]|[A-Z][a-z]/g) || []).length >= 3;
+  const mixedCase = /[a-z]/.test(raw) && /[A-Z]/.test(raw);
+
+  return hasLongConsonantRun || vowelRatio < 0.24 || (mixedCase && alternatingCaseNoise);
+}
+
+function assessMarketingSubmissionRisk({ trimmed, email, extraFields = [] }) {
+  const fields = [
+    { label: 'firstName', value: trimmed?.firstName },
+    { label: 'lastName', value: trimmed?.lastName },
+    { label: 'jobTitle', value: trimmed?.jobTitle },
+    { label: 'company', value: trimmed?.company },
+    ...extraFields,
+  ];
+
+  let score = 0;
+  let gibberishCount = 0;
+  const reasons = [];
+
+  for (const field of fields) {
+    const value = String(field?.value || '').trim();
+    if (!value) continue;
+
+    if (hasUrlLikeContent(value)) {
+      score += 3;
+      reasons.push(`${field.label}:url_like`);
+    }
+    if (isLikelyGibberishToken(value)) {
+      gibberishCount += 1;
+      score += 2;
+      reasons.push(`${field.label}:gibberish`);
+    }
+    if (value.length >= 24 && !/\s/.test(value)) {
+      score += 1;
+      reasons.push(`${field.label}:long_unbroken`);
+    }
+    if (/(.)\1{4,}/.test(value)) {
+      score += 2;
+      reasons.push(`${field.label}:repeated_chars`);
+    }
+  }
+
+  const emailLocalPart = String(email || '').trim().split('@')[0] || '';
+  const compactEmailLocalPart = emailLocalPart.replace(/[._+-]/g, '');
+  if (isLikelyGibberishToken(compactEmailLocalPart)) {
+    score += 1;
+    reasons.push('email:gibberish_local_part');
+  }
+
+  return {
+    blocked: gibberishCount >= 2 || score >= 4,
+    reasons,
+  };
+}
+
+async function validateMarketingSubmission({
+  req,
+  email,
+  trimmed,
+  requireCaptcha = false,
+  extraFields = [],
+}) {
+  const companyWebsite = String(req.body?.companyWebsite || '').trim();
+  if (companyWebsite.length > 0) {
+    return { ok: false, status: 400, message: 'Demande refusée', reason: 'honeypot_filled' };
+  }
+
+  const startedAtMs = Number(req.body?.formStartedAt);
+  if (Number.isFinite(startedAtMs)) {
+    const elapsedMs = Date.now() - startedAtMs;
+    if (elapsedMs < MARKETING_FORM_MIN_AGE_MS) {
+      return { ok: false, status: 400, message: 'Demande refusée', reason: 'submitted_too_fast' };
+    }
+    if (elapsedMs > MARKETING_FORM_MAX_AGE_MS) {
+      return { ok: false, status: 400, message: 'Session expirée. Rechargez la page puis réessayez.', reason: 'form_expired' };
+    }
+  }
+
+  const spamAssessment = assessMarketingSubmissionRisk({ trimmed, email, extraFields });
+  if (spamAssessment.blocked) {
+    return {
+      ok: false,
+      status: 400,
+      message: 'Demande refusée',
+      reason: spamAssessment.reasons.join(','),
+    };
+  }
+
+  const captchaToken = typeof req.body?.captchaToken === 'string' ? req.body.captchaToken.trim() : '';
+  if (requireCaptcha || captchaToken) {
+    const captchaCheck = await verifyTurnstileToken({
+      token: captchaToken,
+      remoteIp: getClientIp(req),
+    });
+    if (!captchaCheck.ok) {
+      return { ok: false, status: 400, message: captchaCheck.message || 'Captcha invalide', reason: 'captcha_failed' };
+    }
+  }
+
+  return { ok: true };
 }
 
 function serializeMarketingLead(lead) {
@@ -7299,11 +8284,26 @@ app.post('/api/v1/marketing/early-access', marketingEarlyAccessLimiter, async (r
       return res.status(400).json({ message: 'Email invalide' });
     }
 
+    const antiSpamCheck = await validateMarketingSubmission({
+      req,
+      email,
+      trimmed,
+      requireCaptcha: Boolean(trimmed.firstName || trimmed.lastName || trimmed.jobTitle || trimmed.company),
+    });
+    if (!antiSpamCheck.ok) {
+      console.warn('Marketing early-access blocked:', {
+        reason: antiSpamCheck.reason,
+        source: leadSource,
+        emailDomain: String(email).trim().toLowerCase().split('@')[1] || 'unknown',
+      });
+      return res.status(antiSpamCheck.status).json({ message: antiSpamCheck.message });
+    }
+
     const prismaClient = await requirePrismaForRequest(res, 'Service marketing temporairement indisponible');
     if (!prismaClient) return;
 
     const emailNormalized = email.toLowerCase().trim();
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || null;
     const nowIso = new Date().toISOString();
 
@@ -7346,6 +8346,26 @@ app.post('/api/v1/marketing/early-access', marketingEarlyAccessLimiter, async (r
           }
         });
       }
+
+      setImmediate(async () => {
+        try {
+          await notifyInternalMarketingFormSubmission({
+            kind: 'lead',
+            source: leadSource,
+            email: emailNormalized,
+            firstName: trimmed.firstName || existingLead.firstName || existingLead.firstname || null,
+            lastName: trimmed.lastName || existingLead.lastName || existingLead.lastname || null,
+            jobTitle: trimmed.jobTitle || existingLead.jobTitle || existingLead.jobtitle || null,
+            phone: trimmed.phone || existingLead.phone || null,
+            company: trimmed.company || existingLead.company || null,
+            locale: trimmed.locale || existingLead.locale || 'fr',
+            createdAt: nowIso,
+            alreadyRegistered: true,
+          });
+        } catch (alertError) {
+          console.warn('Alerte interne lead non envoyee (soumission repetee):', alertError.message);
+        }
+      });
 
       return res.status(200).json({
         message: 'Vous êtes déjà inscrit !',
@@ -7401,6 +8421,23 @@ app.post('/api/v1/marketing/early-access', marketingEarlyAccessLimiter, async (r
       } catch (marketingError) {
         console.warn('Email marketing J0 non envoyé:', marketingError.message);
       }
+
+      try {
+        await notifyInternalMarketingFormSubmission({
+          kind: 'lead',
+          source: leadSource,
+          email: emailNormalized,
+          firstName: trimmed.firstName,
+          lastName: trimmed.lastName,
+          jobTitle: trimmed.jobTitle,
+          phone: trimmed.phone,
+          company: trimmed.company,
+          locale: trimmed.locale,
+          createdAt: nowIso,
+        });
+      } catch (alertError) {
+        console.warn('Alerte interne lead non envoyee:', alertError.message);
+      }
     });
 
     res.status(201).json({
@@ -7448,11 +8485,26 @@ app.post('/api/v1/marketing/audits', marketingAuditLimiter, async (req, res) => 
       return res.status(400).json({ message: 'URL boutique ou flux requise pour lancer l audit' });
     }
 
+    const antiSpamCheck = await validateMarketingSubmission({
+      req,
+      email,
+      trimmed,
+      requireCaptcha: true,
+    });
+    if (!antiSpamCheck.ok) {
+      console.warn('Marketing audit blocked:', {
+        reason: antiSpamCheck.reason,
+        connectorType,
+        emailDomain: String(email).trim().toLowerCase().split('@')[1] || 'unknown',
+      });
+      return res.status(antiSpamCheck.status).json({ message: antiSpamCheck.message });
+    }
+
     const emailNormalized = String(email).trim().toLowerCase();
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service audit temporairement indisponible' });
     }
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || null;
     const lead = await upsertMarketingLeadForAudit({
       email: emailNormalized,
@@ -7509,6 +8561,29 @@ app.post('/api/v1/marketing/audits', marketingAuditLimiter, async (req, res) => 
         });
       } catch (marketingError) {
         console.warn('Email audit non envoye:', marketingError.message);
+      }
+
+      try {
+        await notifyInternalMarketingFormSubmission({
+          kind: 'audit',
+          source: 'audit_flux_marketing',
+          email: emailNormalized,
+          firstName: trimmed.firstName,
+          lastName: trimmed.lastName,
+          jobTitle: trimmed.jobTitle,
+          phone: trimmed.phone,
+          company: trimmed.company,
+          locale,
+          connectorType,
+          cmsUsed,
+          shopUrl,
+          merchantId,
+          catalogSize,
+          targetChannels,
+          createdAt: nowIso,
+        });
+      } catch (alertError) {
+        console.warn('Alerte interne audit non envoyee:', alertError.message);
       }
     });
 
@@ -7777,6 +8852,23 @@ app.post('/api/v1/marketing/feature-idea', marketingFeatureIdeaLimiter, async (r
     `, id, emailNormalized, (name && name.trim()) || null, ideaTrimmed, now);
 
     console.log(`💡 Nouvelle idée feature: ${emailNormalized} — ${ideaTrimmed.slice(0, 50)}…`);
+
+    setImmediate(async () => {
+      try {
+        const [firstName, ...rest] = String(name || '').trim().split(/\s+/).filter(Boolean);
+        await notifyInternalMarketingFormSubmission({
+          kind: 'feature_idea',
+          source: 'roadmap',
+          email: emailNormalized,
+          firstName: firstName || null,
+          lastName: rest.length > 0 ? rest.join(' ') : null,
+          idea: ideaTrimmed,
+          createdAt: now,
+        });
+      } catch (alertError) {
+        console.warn('Alerte interne idee produit non envoyee:', alertError.message);
+      }
+    });
 
     res.status(201).json({
       message: 'Merci ! Votre idée a bien été enregistrée.',
@@ -8698,6 +9790,515 @@ app.put('/api/v1/auth/me/password', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('PUT /auth/me/password error:', error);
     res.status(500).json({ message: 'Erreur lors du changement de mot de passe' });
+  }
+});
+
+app.get('/api/v1/markets', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    await ensureMarketsBackfillForAccount(accountId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    res.json({ markets });
+  } catch (error) {
+    console.error('GET /markets error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors du chargement des marchés' });
+  }
+});
+
+app.post('/api/v1/markets', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour créer un marché' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    await ensureMarketsBackfillForAccount(accountId);
+
+    const body = req.body || {};
+    const code = normalizeMarketCode(body.code || body.marketCode || body.targetMarketCode || '');
+    if (!code) {
+      return res.status(400).json({ message: 'Le code marché est requis (ex. IT, BE, CH).' });
+    }
+
+    const existing = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Market" WHERE accountid = $1::text AND code = $2::text LIMIT 1`,
+      accountId,
+      code
+    );
+    if (existing && existing.length > 0) {
+      return res.status(409).json({ message: `Le marché ${code} existe déjà sur ce compte.` });
+    }
+
+    const existingMarkets = await getHydratedMarketsForAccount(accountId);
+    const sourceMarketId = body.sourceMarketId || null;
+    const sourceMarket = sourceMarketId
+      ? existingMarkets.find((market) => market.id === sourceMarketId)
+      : null;
+    if (sourceMarketId && !sourceMarket) {
+      return res.status(404).json({ message: 'Marché source introuvable sur ce compte.' });
+    }
+
+    const name = String(body.name || '').trim() || getMarketName(code);
+    const countryCodes = Array.isArray(body.countryCodes) && body.countryCodes.length > 0
+      ? body.countryCodes.map((entry) => normalizeMarketCode(entry)).filter(Boolean)
+      : [code];
+    const defaultCurrencyCode = String(body.defaultCurrencyCode || sourceMarket?.defaultCurrencyCode || getMarketCurrency(code)).trim().toUpperCase();
+    const marketId = await createMarket(accountId, {
+      code,
+      name,
+      sourceMarketId,
+      countryCodes,
+      defaultCurrencyCode,
+      status: String(body.status || 'draft').trim() || 'draft',
+      pricingPolicyJson: body.pricingPolicy || body.pricingPolicyJson || sourceMarket?.pricingPolicy || {},
+      shippingPolicyJson: body.shippingPolicy || body.shippingPolicyJson || sourceMarket?.shippingPolicy || {},
+      taxPolicyJson: body.taxPolicy || body.taxPolicyJson || sourceMarket?.taxPolicy || {},
+      contentStrategyJson: body.contentStrategy || body.contentStrategyJson || sourceMarket?.contentStrategy || {},
+      publicationDefaultsJson: body.publicationDefaults || body.publicationDefaultsJson || sourceMarket?.publicationDefaults || {},
+    });
+
+    const marketRows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "Market" WHERE id = $1::text AND accountid = $2::text LIMIT 1`,
+      marketId,
+      accountId
+    );
+    const marketRow = marketRows?.[0];
+    const localesInput = Array.isArray(body.locales) && body.locales.length > 0
+      ? body.locales
+      : (sourceMarket?.locales || []);
+    await ensureMarketLocales(marketId, code, localesInput);
+
+    const platformAccounts = await listPlatformAccountsForAccount(accountId);
+    const channelsInput = Array.isArray(body.channels) && body.channels.length > 0
+      ? body.channels
+      : (sourceMarket?.channels || []).map((channel) => ({
+        platformKey: channel.platformKey,
+        platformAccountId: channel.platformAccountId,
+        status: channel.status,
+        isEnabled: channel.isEnabled,
+        settingsJson: channel.settings,
+      }));
+    if (channelsInput.length > 0) {
+      await upsertMarketChannels(marketRow, channelsInput, platformAccounts);
+    }
+    await syncDestinationsForMarket(accountId, marketId);
+
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === marketId);
+    res.status(201).json({ market });
+  } catch (error) {
+    console.error('POST /markets error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de la création du marché' });
+  }
+});
+
+app.get('/api/v1/markets/:marketId', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    await ensureMarketsBackfillForAccount(accountId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === req.params.marketId);
+    if (!market) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+    res.json({ market });
+  } catch (error) {
+    console.error('GET /markets/:marketId error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors du chargement du marché' });
+  }
+});
+
+app.patch('/api/v1/markets/:marketId', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour modifier ce marché' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId } = req.params;
+    const body = req.body || {};
+    const marketRows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "Market" WHERE id = $1::text AND accountid = $2::text LIMIT 1`,
+      marketId,
+      accountId
+    );
+    const marketRow = marketRows?.[0];
+    if (!marketRow) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+
+    const updates = [];
+    const params = [];
+    let index = 1;
+    const pushText = (column, value) => {
+      updates.push(`${column} = $${index++}::text`);
+      params.push(value);
+    };
+    const pushJson = (column, value) => {
+      updates.push(`${column} = $${index++}::jsonb`);
+      params.push(JSON.stringify(value || {}));
+    };
+
+    if (body.code !== undefined) {
+      const nextCode = normalizeMarketCode(body.code);
+      if (!nextCode) return res.status(400).json({ message: 'Code marché invalide.' });
+      const duplicate = await prisma.$queryRawUnsafe(
+        `SELECT id FROM "Market" WHERE accountid = $1::text AND code = $2::text AND id != $3::text LIMIT 1`,
+        accountId,
+        nextCode,
+        marketId
+      );
+      if (duplicate && duplicate.length > 0) {
+        return res.status(409).json({ message: `Le marché ${nextCode} existe déjà sur ce compte.` });
+      }
+      pushText('code', nextCode);
+    }
+    if (body.name !== undefined) pushText('name', String(body.name || '').trim() || marketRow.name);
+    if (body.defaultCurrencyCode !== undefined) pushText('defaultcurrencycode', String(body.defaultCurrencyCode || '').trim().toUpperCase() || marketRow.defaultcurrencycode);
+    if (body.status !== undefined) pushText('status', String(body.status || '').trim() || marketRow.status);
+    if (body.countryCodes !== undefined) pushJson('countrycodesjson', Array.isArray(body.countryCodes) ? body.countryCodes.map((entry) => normalizeMarketCode(entry)).filter(Boolean) : [marketRow.code]);
+    if (body.pricingPolicy !== undefined || body.pricingPolicyJson !== undefined) pushJson('pricingpolicyjson', body.pricingPolicy || body.pricingPolicyJson || {});
+    if (body.shippingPolicy !== undefined || body.shippingPolicyJson !== undefined) pushJson('shippingpolicyjson', body.shippingPolicy || body.shippingPolicyJson || {});
+    if (body.taxPolicy !== undefined || body.taxPolicyJson !== undefined) pushJson('taxpolicyjson', body.taxPolicy || body.taxPolicyJson || {});
+    if (body.contentStrategy !== undefined || body.contentStrategyJson !== undefined) pushJson('contentstrategyjson', body.contentStrategy || body.contentStrategyJson || {});
+    if (body.publicationDefaults !== undefined || body.publicationDefaultsJson !== undefined) pushJson('publicationdefaultsjson', body.publicationDefaults || body.publicationDefaultsJson || {});
+
+    if (updates.length === 0) {
+      const markets = await getHydratedMarketsForAccount(accountId);
+      return res.json({ market: markets.find((entry) => entry.id === marketId) || null });
+    }
+
+    updates.push('updatedat = NOW()');
+    params.push(marketId);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Market" SET ${updates.join(', ')} WHERE id = $${index}::text`,
+      ...params
+    );
+    await syncDestinationsForMarket(accountId, marketId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    res.json({ market: markets.find((entry) => entry.id === marketId) || null });
+  } catch (error) {
+    console.error('PATCH /markets/:marketId error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du marché' });
+  }
+});
+
+app.post('/api/v1/markets/:marketId/locales', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour modifier les langues du marché' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId } = req.params;
+    const marketRows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "Market" WHERE id = $1::text AND accountid = $2::text LIMIT 1`,
+      marketId,
+      accountId
+    );
+    const marketRow = marketRows?.[0];
+    if (!marketRow) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+
+    const currentLocales = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "MarketLocale" WHERE marketid = $1::text ORDER BY isdefault DESC, localecode ASC`,
+      marketId
+    );
+    const localeInput = normalizeMarketLocaleInput(req.body || {}, marketRow.code, currentLocales.length);
+    if (!localeInput.localeCode) {
+      return res.status(400).json({ message: 'localeCode requis (ex. it-IT, fr-BE).' });
+    }
+    const existing = (currentLocales || []).find((locale) => String(locale.localecode).toLowerCase() === localeInput.localeCode.toLowerCase());
+    if (localeInput.isDefault) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "MarketLocale" SET isdefault = false, updatedat = NOW() WHERE marketid = $1::text`,
+        marketId
+      );
+    }
+    if (existing) {
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE "MarketLocale"
+          SET languagecode = $1::text,
+              countrycode = $2::text,
+              isdefault = $3::boolean,
+              isrequiredlaunch = $4::boolean,
+              translationmode = $5::text,
+              updatedat = NOW()
+          WHERE id = $6::text
+        `,
+        localeInput.languageCode,
+        localeInput.countryCode,
+        localeInput.isDefault,
+        localeInput.isRequiredLaunch,
+        localeInput.translationMode,
+        existing.id
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `
+          INSERT INTO "MarketLocale" (
+            id, marketid, localecode, languagecode, countrycode, isdefault,
+            isrequiredlaunch, translationmode, createdat, updatedat
+          )
+          VALUES (
+            $1::text, $2::text, $3::text, $4::text, $5::text, $6::boolean,
+            $7::boolean, $8::text, NOW(), NOW()
+          )
+        `,
+        crypto.randomUUID(),
+        marketId,
+        localeInput.localeCode,
+        localeInput.languageCode,
+        localeInput.countryCode,
+        localeInput.isDefault,
+        localeInput.isRequiredLaunch,
+        localeInput.translationMode
+      );
+    }
+    await syncDestinationsForMarket(accountId, marketId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === marketId);
+    res.status(existing ? 200 : 201).json({ market, localeCode: localeInput.localeCode });
+  } catch (error) {
+    console.error('POST /markets/:marketId/locales error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de l’ajout de la langue du marché' });
+  }
+});
+
+app.patch('/api/v1/markets/:marketId/locales/:localeId', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour modifier cette langue' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId, localeId } = req.params;
+    const localeRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT ml.*, m.code AS marketcode
+        FROM "MarketLocale" ml
+        JOIN "Market" m ON m.id = ml.marketid
+        WHERE ml.id = $1::text AND ml.marketid = $2::text AND m.accountid = $3::text
+        LIMIT 1
+      `,
+      localeId,
+      marketId,
+      accountId
+    );
+    const localeRow = localeRows?.[0];
+    if (!localeRow) {
+      return res.status(404).json({ message: 'Langue de marché introuvable' });
+    }
+
+    const mergedInput = normalizeMarketLocaleInput(
+      {
+        localeCode: req.body?.localeCode || localeRow.localecode,
+        languageCode: req.body?.languageCode || localeRow.languagecode,
+        countryCode: req.body?.countryCode || localeRow.countrycode,
+        isDefault: req.body?.isDefault === true,
+        isRequiredLaunch: req.body?.isRequiredLaunch ?? localeRow.isrequiredlaunch,
+        translationMode: req.body?.translationMode || localeRow.translationmode,
+      },
+      localeRow.marketcode,
+      0
+    );
+    if (mergedInput.isDefault) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "MarketLocale" SET isdefault = false, updatedat = NOW() WHERE marketid = $1::text`,
+        marketId
+      );
+    }
+    await prisma.$executeRawUnsafe(
+      `
+        UPDATE "MarketLocale"
+        SET localecode = $1::text,
+            languagecode = $2::text,
+            countrycode = $3::text,
+            isdefault = $4::boolean,
+            isrequiredlaunch = $5::boolean,
+            translationmode = $6::text,
+            updatedat = NOW()
+        WHERE id = $7::text
+      `,
+      mergedInput.localeCode,
+      mergedInput.languageCode,
+      mergedInput.countryCode,
+      mergedInput.isDefault,
+      mergedInput.isRequiredLaunch,
+      mergedInput.translationMode,
+      localeId
+    );
+    await syncDestinationsForMarket(accountId, marketId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    res.json({ market: markets.find((entry) => entry.id === marketId) || null });
+  } catch (error) {
+    console.error('PATCH /markets/:marketId/locales/:localeId error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de la mise à jour de la langue du marché' });
+  }
+});
+
+app.post('/api/v1/markets/:marketId/channels', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour modifier les canaux du marché' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId } = req.params;
+    const marketRows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "Market" WHERE id = $1::text AND accountid = $2::text LIMIT 1`,
+      marketId,
+      accountId
+    );
+    const marketRow = marketRows?.[0];
+    if (!marketRow) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+
+    const candidate = normalizeMarketChannelInput(req.body || {}, marketRow.code);
+    if (!candidate.platformKey || !MARKET_PLATFORM_OPTIONS.includes(candidate.platformKey)) {
+      return res.status(400).json({ message: 'platformKey invalide pour ce marché.' });
+    }
+    const platformAccounts = await listPlatformAccountsForAccount(accountId);
+    await upsertMarketChannels(marketRow, [candidate], platformAccounts);
+    await syncDestinationsForMarket(accountId, marketId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === marketId);
+    const channel = market?.channels?.find((entry) => entry.platformKey === candidate.platformKey) || null;
+    res.status(201).json({ market, channel });
+  } catch (error) {
+    console.error('POST /markets/:marketId/channels error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de l’ajout du canal du marché' });
+  }
+});
+
+app.patch('/api/v1/markets/:marketId/channels/:channelId', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (!canManageMarkets(req)) {
+      return res.status(403).json({ message: 'Permissions insuffisantes pour modifier ce canal' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId, channelId } = req.params;
+    const channelRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT mc.*, m.code AS marketcode
+        FROM "MarketChannel" mc
+        JOIN "Market" m ON m.id = mc.marketid
+        WHERE mc.id = $1::text AND mc.marketid = $2::text AND m.accountid = $3::text
+        LIMIT 1
+      `,
+      channelId,
+      marketId,
+      accountId
+    );
+    const channelRow = channelRows?.[0];
+    if (!channelRow) {
+      return res.status(404).json({ message: 'Canal de marché introuvable' });
+    }
+
+    const platformAccounts = await listPlatformAccountsForAccount(accountId);
+    const updates = [];
+    const params = [];
+    let index = 1;
+    if (req.body?.platformAccountId !== undefined) {
+      updates.push(`platformaccountid = $${index++}::text`);
+      params.push(pickPlatformAccountId(platformAccounts, channelRow.platformkey, req.body.platformAccountId));
+    }
+    if (req.body?.status !== undefined) {
+      updates.push(`status = $${index++}::text`);
+      params.push(String(req.body.status || '').trim() || channelRow.status);
+    }
+    if (req.body?.isEnabled !== undefined) {
+      updates.push(`isenabled = $${index++}::boolean`);
+      params.push(req.body.isEnabled !== false);
+    }
+    if (req.body?.settingsJson !== undefined || req.body?.settings !== undefined) {
+      const settingsJson = {
+        ...parseJsonObject(channelRow.settingsjson),
+        ...parseJsonObject(req.body.settingsJson || req.body.settings || {}),
+      };
+      if (normalizePlatformKey(channelRow.platformkey) === 'amazon' && !settingsJson.legacyChannelKey) {
+        const legacyChannelKey = inferAmazonChannelKeyForMarket(channelRow.marketcode);
+        if (legacyChannelKey) settingsJson.legacyChannelKey = legacyChannelKey;
+      }
+      updates.push(`settingsjson = $${index++}::jsonb`);
+      params.push(JSON.stringify(settingsJson));
+    }
+    if (updates.length === 0) {
+      const markets = await getHydratedMarketsForAccount(accountId);
+      return res.json({ market: markets.find((entry) => entry.id === marketId) || null });
+    }
+
+    updates.push('updatedat = NOW()');
+    params.push(channelId);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "MarketChannel" SET ${updates.join(', ')} WHERE id = $${index}::text`,
+      ...params
+    );
+    await syncDestinationsForMarket(accountId, marketId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    res.json({ market: markets.find((entry) => entry.id === marketId) || null });
+  } catch (error) {
+    console.error('PATCH /markets/:marketId/channels/:channelId error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du canal du marché' });
+  }
+});
+
+app.get('/api/v1/markets/:marketId/readiness', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    await ensureMarketsBackfillForAccount(accountId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === req.params.marketId);
+    if (!market) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+    res.json({ readiness: market.readiness, market });
+  } catch (error) {
+    console.error('GET /markets/:marketId/readiness error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors du calcul de la readiness du marché' });
   }
 });
 
@@ -9766,10 +11367,87 @@ app.patch('/api/v1/ingestion/items/:id/channels', async (req, res) => {
     await prisma.$executeRawUnsafe(`
       UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text
     `, JSON.stringify(customFields), itemId);
-    return res.json({ channelOverrides: overrides });
+    for (const [overrideKey, value] of Object.entries(body)) {
+      if (typeof value !== 'boolean') continue;
+      const platformKey = getPlatformKeyFromOverrideKey(overrideKey);
+      if (!platformKey) continue;
+      await syncDestinationActivationsForPlatformOverride(accountId, itemId, platformKey, value);
+      customFields = await syncLegacyChannelOverrideForPlatform(accountId, itemId, platformKey, customFields);
+    }
+    return res.json({ channelOverrides: parseJsonObject(customFields._channelOverrides) });
   } catch (e) {
     console.error('Erreur PATCH channels:', e);
     return res.status(500).json({ message: 'Erreur mise à jour canaux', error: e.message });
+  }
+});
+
+app.get('/api/v1/ingestion/items/:id/destinations', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
+    const accountId = req.accountId || 'default-account';
+    const itemId = await resolveItemId(prisma, id, accountId);
+    if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
+    if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
+    const payload = await buildItemDestinationActivations(accountId, itemId);
+    return res.json(payload);
+  } catch (e) {
+    console.error('Erreur GET destinations item:', e);
+    const unavailable = getMarketsUnavailableResponse(res, e);
+    if (unavailable) return unavailable;
+    return res.status(e.statusCode || 500).json({ message: e.message || 'Erreur chargement destinations item' });
+  }
+});
+
+app.patch('/api/v1/ingestion/items/:id/destinations/:destinationId', async (req, res) => {
+  try {
+    const { id, destinationId } = req.params;
+    const { isEnabled, excludedReason } = req.body || {};
+    if (typeof isEnabled !== 'boolean') {
+      return res.status(400).json({ message: 'isEnabled (boolean) est requis.' });
+    }
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
+    const accountId = req.accountId || 'default-account';
+    const itemId = await resolveItemId(prisma, id, accountId);
+    if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
+    if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
+    const destinationContext = await getDestinationPushContext(accountId, destinationId);
+    const activationStatus = isEnabled ? 'active' : 'excluded';
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "ProductActivation" (
+          id, productid, destinationid, isenabled, activationstatus, excludedreason, manualoverride, createdat, updatedat
+        )
+        VALUES (
+          $1::text, $2::text, $3::text, $4::boolean, $5::text, $6::text, true, NOW(), NOW()
+        )
+        ON CONFLICT (productid, destinationid) DO UPDATE
+        SET isenabled = EXCLUDED.isenabled,
+            activationstatus = EXCLUDED.activationstatus,
+            excludedreason = EXCLUDED.excludedreason,
+            manualoverride = true,
+            updatedat = NOW()
+      `,
+      crypto.randomUUID(),
+      itemId,
+      destinationId,
+      isEnabled,
+      activationStatus,
+      isEnabled ? null : String(excludedReason || 'disabled_from_destination_toggle')
+    );
+    const customFields = await syncLegacyChannelOverrideForPlatform(accountId, itemId, destinationContext.platformKey);
+    return res.json({
+      itemId,
+      destinationId,
+      isEnabled,
+      activationStatus,
+      channelOverrides: parseJsonObject(customFields._channelOverrides),
+    });
+  } catch (e) {
+    console.error('Erreur PATCH destination item:', e);
+    const unavailable = getMarketsUnavailableResponse(res, e);
+    if (unavailable) return unavailable;
+    return res.status(e.statusCode || 500).json({ message: e.message || 'Erreur mise à jour destination item' });
   }
 });
 
@@ -9777,7 +11455,7 @@ app.patch('/api/v1/ingestion/items/:id/channels', async (req, res) => {
 app.patch('/api/v1/ingestion/items/:id/optimized', async (req, res) => {
   try {
     const { id } = req.params;
-    const { platform, title, description, highlights } = req.body || {};
+    const { platform, title, description, highlights, destinationId } = req.body || {};
     if (!platform || typeof platform !== 'string') {
       return res.status(400).json({ message: 'platform requis (gmc|meta|amazon|chatgpt)' });
     }
@@ -9789,6 +11467,10 @@ app.patch('/api/v1/ingestion/items/:id/optimized', async (req, res) => {
     const platKey = String(platform).toLowerCase().replace('google', 'gmc');
     if (!['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
       return res.status(400).json({ message: 'plateforme invalide. Utilisez gmc, meta, amazon ou chatgpt.' });
+    }
+    let destinationContext = null;
+    if (destinationId) {
+      destinationContext = await getDestinationPushContext(accountId, String(destinationId), platKey);
     }
     const current = await prisma.$queryRawUnsafe(`SELECT id, customfields FROM "FeedItem" WHERE id = $1::text`, itemId);
     if (!current || !current[0]) return res.status(404).json({ message: 'Item non trouvé' });
@@ -9803,13 +11485,21 @@ app.patch('/api/v1/ingestion/items/:id/optimized', async (req, res) => {
     if (description !== undefined) content.description = String(description).trim();
     if (Array.isArray(highlights)) content.highlights = highlights.map((entry) => String(entry).trim()).filter(Boolean);
     if (Object.keys(content).length === 0) return res.json({ message: 'Aucune modification', customfields: cf });
-    const newCf = mergeOptimizedContent(cf, platKey, content);
+    const newCf = mergeOptimizedContent(cf, platKey, content, destinationContext ? {
+      destinationId: destinationContext.id,
+      marketCode: destinationContext.marketCode,
+      localeCode: destinationContext.localeCode || null,
+    } : {});
     await prisma.$executeRawUnsafe(
       `UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`,
       JSON.stringify(newCf),
       itemId
     );
-    return res.json({ message: 'Contenu optimisé sauvegardé', platform: platKey });
+    return res.json({
+      message: 'Contenu optimisé sauvegardé',
+      platform: platKey,
+      destinationId: destinationContext?.id || null,
+    });
   } catch (e) {
     console.error('Erreur PATCH optimized:', e);
     return res.status(500).json({ message: 'Erreur mise à jour', error: e.message });
@@ -10183,7 +11873,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
 // Optimiser le titre d'un produit (optionnel: savePlatform = gmc|meta|amazon|chatgpt pour sauvegarder dans optimized[platform])
 app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
   try {
-    const { itemId, platform, industry, forceRefresh, savePlatform } = req.body;
+    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
     
     if (!itemId) {
       return res.status(400).json({ message: 'itemId requis' });
@@ -10213,14 +11903,31 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
     }
     
     const plat = platform || 'GMC';
-    const result = await optimizeTitleWithAI(prisma, items[0], { platform: plat, industry, forceRefresh: forceRefresh || false });
+    const targetDestinationContext = saveDestinationId
+      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
+      : null;
+    const result = await optimizeTitleWithAI(prisma, items[0], {
+      platform: plat,
+      industry,
+      forceRefresh: forceRefresh || false,
+      destinationContext: targetDestinationContext,
+    });
     
     if (savePlatform && result.optimizedTitle && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
       const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
       if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
+        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
+          ? targetDestinationContext
+          : saveDestinationId
+            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
+            : null;
         let cf = items[0].customfields;
         try { cf = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {}); } catch (e) { cf = {}; }
-        const newCf = mergeOptimizedContent(cf, platKey, { title: result.optimizedTitle });
+        const newCf = mergeOptimizedContent(cf, platKey, { title: result.optimizedTitle }, destinationContext ? {
+          destinationId: destinationContext.id,
+          marketCode: destinationContext.marketCode,
+          localeCode: destinationContext.localeCode || null,
+        } : {});
         await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), items[0].id);
       }
     }
@@ -10235,7 +11942,7 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
 // Optimiser la description d'un produit (optionnel: savePlatform pour sauvegarder dans optimized[platform])
 app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
   try {
-    const { itemId, platform, industry, forceRefresh, savePlatform } = req.body;
+    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
     
     if (!itemId) {
       return res.status(400).json({ message: 'itemId requis' });
@@ -10261,14 +11968,31 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
     }
     
     const plat = platform || 'GMC';
-    const result = await optimizeDescriptionWithAI(prisma, items[0], { platform: plat, industry, forceRefresh: forceRefresh || false });
+    const targetDestinationContext = saveDestinationId
+      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
+      : null;
+    const result = await optimizeDescriptionWithAI(prisma, items[0], {
+      platform: plat,
+      industry,
+      forceRefresh: forceRefresh || false,
+      destinationContext: targetDestinationContext,
+    });
     
     if (savePlatform && result.optimizedDescription && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
       const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
       if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
+        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
+          ? targetDestinationContext
+          : saveDestinationId
+            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
+            : null;
         let cf = items[0].customfields;
         try { cf = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {}); } catch (e) { cf = {}; }
-        const newCf = mergeOptimizedContent(cf, platKey, { description: result.optimizedDescription });
+        const newCf = mergeOptimizedContent(cf, platKey, { description: result.optimizedDescription }, destinationContext ? {
+          destinationId: destinationContext.id,
+          marketCode: destinationContext.marketCode,
+          localeCode: destinationContext.localeCode || null,
+        } : {});
         await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), items[0].id);
       }
     }
@@ -10283,7 +12007,7 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
 // Générer des highlights (bullet points) pour un produit avec IA
 app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
   try {
-    const { itemId, platform, industry, forceRefresh, savePlatform } = req.body;
+    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'itemId requis' });
@@ -10325,13 +12049,30 @@ app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
     const product = { ...item, customfields: cf };
 
     const plat = platform ? String(platform).toUpperCase() : 'GMC';
-    const result = await generateHighlightsWithAI(prisma, product, { platform: plat, industry, forceRefresh: forceRefresh || false });
+    const targetDestinationContext = saveDestinationId
+      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
+      : null;
+    const result = await generateHighlightsWithAI(prisma, product, {
+      platform: plat,
+      industry,
+      forceRefresh: forceRefresh || false,
+      destinationContext: targetDestinationContext,
+    });
 
     // Sauvegarder si demandé
     if (savePlatform && result.highlights && result.highlights.length > 0) {
       const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
       if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
-        const newCf = mergeOptimizedContent(cf, platKey, { highlights: result.highlights });
+        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
+          ? targetDestinationContext
+          : saveDestinationId
+            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
+            : null;
+        const newCf = mergeOptimizedContent(cf, platKey, { highlights: result.highlights }, destinationContext ? {
+          destinationId: destinationContext.id,
+          marketCode: destinationContext.marketCode,
+          localeCode: destinationContext.localeCode || null,
+        } : {});
         await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), item.id);
       }
     }
@@ -10639,7 +12380,7 @@ app.post('/api/v1/enrichment/proxy-image', async (req, res) => {
 // saveToCatalog: false = ne pas écrire en base (pour tests A/B : on ne garde que les résultats)
 app.post('/api/v1/enrichment/batch', async (req, res) => {
   try {
-    const { itemIds, optimizations, platform, platforms, saveToCatalog = true } = req.body;
+    const { itemIds, optimizations, platform, platforms, saveToCatalog = true, saveDestinationId } = req.body;
     
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
       return res.status(400).json({ message: 'itemIds requis (array)' });
@@ -10669,21 +12410,34 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
       ...itemIds, req.accountId
     );
     
+    const accountId = req.accountId || 'default-account';
     const results = { total: itemIds.length, found: products.length, titles: null, descriptions: null, images: null, totalCost: 0 };
     
     const platformResults = {};
     for (const plat of normalizedPlatforms) {
       platformResults[plat] = { titles: null, descriptions: null };
     }
+
+    const shouldWriteLegacyOptimizedFields = !String(saveDestinationId || '').trim();
+    const destinationContextByPlatform = {};
+    if (!shouldWriteLegacyOptimizedFields) {
+      for (const plat of normalizedPlatforms) {
+        const platKey = (plat === 'GMC' ? 'gmc' : plat.toLowerCase());
+        if (!['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) continue;
+        destinationContextByPlatform[platKey] = await getDestinationPushContext(accountId, String(saveDestinationId), platKey);
+      }
+    }
     
     for (const plat of normalizedPlatforms) {
+      const platKey = (plat === 'GMC' ? 'gmc' : plat.toLowerCase());
+      const destinationContext = destinationContextByPlatform[platKey] || null;
       if (optimizations?.titles) {
-        const titleResults = await optimizeTitlesBatch(prisma, products, { platform: plat });
+        const titleResults = await optimizeTitlesBatch(prisma, products, { platform: plat, destinationContext });
         platformResults[plat].titles = titleResults;
         results.totalCost += titleResults.totalCost;
       }
       if (optimizations?.descriptions) {
-        const descResults = await optimizeDescriptionsBatch(prisma, products, { platform: plat });
+        const descResults = await optimizeDescriptionsBatch(prisma, products, { platform: plat, destinationContext });
         platformResults[plat].descriptions = descResults;
         results.totalCost += descResults.totalCost;
       }
@@ -10710,7 +12464,7 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
       results.saved = savedCount;
       return res.json(results);
     }
-    
+
     for (const product of products) {
       try {
         let currentCf = product.customfields;
@@ -10720,7 +12474,9 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
           currentCf = {};
         }
         
-        const updates = {};
+        let nextCf = currentCf;
+        let hasContentUpdates = false;
+        const legacyUpdates = {};
         let firstTitle = null;
         let firstDesc = null;
         
@@ -10743,25 +12499,33 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
             }
           }
           if (Object.keys(platContent).length > 0) {
-            platContent.updatedAt = new Date().toISOString();
-            updates.optimized = updates.optimized || currentCf.optimized || {};
-            updates.optimized = { ...updates.optimized, [platKey]: { ...(updates.optimized[platKey] || {}), ...platContent } };
+            const destinationContext = destinationContextByPlatform[platKey];
+            nextCf = mergeOptimizedContent(nextCf, platKey, platContent, destinationContext ? {
+              destinationId: destinationContext.id,
+              marketCode: destinationContext.marketCode,
+              localeCode: destinationContext.localeCode || null,
+            } : {});
+            hasContentUpdates = true;
           }
         }
         
         if (firstTitle) {
-          updates.optimized_title = firstTitle;
-          updates.title_optimized_at = new Date().toISOString();
+          if (shouldWriteLegacyOptimizedFields) {
+            legacyUpdates.optimized_title = firstTitle;
+            legacyUpdates.title_optimized_at = new Date().toISOString();
+          }
           savedCount.titles++;
         }
         if (firstDesc) {
-          updates.optimized_description = firstDesc;
-          updates.description_optimized_at = new Date().toISOString();
+          if (shouldWriteLegacyOptimizedFields) {
+            legacyUpdates.optimized_description = firstDesc;
+            legacyUpdates.description_optimized_at = new Date().toISOString();
+          }
           savedCount.descriptions++;
         }
         
-        if (Object.keys(updates).length > 0) {
-          const newCf = { ...currentCf, ...updates };
+        if (hasContentUpdates || Object.keys(legacyUpdates).length > 0) {
+          const newCf = Object.keys(legacyUpdates).length > 0 ? { ...nextCf, ...legacyUpdates } : nextCf;
           await prisma.$executeRawUnsafe(
             `UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`,
             JSON.stringify(newCf),
@@ -12279,157 +14043,717 @@ async function refreshAmazonToken(connection) {
   return tokens.access_token;
 }
 
+function createPushError(message, statusCode = 400, extras = {}) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  Object.assign(error, extras);
+  return error;
+}
+
+function getOverrideKeyForPlatform(platformKey) {
+  const normalizedPlatform = normalizePlatformKey(platformKey);
+  if (normalizedPlatform === 'gmc') return 'google';
+  if (normalizedPlatform === 'amazon') return 'amazon';
+  return normalizedPlatform;
+}
+
+function getPlatformKeyFromOverrideKey(overrideKey) {
+  const normalizedKey = String(overrideKey || '').trim().toLowerCase();
+  if (normalizedKey === 'google') return 'gmc';
+  return normalizePlatformKey(normalizedKey);
+}
+
+function getLegacyOverrideValue(customFields, platformKey) {
+  const overrideKey = getOverrideKeyForPlatform(platformKey);
+  const overrides = parseJsonObject(customFields?._channelOverrides);
+  return overrides[overrideKey];
+}
+
+function isDestinationEffectivelyEnabled(destination, activationRow, customFields) {
+  if (activationRow) {
+    if (activationRow.isenabled === false) return false;
+    if (String(activationRow.activationstatus || '').toLowerCase() === 'excluded') return false;
+    return true;
+  }
+  return getLegacyOverrideValue(customFields, destination.platformKey) !== false;
+}
+
+async function loadProductActivationsByDestinationIds(productId, destinationIds = []) {
+  if (!destinationIds.length) return [];
+  return prisma.$queryRawUnsafe(
+    `
+      SELECT *
+      FROM "ProductActivation"
+      WHERE productid = $1::text
+        AND destinationid = ANY($2::text[])
+    `,
+    productId,
+    destinationIds
+  );
+}
+
+async function fetchItemCustomFields(itemId) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT customfields FROM "FeedItem" WHERE id = $1::text LIMIT 1`,
+    itemId
+  );
+  return parseProductCustomFields(rows?.[0]?.customfields);
+}
+
+async function syncLegacyChannelOverrideForPlatform(accountId, itemId, platformKey, currentCustomFields = null) {
+  const normalizedPlatformKey = normalizePlatformKey(platformKey);
+  const overrideKey = getOverrideKeyForPlatform(normalizedPlatformKey);
+  const customFields = currentCustomFields || await fetchItemCustomFields(itemId);
+  const destinationRows = await prisma.$queryRawUnsafe(
+    `
+      SELECT id, platformkey
+      FROM "Destination"
+      WHERE accountid = $1::text
+        AND platformkey = $2::text
+    `,
+    accountId,
+    normalizedPlatformKey
+  );
+  if (!destinationRows?.length) {
+    return customFields;
+  }
+
+  const destinationIds = destinationRows.map((row) => row.id);
+  const activationRows = await loadProductActivationsByDestinationIds(itemId, destinationIds);
+  const activationByDestinationId = new Map(activationRows.map((row) => [row.destinationid, row]));
+  const hasAnyEnabled = destinationRows.some((destination) =>
+    isDestinationEffectivelyEnabled(
+      { platformKey: destination.platformkey },
+      activationByDestinationId.get(destination.id),
+      customFields
+    )
+  );
+
+  const nextCustomFields = {
+    ...customFields,
+    _channelOverrides: {
+      ...parseJsonObject(customFields._channelOverrides),
+      [overrideKey]: hasAnyEnabled,
+    },
+  };
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`,
+    JSON.stringify(nextCustomFields),
+    itemId
+  );
+
+  return nextCustomFields;
+}
+
+async function syncDestinationActivationsForPlatformOverride(accountId, itemId, platformKey, isEnabled) {
+  const normalizedPlatformKey = normalizePlatformKey(platformKey);
+  if (!normalizedPlatformKey) return;
+  const destinationRows = await prisma.$queryRawUnsafe(
+    `
+      SELECT id
+      FROM "Destination"
+      WHERE accountid = $1::text
+        AND platformkey = $2::text
+    `,
+    accountId,
+    normalizedPlatformKey
+  );
+  for (const destination of destinationRows || []) {
+    const activationStatus = isEnabled ? 'active' : 'excluded';
+    const excludedReason = isEnabled ? null : 'disabled_from_platform_toggle';
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "ProductActivation" (
+          id, productid, destinationid, isenabled, activationstatus, excludedreason, manualoverride, createdat, updatedat
+        )
+        VALUES (
+          $1::text, $2::text, $3::text, $4::boolean, $5::text, $6::text, true, NOW(), NOW()
+        )
+        ON CONFLICT (productid, destinationid) DO UPDATE
+        SET isenabled = EXCLUDED.isenabled,
+            activationstatus = EXCLUDED.activationstatus,
+            excludedreason = EXCLUDED.excludedreason,
+            manualoverride = true,
+            updatedat = NOW()
+      `,
+      crypto.randomUUID(),
+      itemId,
+      destination.id,
+      isEnabled,
+      activationStatus,
+      excludedReason
+    );
+  }
+}
+
+async function buildItemDestinationActivations(accountId, itemId) {
+  await ensureMarketsBackfillForAccount(accountId);
+  const [markets, customFields] = await Promise.all([
+    getHydratedMarketsForAccount(accountId),
+    fetchItemCustomFields(itemId),
+  ]);
+
+  const destinations = markets.flatMap((market) => {
+    const localesById = new Map((market.locales || []).map((locale) => [locale.id, locale]));
+    return (market.channels || []).flatMap((channel) =>
+      (channel.destinations || []).map((destination) => ({
+        id: destination.id,
+        slug: destination.slug,
+        status: destination.status,
+        platformKey: destination.platformKey,
+        platformLabel: getPlatformLabel(destination.platformKey),
+        marketId: market.id,
+        marketCode: market.code,
+        marketName: market.name,
+        localeCode: destination.marketLocaleId ? localesById.get(destination.marketLocaleId)?.localeCode || null : null,
+        languageCode: destination.marketLocaleId ? localesById.get(destination.marketLocaleId)?.languageCode || null : null,
+        countryCode: destination.marketLocaleId ? localesById.get(destination.marketLocaleId)?.countryCode || market.code : market.code,
+        currencyCode: destination.currencyCode,
+        externalScopeLabel: destination.externalScopeLabel || null,
+      }))
+    );
+  });
+
+  const activationRows = await loadProductActivationsByDestinationIds(itemId, destinations.map((destination) => destination.id));
+  const activationByDestinationId = new Map(activationRows.map((row) => [row.destinationid, row]));
+  const items = destinations.map((destination) => {
+    const activationRow = activationByDestinationId.get(destination.id);
+    const isEnabled = isDestinationEffectivelyEnabled(destination, activationRow, customFields);
+    return {
+      destinationId: destination.id,
+      destinationSlug: destination.slug,
+      status: destination.status,
+      platformKey: destination.platformKey,
+      platformLabel: destination.platformLabel,
+      marketId: destination.marketId,
+      marketCode: destination.marketCode,
+      marketName: destination.marketName,
+      localeCode: destination.localeCode,
+      languageCode: destination.languageCode,
+      countryCode: destination.countryCode,
+      currencyCode: destination.currencyCode,
+      externalScopeLabel: destination.externalScopeLabel,
+      isEnabled,
+      activationSource: activationRow ? 'destination' : 'legacy',
+      activationStatus: activationRow?.activationstatus || (isEnabled ? 'active' : 'excluded'),
+      excludedReason: activationRow?.excludedreason || null,
+    };
+  });
+
+  return {
+    itemId,
+    channelOverrides: parseJsonObject(customFields._channelOverrides),
+    summary: {
+      totalDestinations: items.length,
+      activeDestinations: items.filter((entry) => entry.isEnabled).length,
+      marketCount: new Set(items.map((entry) => entry.marketId)).size,
+    },
+    destinations: items,
+  };
+}
+
+async function filterItemsForDestinationActivation(items, destinationContext) {
+  if (!destinationContext || !items?.length) return items;
+  const productActivations = await prisma.$queryRawUnsafe(
+    `
+      SELECT *
+      FROM "ProductActivation"
+      WHERE destinationid = $1::text
+        AND productid = ANY($2::text[])
+    `,
+    destinationContext.id,
+    items.map((item) => item.id)
+  );
+  const activationByItemId = new Map(productActivations.map((row) => [row.productid, row]));
+  return items.filter((item) => {
+    const cf = item.customfields && typeof item.customfields === 'object'
+      ? item.customfields
+      : parseProductCustomFields(item.customfields);
+    return isDestinationEffectivelyEnabled(
+      destinationContext,
+      activationByItemId.get(item.id),
+      cf
+    );
+  });
+}
+
+async function getDestinationPushContext(accountId, destinationId, expectedPlatform = null) {
+  if (!destinationId) return null;
+  if (!prismaReady || !prisma) {
+    throw createPushError('Service non disponible', 503);
+  }
+
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT
+        d.*,
+        m.code AS marketcode,
+        m.name AS marketname,
+        mc.settingsjson,
+        mc.isenabled AS channelenabled,
+        ml.localecode,
+        ml.languagecode,
+        ml.countrycode,
+        pa.externalaccountname,
+        pa.externalaccountid
+      FROM "Destination" d
+      JOIN "Market" m ON m.id = d.marketid
+      JOIN "MarketChannel" mc ON mc.id = d.marketchannelid
+      LEFT JOIN "MarketLocale" ml ON ml.id = d.marketlocaleid
+      LEFT JOIN "PlatformAccount" pa ON pa.id = d.platformaccountid
+      WHERE d.id = $1::text
+        AND d.accountid = $2::text
+      LIMIT 1
+    `,
+    destinationId,
+    accountId
+  );
+
+  const row = rows?.[0];
+  if (!row) {
+    throw createPushError('Destination introuvable pour ce compte.', 404);
+  }
+
+  const platformKey = normalizePlatformKey(row.platformkey);
+  if (expectedPlatform && platformKey !== normalizePlatformKey(expectedPlatform)) {
+    throw createPushError(`La destination ${destinationId} ne correspond pas à la plateforme ${expectedPlatform}.`, 400);
+  }
+  if (row.channelenabled === false) {
+    throw createPushError('Cette destination est désactivée. Réactivez le canal du marché avant de pousser.', 409);
+  }
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    status: row.status || 'draft',
+    platformKey,
+    marketCode: normalizeMarketCode(row.marketcode),
+    marketName: row.marketname || getMarketName(row.marketcode),
+    localeCode: row.localecode || null,
+    languageCode: row.languagecode || null,
+    countryCode: normalizeMarketCode(row.countrycode || row.marketcode),
+    currencyCode: row.currencycode || getMarketCurrency(row.marketcode),
+    externalScopeType: row.externalscopetype || null,
+    externalScopeId: row.externalscopeid || null,
+    externalScopeLabel: row.externalscopelabel || null,
+    settings: parseJsonObject(row.settingsjson),
+    config: parseJsonObject(row.configjson),
+    platformAccountId: row.platformaccountid || null,
+    platformAccountName: row.externalaccountname || null,
+    platformAccountExternalId: row.externalaccountid || null,
+  };
+}
+
+function buildDestinationPushLabel(destinationContext) {
+  if (!destinationContext) return '';
+  const baseLabel = destinationContext.externalScopeLabel
+    || getPlatformLabel(destinationContext.platformKey)
+    || destinationContext.platformKey;
+  const localeLabel = destinationContext.localeCode ? ` (${destinationContext.localeCode})` : '';
+  if (destinationContext.platformKey === 'amazon') {
+    return `${baseLabel}${localeLabel}`;
+  }
+  return `${baseLabel} ${destinationContext.marketName || destinationContext.marketCode}${localeLabel}`.trim();
+}
+
+async function getActivePlatformConnectionForPush(accountId, platformKey) {
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT *
+      FROM "PlatformConnection"
+      WHERE accountid = $1::text
+        AND platform = $2::text
+        AND status = 'active'
+      ORDER BY updatedat DESC NULLS LAST, createdat DESC
+      LIMIT 1
+    `,
+    accountId,
+    normalizePlatformKey(platformKey)
+  );
+  return rows?.[0] ? decryptPlatformConnection(rows[0]) : null;
+}
+
+async function executeAmazonPush({ accountId, feedId, destinationContext = null, channelKey = null }) {
+  const resolvedChannelKey = String(
+    channelKey
+      || destinationContext?.settings?.legacyChannelKey
+      || inferAmazonChannelKeyForMarket(destinationContext?.marketCode || '')
+      || 'amazon_fr'
+  ).toLowerCase();
+  const channelConfig = AMAZON_CHANNEL_CONFIG[resolvedChannelKey];
+  if (!channelConfig) {
+    throw createPushError('Canal Amazon invalide. Utilisez une destination Amazon ou channel=amazon_fr|amazon_uk|amazon_de|amazon_it|amazon_es.', 400);
+  }
+
+  const conn = await getActivePlatformConnectionForPush(accountId, 'amazon');
+  if (!conn) {
+    throw createPushError('Amazon non connecté. Connectez votre compte Seller Central d\'abord.', 400);
+  }
+
+  let accessToken = conn.accesstoken;
+  if (conn.tokenexpiry && new Date(conn.tokenexpiry) < new Date()) {
+    try {
+      accessToken = await refreshAmazonToken(conn);
+    } catch (refreshErr) {
+      throw createPushError('Token Amazon expiré. Reconnectez votre compte.', 401, { reconnect: true });
+    }
+  }
+
+  const meta = conn.metadata || {};
+  const sellerId = conn.merchantid || meta.sellerId;
+  if (!sellerId) {
+    throw createPushError('Seller ID manquant. Reconnectez Amazon.', 400);
+  }
+
+  const legacyAmazonFilter = destinationContext
+    ? ''
+    : `AND (customfields->'_channelOverrides'->>'amazon' IS NULL OR customfields->'_channelOverrides'->>'amazon' != 'false')`;
+  let items = await prisma.$queryRawUnsafe(
+    `
+      SELECT id, feedid AS "feedId", originid AS "originId", url, title,
+             descriptionhtml AS "descriptionHtml", descriptiontext AS "descriptionText", imageurl AS "imageUrl",
+             brand, sku, price, currency, inventory, customfields, gtin, mpn
+      FROM "FeedItem"
+      WHERE feedid = $1::text
+        ${legacyAmazonFilter}
+    `,
+    feedId
+  );
+  items = await filterItemsForDestinationActivation(items, destinationContext);
+
+  if (!items || items.length === 0) {
+    const emptyStateRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (
+            WHERE customfields->'_channelOverrides'->>'amazon' = 'false'
+          )::int AS amazon_disabled
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+      `,
+      feedId
+    );
+
+    const emptyState = emptyStateRows?.[0] || {};
+    const totalFeedItems = Number(emptyState.total || 0);
+    const amazonDisabledItems = Number(emptyState.amazon_disabled || 0);
+
+    let message = destinationContext
+      ? `Aucun produit à pousser : aucun produit actif pour ${destinationContext.marketName || destinationContext.slug || 'cette destination Amazon'}.`
+      : 'Aucun produit à pousser : aucun produit éligible pour Amazon.';
+    let reason = destinationContext ? 'destination_empty' : 'no_eligible_products';
+
+    if (totalFeedItems === 0) {
+      message = 'Aucun produit à pousser : ce flux ne contient actuellement aucun produit synchronisé.';
+      reason = 'empty_feed';
+    } else if (amazonDisabledItems === totalFeedItems) {
+      message = 'Aucun produit à pousser : tous les produits de ce flux sont désactivés pour Amazon.';
+      reason = 'amazon_disabled';
+    }
+
+    return {
+      message,
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      reason,
+      totalFeedItems,
+      amazonDisabledItems,
+      destinationId: destinationContext?.id || null,
+      destinationSlug: destinationContext?.slug || null,
+      channelKey: resolvedChannelKey,
+    };
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  const errors = [];
+  const marketplaceId = channelConfig.marketplaceId;
+  const currency = channelConfig.currency;
+
+  for (const item of items) {
+    try {
+      const cf = typeof item.customfields === 'string' ? JSON.parse(item.customfields || '{}') : (item.customfields || {});
+      const n = normalizeForAmazon({ ...item, customfields: cf }, channelConfig, { destinationId: destinationContext?.id || null });
+      const sku = n.sku;
+      const priceVal = parseFloat((n.standard_price || '').split(' ')[0] || '0');
+      const payload = {
+        productType: 'PRODUCT',
+        attributes: {
+          item_name: [{ value: n.item_name, marketplace_id: marketplaceId }],
+          product_description: [{ value: n.product_description, marketplace_id: marketplaceId }],
+          bullet_point: [{ value: n.bullet_point, marketplace_id: marketplaceId }],
+          brand: [{ value: n.brand, marketplace_id: marketplaceId }],
+          condition_type: [{ value: n.condition_type, marketplace_id: marketplaceId }],
+          list_price: [{ value: { value: priceVal, currency }, marketplace_id: marketplaceId }],
+          fulfillment_availability: [{ value: [{ quantity: n.quantity }], marketplace_id: marketplaceId }],
+          main_image: [{ value: [{ link: n.main_image_url }], marketplace_id: marketplaceId }]
+        }
+      };
+      if (n.external_product_id) {
+        payload.attributes.external_product_id = [{ value: n.external_product_id, marketplace_id: marketplaceId }];
+        payload.attributes.external_product_id_type = [{ value: n.external_product_id_type, marketplace_id: marketplaceId }];
+      }
+      const putRes = await fetch(`${AMAZON_SP_API_BASE}/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}?marketplaceIds=${marketplaceId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-amz-access-token': accessToken,
+          'User-Agent': 'FeedPlug/1.0 (Language=JavaScript)'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (putRes.ok) {
+        succeeded++;
+      } else {
+        const errText = await putRes.text();
+        failed++;
+        errors.push({ sku, error: errText.substring(0, 200) });
+      }
+    } catch (e) {
+      failed++;
+      errors.push({ sku: item.sku || item.id, error: e.message });
+    }
+  }
+
+  const logId = crypto.randomUUID();
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "ExportLog" (id, accountid, feedid, platform, status, totalproducts, succeeded, failed, errormessage, createdat)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::int, $7::int, $8::int, $9::text, NOW())
+    `,
+    logId,
+    accountId,
+    feedId,
+    destinationContext?.slug || resolvedChannelKey,
+    failed > 0 ? 'partial' : 'success',
+    items.length,
+    succeeded,
+    failed,
+    errors.length > 0 ? JSON.stringify(errors.slice(0, 5)) : null
+  );
+
+  const destinationLabel = buildDestinationPushLabel(destinationContext) || channelConfig.label;
+  return {
+    message: `Push Amazon ${destinationLabel} : ${succeeded} produits envoyés, ${failed} erreurs`,
+    total: items.length,
+    succeeded,
+    failed,
+    errors: errors.slice(0, 10),
+    logId,
+    destinationId: destinationContext?.id || null,
+    destinationSlug: destinationContext?.slug || null,
+    channelKey: resolvedChannelKey,
+  };
+}
+
+async function executeGmcPush({ accountId, userId, feedId, destinationContext = null }) {
+  const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
+  if (!conn) {
+    throw createPushError('Google Merchant Center non connecté. Connectez votre compte d\'abord.', 400);
+  }
+  if (!conn.merchantid) {
+    throw createPushError('Aucun Merchant Center ID trouvé. Reconnectez votre compte.', 400);
+  }
+
+  let accessToken = conn.accesstoken;
+  if (conn.tokenexpiry && new Date(conn.tokenexpiry) < new Date()) {
+    try {
+      accessToken = await refreshGMCToken(conn);
+    } catch (refreshErr) {
+      throw createPushError('Token expiré et impossible de rafraîchir. Reconnectez Google Merchant Center.', 401, { reconnect: true });
+    }
+  }
+
+  const legacyGoogleFilter = destinationContext
+    ? ''
+    : `AND (customfields->'_channelOverrides'->>'google' IS NULL OR customfields->'_channelOverrides'->>'google' != 'false')`;
+  let items = await prisma.$queryRawUnsafe(
+    `
+      SELECT id, feedid AS "feedId", originid AS "originId", url, title,
+             descriptionhtml AS "descriptionHtml", descriptiontext AS "descriptionText", imageurl AS "imageUrl",
+             brand, sku, price, currency, inventory, customfields, gtin, mpn
+      FROM "FeedItem"
+      WHERE feedid = $1::text
+        ${legacyGoogleFilter}
+    `,
+    feedId
+  );
+  items = await filterItemsForDestinationActivation(items, destinationContext);
+
+  if (!items || items.length === 0) {
+    return {
+      message: destinationContext
+        ? `Aucun produit à pousser pour ${destinationContext.marketName || destinationContext.slug || 'cette destination'}`
+        : 'Aucun produit à pousser',
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      destinationId: destinationContext?.id || null,
+      destinationSlug: destinationContext?.slug || null,
+    };
+  }
+
+  const merchantId = conn.merchantid;
+  const targetCountry = destinationContext?.countryCode || destinationContext?.marketCode || 'FR';
+  const contentLanguage = String(destinationContext?.languageCode || 'fr').toLowerCase();
+  let succeeded = 0;
+  let failed = 0;
+  const errors = [];
+
+  const batchSize = 50;
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const DEFAULT_GMC_CATEGORY = 'Apparel & Accessories > Clothing';
+    const entries = batch.map((item, idx) => {
+      const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
+      const { title: optTitle, description: optDesc } = getOptimizedContentForPlatform(item, 'gmc', { destinationId: destinationContext?.id || null });
+      const title = (optTitle || item.title || '').substring(0, 150);
+      const description = (optDesc || '').replace(/<[^>]*>/g, '').substring(0, 5000);
+      const price = item.price ? { value: String(Number(item.price).toFixed(2)), currency: item.currency || destinationContext?.currencyCode || 'EUR' } : undefined;
+      const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory);
+      const googleProductCategory = (cf.google_product_category && String(cf.google_product_category).trim()) || DEFAULT_GMC_CATEGORY;
+      const condition = normalizeConditionForGMC(item.condition || cf.condition);
+      const offerId = ((item.originid ?? item.originId) || item.id).toString().substring(0, 50);
+      return {
+        batchId: idx,
+        merchantId: merchantId,
+        method: 'insert',
+        product: {
+          offerId: offerId,
+          title: title,
+          description: description.replace(/<[^>]*>/g, ''),
+          link: item.url || cf.link || '',
+          imageLink: (item.imageurl ?? item.imageUrl) || cf.image_link || '',
+          availability: availability,
+          price: price,
+          brand: item.brand || cf.brand || '',
+          gtin: item.gtin || cf.gtin || undefined,
+          mpn: item.mpn || cf.mpn || item.sku || undefined,
+          condition: condition,
+          googleProductCategory: googleProductCategory,
+          channel: 'online',
+          contentLanguage,
+          targetCountry
+        }
+      };
+    });
+
+    try {
+      const batchRes = await fetch(`https://shoppingcontent.googleapis.com/content/v2.1/products/batch`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ entries })
+      });
+
+      if (batchRes.ok) {
+        const batchData = await batchRes.json();
+        for (const entry of (batchData.entries || [])) {
+          if (entry.errors && entry.errors.errors && entry.errors.errors.length > 0) {
+            failed++;
+            errors.push({ productId: batch[entry.batchId]?.id, errors: entry.errors.errors.map(e => e.message) });
+          } else {
+            succeeded++;
+          }
+        }
+      } else {
+        const errText = await batchRes.text();
+        console.error('GMC batch error:', batchRes.status, errText);
+        if (batchRes.status === 401) {
+          await prisma.$executeRawUnsafe(`UPDATE "PlatformConnection" SET status = 'expired', updatedat = NOW() WHERE id = $1::text`, conn.id);
+          throw createPushError('Token GMC expiré. Reconnectez votre compte.', 401, { reconnect: true });
+        }
+        failed += batch.length;
+        errors.push({ batch: `${i}-${i + batch.length}`, error: errText.substring(0, 200) });
+      }
+    } catch (batchErr) {
+      if (batchErr?.statusCode) {
+        throw batchErr;
+      }
+      console.error('GMC batch fetch error:', batchErr);
+      failed += batch.length;
+      errors.push({ batch: `${i}-${i + batch.length}`, error: batchErr.message });
+    }
+  }
+
+  const isMcaError = failed > 0 && succeeded === 0 && errors.some(e =>
+    (Array.isArray(e.errors) && e.errors.some(msg => typeof msg === 'string' && msg.includes('products manager access'))) ||
+    (typeof e.error === 'string' && e.error.includes('products manager access'))
+  );
+
+  const logId = crypto.randomUUID();
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "ExportLog" (id, accountid, feedid, platform, status, totalproducts, succeeded, failed, errormessage, createdat)
+      VALUES ($1::text, $2::text, $3::text, 'gmc', $4::text, $5::int, $6::int, $7::int, $8::text, NOW())
+    `,
+    logId,
+    accountId,
+    feedId,
+    failed > 0 ? 'partial' : 'success',
+    items.length,
+    succeeded,
+    failed,
+    errors.length > 0 ? JSON.stringify(errors.slice(0, 10)) : null
+  );
+
+  try {
+    const user = await findUserById(userId);
+    if (user?.email) {
+      sendExportCompleteEmail(user.email, `Feed ${feedId.substring(0, 8)}`, { succeeded, failed, total: items.length })
+        .catch(e => console.warn('Email export non envoyé:', e.message));
+    }
+  } catch {}
+
+  const destinationLabel = buildDestinationPushLabel(destinationContext);
+  return {
+    message: isMcaError
+      ? `Compte MCA détecté : le compte Merchant Center sélectionné est un agrégateur. Reconnectez en choisissant un sous-compte enfant.`
+      : `Push ${destinationLabel || 'Google Merchant Center'} terminé : ${succeeded} produits envoyés, ${failed} erreurs`,
+    total: items.length,
+    succeeded,
+    failed,
+    mcaError: isMcaError || undefined,
+    errors: errors.slice(0, 10),
+    logId,
+    destinationId: destinationContext?.id || null,
+    destinationSlug: destinationContext?.slug || null,
+    targetCountry,
+    contentLanguage,
+  };
+}
+
 // Push produits vers Amazon SP-API (Listings Items API)
 app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) => {
   try {
     const { feedId } = req.params;
-    const channel = (req.query.channel || req.body?.channel || 'amazon_fr').toLowerCase();
-    const channelConfig = AMAZON_CHANNEL_CONFIG[channel];
-    if (!channelConfig) {
-      return res.status(400).json({ message: 'Canal invalide. Utilisez channel=amazon_fr|amazon_uk|amazon_de|amazon_it|amazon_es' });
-    }
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service non disponible' });
     }
     if (!await verifyFeedAccess(feedId, req.accountId)) {
       return res.status(403).json({ message: 'Accès refusé à ce flux' });
     }
-    const connections = await prisma.$queryRawUnsafe(`
-      SELECT * FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'amazon' AND status = 'active'
-    `, req.accountId);
-    if (!connections || connections.length === 0) {
-      return res.status(400).json({ message: 'Amazon non connecté. Connectez votre compte Seller Central d\'abord.' });
-    }
-    const conn = decryptPlatformConnection(connections[0]);
-    let accessToken = conn.accesstoken;
-    if (conn.tokenexpiry && new Date(conn.tokenexpiry) < new Date()) {
-      try {
-        accessToken = await refreshAmazonToken(conn);
-      } catch (refreshErr) {
-        return res.status(401).json({ message: 'Token Amazon expiré. Reconnectez votre compte.', reconnect: true });
-      }
-    }
-    const meta = conn.metadata || {};
-    const sellerId = conn.merchantid || meta.sellerId;
-    if (!sellerId) {
-      return res.status(400).json({ message: 'Seller ID manquant. Reconnectez Amazon.' });
-    }
-    const items = await prisma.$queryRawUnsafe(`
-      SELECT id, feedid AS "feedId", originid AS "originId", url, title,
-             descriptionhtml AS "descriptionHtml", descriptiontext AS "descriptionText", imageurl AS "imageUrl",
-             brand, sku, price, currency, inventory, customfields, gtin, mpn
-      FROM "FeedItem"
-      WHERE feedid = $1::text
-    `, feedId);
-    if (!items || items.length === 0) {
-      const emptyStateRows = await prisma.$queryRawUnsafe(`
-        SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (
-            WHERE customfields->'_channelOverrides'->>'google' = 'false'
-          )::int AS google_disabled
-        FROM "FeedItem"
-        WHERE feedid = $1::text
-      `, feedId);
-
-      const emptyState = emptyStateRows?.[0] || {};
-      const totalFeedItems = Number(emptyState.total || 0);
-      const googleDisabledItems = Number(emptyState.google_disabled || 0);
-
-      let message = 'Aucun produit à pousser : aucun produit éligible pour Google Merchant Center.';
-      let reason = 'no_eligible_products';
-
-      if (totalFeedItems === 0) {
-        message = 'Aucun produit à pousser : ce flux ne contient actuellement aucun produit synchronisé.';
-        reason = 'empty_feed';
-      } else if (googleDisabledItems === totalFeedItems) {
-        message = 'Aucun produit à pousser : tous les produits de ce flux sont désactivés pour Google.';
-        reason = 'google_disabled';
-      }
-
-      console.info('GMC push skipped:', {
-        accountId: req.accountId,
-        feedId,
-        reason,
-        totalFeedItems,
-        googleDisabledItems,
-      });
-
-      return res.json({
-        message,
-        total: 0,
-        succeeded: 0,
-        failed: 0,
-        reason,
-        totalFeedItems,
-        googleDisabledItems,
-      });
-    }
-    let succeeded = 0;
-    let failed = 0;
-    const errors = [];
-    const marketplaceId = channelConfig.marketplaceId;
-    const currency = channelConfig.currency;
-    for (const item of items) {
-      try {
-        const cf = typeof item.customfields === 'string' ? JSON.parse(item.customfields || '{}') : (item.customfields || {});
-        const n = normalizeForAmazon({ ...item, customfields: cf }, channelConfig);
-        const sku = n.sku;
-        const priceVal = parseFloat((n.standard_price || '').split(' ')[0] || '0');
-        const payload = {
-          productType: 'PRODUCT',
-          attributes: {
-            item_name: [{ value: n.item_name, marketplace_id: marketplaceId }],
-            product_description: [{ value: n.product_description, marketplace_id: marketplaceId }],
-            bullet_point: [{ value: n.bullet_point, marketplace_id: marketplaceId }],
-            brand: [{ value: n.brand, marketplace_id: marketplaceId }],
-            condition_type: [{ value: n.condition_type, marketplace_id: marketplaceId }],
-            list_price: [{ value: { value: priceVal, currency }, marketplace_id: marketplaceId }],
-            fulfillment_availability: [{ value: [{ quantity: n.quantity }], marketplace_id: marketplaceId }],
-            main_image: [{ value: [{ link: n.main_image_url }], marketplace_id: marketplaceId }]
-          }
-        };
-        if (n.external_product_id) {
-          payload.attributes.external_product_id = [{ value: n.external_product_id, marketplace_id: marketplaceId }];
-          payload.attributes.external_product_id_type = [{ value: n.external_product_id_type, marketplace_id: marketplaceId }];
-        }
-        const putRes = await fetch(`${AMAZON_SP_API_BASE}/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}?marketplaceIds=${marketplaceId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-amz-access-token': accessToken,
-            'User-Agent': 'FeedPlug/1.0 (Language=JavaScript)'
-          },
-          body: JSON.stringify(payload)
-        });
-        if (putRes.ok) {
-          succeeded++;
-        } else {
-          const errText = await putRes.text();
-          failed++;
-          errors.push({ sku, error: errText.substring(0, 200) });
-        }
-      } catch (e) {
-        failed++;
-        errors.push({ sku: item.sku || item.id, error: e.message });
-      }
-    }
-    const logId = crypto.randomUUID();
-    await prisma.$executeRawUnsafe(`
-      INSERT INTO "ExportLog" (id, accountid, feedid, platform, status, totalproducts, succeeded, failed, errormessage, createdat)
-      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::int, $7::int, $8::int, $9::text, NOW())
-    `, logId, req.accountId, feedId, channel, failed > 0 ? 'partial' : 'success', items.length, succeeded, failed, errors.length > 0 ? JSON.stringify(errors.slice(0, 5)) : null);
-    res.json({
-      message: `Push Amazon ${channelConfig.label} : ${succeeded} produits envoyés, ${failed} erreurs`,
-      total: items.length,
-      succeeded,
-      failed,
-      errors: errors.slice(0, 10),
-      logId
+    const destinationContext = req.query.destinationId
+      ? await getDestinationPushContext(req.accountId, String(req.query.destinationId), 'amazon')
+      : null;
+    const result = await executeAmazonPush({
+      accountId: req.accountId,
+      feedId,
+      destinationContext,
+      channelKey: req.query.channel || req.body?.channel || null,
     });
+    res.json(result);
   } catch (error) {
     console.error('Amazon push error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({
+      message: error.message,
+      reconnect: error.reconnect === true || undefined,
+    });
   }
 });
 
@@ -12437,176 +14761,28 @@ app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) 
 app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => {
   try {
     const { feedId } = req.params;
-    
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service non disponible' });
     }
-    
-    // Vérifier accès au feed
     if (!await verifyFeedAccess(feedId, req.accountId)) {
       return res.status(403).json({ message: 'Accès refusé à ce flux' });
     }
-    
-    // Récupérer la connexion GMC
-    const connections = await prisma.$queryRawUnsafe(`
-      SELECT * FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'gmc' AND status = 'active'
-    `, req.accountId);
-    
-    if (!connections || connections.length === 0) {
-      return res.status(400).json({ message: 'Google Merchant Center non connecté. Connectez votre compte d\'abord.' });
-    }
-    
-    const conn = decryptPlatformConnection(connections[0]);
-    
-    if (!conn.merchantid) {
-      return res.status(400).json({ message: 'Aucun Merchant Center ID trouvé. Reconnectez votre compte.' });
-    }
-    
-    // Rafraîchir le token si expiré
-    let accessToken = conn.accesstoken;
-    if (conn.tokenexpiry && new Date(conn.tokenexpiry) < new Date()) {
-      try {
-        accessToken = await refreshGMCToken(conn);
-      } catch (refreshErr) {
-        return res.status(401).json({ message: 'Token expiré et impossible de rafraîchir. Reconnectez Google Merchant Center.', reconnect: true });
-      }
-    }
-    
-    // Récupérer les produits du feed ; exclure ceux dont le canal Google est désactivé (casse FeedItem = migration 002)
-    const items = await prisma.$queryRawUnsafe(`
-      SELECT id, feedid AS "feedId", originid AS "originId", url, title,
-             descriptionhtml AS "descriptionHtml", descriptiontext AS "descriptionText", imageurl AS "imageUrl",
-             brand, sku, price, currency, inventory, customfields
-      FROM "FeedItem"
-      WHERE feedid = $1::text
-      AND (customfields->'_channelOverrides'->>'google' IS NULL OR customfields->'_channelOverrides'->>'google' != 'false')
-    `, feedId);
-    
-    if (!items || items.length === 0) {
-      return res.json({ message: 'Aucun produit à pousser', total: 0, succeeded: 0, failed: 0 });
-    }
-    
-    const merchantId = conn.merchantid;
-    let succeeded = 0;
-    let failed = 0;
-    const errors = [];
-    
-    // Push par batch de 50
-    const batchSize = 50;
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize);
-      
-      // Construire les entrées pour l'API Content API batch
-      const DEFAULT_GMC_CATEGORY = 'Apparel & Accessories > Clothing';
-      const entries = batch.map((item, idx) => {
-        const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
-        const { title: optTitle, description: optDesc } = getOptimizedContentForPlatform(item, 'gmc');
-        const title = (optTitle || item.title || '').substring(0, 150);
-        const description = (optDesc || '').replace(/<[^>]*>/g, '').substring(0, 5000);
-        const price = item.price ? { value: String(Number(item.price).toFixed(2)), currency: item.currency || 'EUR' } : undefined;
-        const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory);
-        const googleProductCategory = (cf.google_product_category && String(cf.google_product_category).trim()) || DEFAULT_GMC_CATEGORY;
-        const condition = normalizeConditionForGMC(item.condition || cf.condition);
-        const offerId = ((item.originid ?? item.originId) || item.id).toString().substring(0, 50);
-        return {
-          batchId: idx,
-          merchantId: merchantId,
-          method: 'insert',
-          product: {
-            offerId: offerId,
-            title: title,
-            description: description.replace(/<[^>]*>/g, ''),
-            link: item.url || cf.link || '',
-            imageLink: (item.imageurl ?? item.imageUrl) || cf.image_link || '',
-            availability: availability,
-            price: price,
-            brand: item.brand || cf.brand || '',
-            gtin: item.gtin || cf.gtin || undefined,
-            mpn: item.mpn || cf.mpn || item.sku || undefined,
-            condition: condition,
-            googleProductCategory: googleProductCategory,
-            channel: 'online',
-            contentLanguage: 'fr',
-            targetCountry: 'FR'
-          }
-        };
-      });
-      
-      try {
-        const batchRes = await fetch(`https://shoppingcontent.googleapis.com/content/v2.1/products/batch`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ entries })
-        });
-        
-        if (batchRes.ok) {
-          const batchData = await batchRes.json();
-          for (const entry of (batchData.entries || [])) {
-            if (entry.errors && entry.errors.errors && entry.errors.errors.length > 0) {
-              failed++;
-              errors.push({ productId: batch[entry.batchId]?.id, errors: entry.errors.errors.map(e => e.message) });
-            } else {
-              succeeded++;
-            }
-          }
-        } else {
-          const errText = await batchRes.text();
-          console.error('GMC batch error:', batchRes.status, errText);
-          // Si 401, marquer la connexion comme expirée
-          if (batchRes.status === 401) {
-            await prisma.$executeRawUnsafe(`UPDATE "PlatformConnection" SET status = 'expired', updatedat = NOW() WHERE id = $1::text`, conn.id);
-            return res.status(401).json({ message: 'Token GMC expiré. Reconnectez votre compte.', reconnect: true });
-          }
-          failed += batch.length;
-          errors.push({ batch: `${i}-${i + batch.length}`, error: errText.substring(0, 200) });
-        }
-      } catch (batchErr) {
-        console.error('GMC batch fetch error:', batchErr);
-        failed += batch.length;
-        errors.push({ batch: `${i}-${i + batch.length}`, error: batchErr.message });
-      }
-    }
-    
-    // Détecter erreur MCA : compte agrégateur sans accès produits
-    const isMcaError = failed > 0 && succeeded === 0 && errors.some(e =>
-      (Array.isArray(e.errors) && e.errors.some(msg => typeof msg === 'string' && msg.includes('products manager access'))) ||
-      (typeof e.error === 'string' && e.error.includes('products manager access'))
-    );
-
-    // Log l'export
-    const logId = crypto.randomUUID();
-    await prisma.$executeRawUnsafe(`
-      INSERT INTO "ExportLog" (id, accountid, feedid, platform, status, totalproducts, succeeded, failed, errormessage, createdat)
-      VALUES ($1::text, $2::text, $3::text, 'gmc', $4::text, $5::int, $6::int, $7::int, $8::text, NOW())
-    `, logId, req.accountId, feedId, failed > 0 ? 'partial' : 'success', items.length, succeeded, failed, errors.length > 0 ? JSON.stringify(errors.slice(0, 10)) : null);
-
-    // Envoyer email de résultat d'export
-    try {
-      const user = await findUserById(req.user.id);
-      if (user?.email) {
-        sendExportCompleteEmail(user.email, `Feed ${feedId.substring(0, 8)}`, { succeeded, failed, total: items.length })
-          .catch(e => console.warn('Email export non envoyé:', e.message));
-      }
-    } catch {}
-
-    res.json({
-      message: isMcaError
-        ? `Compte MCA détecté : le compte Merchant Center sélectionné est un agrégateur. Reconnectez en choisissant un sous-compte enfant.`
-        : `Push terminé : ${succeeded} produits envoyés, ${failed} erreurs`,
-      total: items.length,
-      succeeded,
-      failed,
-      mcaError: isMcaError || undefined,
-      errors: errors.slice(0, 10),
-      logId
+    const destinationContext = req.query.destinationId
+      ? await getDestinationPushContext(req.accountId, String(req.query.destinationId), 'gmc')
+      : null;
+    const result = await executeGmcPush({
+      accountId: req.accountId,
+      userId: req.user.id,
+      feedId,
+      destinationContext,
     });
-    
+    res.json(result);
   } catch (error) {
     console.error('GMC push error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({
+      message: error.message,
+      reconnect: error.reconnect === true || undefined,
+    });
   }
 });
 

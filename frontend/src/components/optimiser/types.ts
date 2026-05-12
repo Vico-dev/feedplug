@@ -39,6 +39,7 @@ export interface Rule {
   actionJson: ActionJson;
   feedIds?: string[];
   channelIds?: string[];
+  destinationIds?: string[];
   startDate?: string | null;
   endDate?: string | null;
   runOnIngestion?: boolean;

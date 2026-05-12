@@ -22,10 +22,36 @@ const RESEND_AUDIENCE_ID = typeof process.env.RESEND_AUDIENCE_ID === 'string'
 const MARKETING_UNSUBSCRIBE_SECRET = process.env.MARKETING_UNSUBSCRIBE_SECRET
   || process.env.JWT_SECRET
   || 'feedplug-marketing-secret';
+const INTERNAL_ALERT_EMAILS = parseEmailList(
+  process.env.MARKETING_ALERT_EMAILS
+  || process.env.LEAD_ALERT_EMAILS
+  || process.env.FEEDPLUG_STAFF_EMAILS
+  || 'admin@feedplug.com'
+);
+const PUSHOVER_APP_TOKEN = typeof process.env.PUSHOVER_APP_TOKEN === 'string'
+  ? process.env.PUSHOVER_APP_TOKEN.trim()
+  : '';
+const PUSHOVER_USER_KEY = typeof process.env.PUSHOVER_USER_KEY === 'string'
+  ? process.env.PUSHOVER_USER_KEY.trim()
+  : '';
+const PUSHOVER_DEVICE = typeof process.env.PUSHOVER_DEVICE === 'string'
+  ? process.env.PUSHOVER_DEVICE.trim()
+  : '';
 
 /** Langues supportées pour les emails (clé = locale). */
 const SUPPORTED_EMAIL_LOCALES = ['fr', 'en', 'es'];
 const DEFAULT_EMAIL_LOCALE = 'fr';
+
+function parseEmailList(value) {
+  return Array.from(
+    new Set(
+      String(value || '')
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+}
 
 const EMAIL_TEMPLATES = {
   fr: {
@@ -845,6 +871,186 @@ async function sendMarketingAuditEmail({
   });
 }
 
+function formatAlertValue(value) {
+  if (Array.isArray(value)) {
+    const joined = value.map((item) => String(item || '').trim()).filter(Boolean).join(', ');
+    return joined || '—';
+  }
+  if (value === null || value === undefined) return '—';
+  const stringValue = String(value).trim();
+  return stringValue || '—';
+}
+
+function buildInternalAlertRows(event) {
+  const rows = [
+    ['Type', event.typeLabel],
+    ['Email', event.email],
+    ['Nom', [event.firstName, event.lastName].filter(Boolean).join(' ')],
+    ['Societe', event.company],
+    ['Fonction', event.jobTitle],
+    ['Telephone', event.phone],
+    ['Source', event.source],
+    ['Locale', event.locale],
+    ['Etat', event.alreadyRegistered ? 'Soumission repetee' : 'Nouvelle soumission'],
+    ['Connecteur', event.connectorType],
+    ['CMS / source', event.cmsUsed],
+    ['Boutique / flux', event.shopUrl],
+    ['Merchant Center', event.merchantId],
+    ['Taille catalogue', event.catalogSize],
+    ['Canaux cibles', event.targetChannels],
+    ['Date', event.createdAt || new Date().toISOString()],
+  ];
+  if (event.idea) rows.push(['Idee', event.idea]);
+  return rows
+    .filter(([, value]) => value !== null && value !== undefined && String(formatAlertValue(value)).trim() !== '—')
+    .map(([label, value]) => `
+      <tr>
+        <td style="padding: 8px 10px; border-top: 1px solid #e5e7eb; width: 180px; color: #475569; font-size: 13px; vertical-align: top;">${escapeHtml(label)}</td>
+        <td style="padding: 8px 10px; border-top: 1px solid #e5e7eb; color: #0f172a; font-size: 14px; vertical-align: top;">${escapeHtml(formatAlertValue(value))}</td>
+      </tr>
+    `)
+    .join('');
+}
+
+function buildInternalAlertCopy(event) {
+  const typeLabel = event.kind === 'audit'
+    ? 'Nouvel audit marketing'
+    : event.kind === 'feature_idea'
+      ? 'Nouvelle idee roadmap'
+      : 'Nouveau lead marketing';
+  const subjectParts = ['FeedPlug', typeLabel];
+  if (event.source) subjectParts.push(event.source);
+  const displayName = [event.firstName, event.lastName].filter(Boolean).join(' ').trim();
+  if (displayName) {
+    subjectParts.push(displayName);
+  } else if (event.email) {
+    subjectParts.push(event.email);
+  }
+
+  const actionUrl = event.kind === 'feature_idea'
+    ? `${APP_URL}/admin/feature-ideas`
+    : `${APP_URL}/admin/leads`;
+  const actionLabel = event.kind === 'feature_idea'
+    ? 'Ouvrir les idees produit'
+    : 'Ouvrir les leads';
+  const summary = event.kind === 'feature_idea'
+    ? 'Une nouvelle idee a ete soumise sur la roadmap FeedPlug.'
+    : event.alreadyRegistered
+      ? 'Une nouvelle soumission a ete acceptee pour un lead deja connu.'
+      : 'Une nouvelle soumission marketing a ete acceptee.';
+  const rowsHtml = buildInternalAlertRows({ ...event, typeLabel });
+  const noteHtml = event.idea
+    ? `<div class="note" style="margin-top: 18px;"><strong>Extrait :</strong><br>${escapeHtml(String(event.idea).slice(0, 700))}</div>`
+    : '';
+  const html = baseTemplate(`
+    <h1>${escapeHtml(typeLabel)}</h1>
+    <p>${escapeHtml(summary)}</p>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 18px; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden;">
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+    ${noteHtml}
+    <p style="margin-top: 24px;">
+      <a href="${escapeHtml(actionUrl)}" class="btn">${escapeHtml(actionLabel)}</a>
+    </p>
+  `, {
+    locale: 'fr',
+    previewText: `${typeLabel} — ${event.email || displayName || 'nouvelle soumission'}`,
+  });
+
+  const pushoverLines = [
+    typeLabel,
+    event.email ? `Email: ${event.email}` : '',
+    displayName ? `Nom: ${displayName}` : '',
+    event.company ? `Societe: ${event.company}` : '',
+    event.source ? `Source: ${event.source}` : '',
+    event.idea ? `Idee: ${String(event.idea).slice(0, 160)}` : '',
+  ].filter(Boolean);
+
+  return {
+    actionLabel,
+    actionUrl,
+    html,
+    message: pushoverLines.join('\n'),
+    subject: subjectParts.join(' • '),
+    typeLabel,
+  };
+}
+
+async function sendPushoverAlert({ title, message, url, urlTitle }) {
+  if (!PUSHOVER_APP_TOKEN || !PUSHOVER_USER_KEY) return null;
+
+  const body = new URLSearchParams({
+    token: PUSHOVER_APP_TOKEN,
+    user: PUSHOVER_USER_KEY,
+    title,
+    message,
+    url,
+    url_title: urlTitle || 'Ouvrir FeedPlug',
+  });
+  if (PUSHOVER_DEVICE) {
+    body.set('device', PUSHOVER_DEVICE);
+  }
+
+  const response = await fetch('https://api.pushover.net/1/messages.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Pushover ${response.status}: ${errorText || 'push failed'}`);
+  }
+
+  return response.json().catch(() => null);
+}
+
+async function notifyInternalMarketingFormSubmission(event = {}) {
+  const alert = buildInternalAlertCopy(event);
+  const tasks = [];
+
+  if (INTERNAL_ALERT_EMAILS.length > 0) {
+    tasks.push(
+      dispatchEmail({
+        to: INTERNAL_ALERT_EMAILS,
+        subject: alert.subject,
+        html: alert.html,
+        replyTo: event.email || MARKETING_REPLY_TO,
+        tags: [{ name: 'category', value: 'internal_marketing_alert' }],
+      })
+    );
+  }
+
+  if (PUSHOVER_APP_TOKEN && PUSHOVER_USER_KEY) {
+    tasks.push(
+      sendPushoverAlert({
+        title: 'FeedPlug',
+        message: alert.message,
+        url: alert.actionUrl,
+        urlTitle: alert.actionLabel,
+      })
+    );
+  }
+
+  if (tasks.length === 0) {
+    return { attempted: false };
+  }
+
+  const results = await Promise.allSettled(tasks);
+  const failures = results.filter((result) => result.status === 'rejected');
+  if (failures.length === results.length) {
+    throw failures[0].reason || new Error('Internal marketing alert failed');
+  }
+
+  return {
+    attempted: true,
+    failedChannels: failures.length,
+    sentChannels: results.length - failures.length,
+  };
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendSyncCompleteEmail,
@@ -860,6 +1066,7 @@ module.exports = {
   getMarketingTrackedUrl,
   createMarketingUnsubscribeToken,
   verifyMarketingUnsubscribeToken,
+  notifyInternalMarketingFormSubmission,
   SUPPORTED_EMAIL_LOCALES,
   getEmailLocale,
 };

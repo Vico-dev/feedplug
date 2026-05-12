@@ -34,6 +34,9 @@ export interface MarketingAuditRequest {
   catalogSize: number;
   targetChannels: MarketingAuditChannel[];
   goal?: string;
+  captchaToken?: string;
+  companyWebsite?: string;
+  formStartedAt?: number;
   gmcDiagnostics?: {
     issueCount?: number;
     disapprovalRate?: number;
