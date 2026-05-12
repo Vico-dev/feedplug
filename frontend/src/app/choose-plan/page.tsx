@@ -264,13 +264,13 @@ export default function ChoosePlanPage() {
 
   if (authLoading || !isAuthenticated) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f8fafc" }}>
-        <p style={{ color: "#6b7280" }}>Chargement...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--paper-2)" }}>
+        <p style={{ color: "var(--ink-3)" }}>Chargement...</p>
       </div>
     );
   }
 
-  const inputStyle = { width: "100%", padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: "6px", fontSize: "14px" };
+  const inputStyle = { width: "100%", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: "6px", fontSize: "14px" };
   const labelStyle = { display: "block", fontSize: "14px", fontWeight: "500", marginBottom: "6px" };
 
   return (
@@ -284,7 +284,7 @@ export default function ChoosePlanPage() {
                 flex: 1,
                 height: "4px",
                 borderRadius: "2px",
-                backgroundColor: step >= s ? "#0a0a0a" : "#e5e7eb",
+                backgroundColor: step >= s ? "#0a0a0a" : "var(--line)",
               }}
             />
           ))}
@@ -295,7 +295,7 @@ export default function ChoosePlanPage() {
           {step === 2 && "Informations de facturation"}
           {step === 3 && "Paiement"}
         </h1>
-        <p style={{ fontSize: "15px", color: "#6b7280", marginBottom: "24px" }}>
+        <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px" }}>
           {step === 1 && "Produits × canaux + option Pack IA — même grille que sur feedplug.com/tarifs."}
           {step === 2 && "Renseignez les informations de votre entreprise pour la facturation."}
           {step === 3 && "Vous allez être redirigé vers Stripe pour payer par carte bancaire ou prélèvement SEPA."}
@@ -305,10 +305,10 @@ export default function ChoosePlanPage() {
           <div
             style={{
               padding: "12px 16px",
-              backgroundColor: "#fef2f2",
+              backgroundColor: "var(--danger-bg)",
               border: "1px solid #fecaca",
               borderRadius: "8px",
-              color: "#dc2626",
+              color: "var(--danger)",
               fontSize: "14px",
               marginBottom: "24px",
             }}
@@ -321,10 +321,10 @@ export default function ChoosePlanPage() {
           <div
             style={{
               padding: "12px 16px",
-              backgroundColor: "#eff6ff",
-              border: "1px solid #bfdbfe",
+              backgroundColor: "var(--accent-bg)",
+              border: "1px solid var(--accent-bg)",
               borderRadius: "8px",
-              color: "#1d4ed8",
+              color: "var(--accent-2)",
               fontSize: "14px",
               marginBottom: "24px",
             }}
@@ -346,7 +346,7 @@ export default function ChoosePlanPage() {
                     onClick={() => setProductTier(tier)}
                     style={{
                       padding: "10px 16px",
-                      border: `2px solid ${productTier === tier ? "#0a0a0a" : "#e5e7eb"}`,
+                      border: `2px solid ${productTier === tier ? "#0a0a0a" : "var(--line)"}`,
                       borderRadius: "8px",
                       backgroundColor: productTier === tier ? "#fafafa" : "#fff",
                       cursor: "pointer",
@@ -370,7 +370,7 @@ export default function ChoosePlanPage() {
                     onClick={() => setChannelCount(n)}
                     style={{
                       padding: "10px 18px",
-                      border: `2px solid ${channelCount === n ? "#0a0a0a" : "#e5e7eb"}`,
+                      border: `2px solid ${channelCount === n ? "#0a0a0a" : "var(--line)"}`,
                       borderRadius: "8px",
                       backgroundColor: channelCount === n ? "#fafafa" : "#fff",
                       cursor: "pointer",
@@ -383,7 +383,7 @@ export default function ChoosePlanPage() {
                   </button>
                 ))}
               </div>
-              <p style={{ fontSize: "13px", color: "#6b7280", marginTop: "8px", marginBottom: 0 }}>
+              <p style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "8px", marginBottom: 0 }}>
                 Besoin de plus de 5 canaux ? Contactez-nous pour un devis sur mesure.
               </p>
             </div>
@@ -491,7 +491,7 @@ export default function ChoosePlanPage() {
               </div>
             </div>
             <div style={{ marginTop: "24px", display: "flex", justifyContent: "space-between" }}>
-              <button type="button" onClick={() => setStep(1)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
+              <button type="button" onClick={() => setStep(1)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
                 <ArrowLeft style={{ width: "16px", height: "16px" }} />
                 Retour
               </button>
@@ -506,18 +506,18 @@ export default function ChoosePlanPage() {
         {/* Étape 3 : Paiement Stripe */}
         {step === 3 && (
           <>
-            <div style={{ padding: "20px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
+            <div style={{ padding: "20px", backgroundColor: "var(--paper-2)", borderRadius: "8px", border: "1px solid var(--line)", marginBottom: "24px" }}>
               <div style={{ fontWeight: "600", color: "#0a0a0a", marginBottom: "4px" }}>
                 {totalPrice} € HT / mois — Jusqu&apos;à {getProductTierLabel(productTier)} produits · {channelCount} canal{channelCount > 1 ? "aux" : ""}
                 {addonIA && " · Pack IA"}
               </div>
-              <div style={{ fontSize: "14px", color: "#6b7280" }}>Paiement sécurisé par carte bancaire ou prélèvement SEPA via Stripe</div>
-              <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "8px" }}>
+              <div style={{ fontSize: "14px", color: "var(--ink-3)" }}>Paiement sécurisé par carte bancaire ou prélèvement SEPA via Stripe</div>
+              <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "8px" }}>
                 En cas de prélèvement SEPA, l&apos;accès reste ouvert pendant 10 jours le temps de confirmer l&apos;encaissement.
               </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button type="button" onClick={() => setStep(2)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
+              <button type="button" onClick={() => setStep(2)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
                 <ArrowLeft style={{ width: "16px", height: "16px" }} />
                 Retour
               </button>

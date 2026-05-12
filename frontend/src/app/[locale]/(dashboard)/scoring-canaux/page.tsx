@@ -173,17 +173,17 @@ export default function ScoringCanauxPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <span style={{ fontWeight: 600, fontSize: 16 }}>{item.name}</span>
               {item.config?.enabled ? (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#16a34a", fontSize: 13 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--success)", fontSize: 13 }}>
                   <CheckCircle size={14} /> Activé
                 </span>
               ) : (
-                <span style={{ fontSize: 13, color: "#6b7280" }}>
+                <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
                   {item.config ? t("common.disabled") : t("common.notConfigured")}
                 </span>
               )}
             </div>
             {item.config && (
-              <p style={{ margin: 0, fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
                 {Math.round((item.config.qualityWeight || 0) * 100)} % qualité ·{" "}
                 {Math.round((item.config.performanceWeight || 0) * 100)} % performance
               </p>
@@ -248,7 +248,7 @@ export default function ScoringCanauxPage() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 500 }}>Qualité des données</span>
-                <span style={{ fontSize: 14, color: "#6b7280" }}>{formQuality} %</span>
+                <span style={{ fontSize: 14, color: "var(--ink-3)" }}>{formQuality} %</span>
               </div>
               <input
                 type="range"
@@ -256,14 +256,14 @@ export default function ScoringCanauxPage() {
                 max={100}
                 value={formQuality}
                 onChange={(e) => handleQualityChange(Number(e.target.value))}
-                style={{ width: "100%", accentColor: "#0f172a" }}
+                style={{ width: "100%", accentColor: "var(--ink)" }}
               />
             </div>
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 500 }}>Performance commerciale</span>
-                <span style={{ fontSize: 14, color: "#6b7280" }}>{formPerf} %</span>
+                <span style={{ fontSize: 14, color: "var(--ink-3)" }}>{formPerf} %</span>
               </div>
               <input
                 type="range"
@@ -271,7 +271,7 @@ export default function ScoringCanauxPage() {
                 max={100}
                 value={formPerf}
                 onChange={(e) => handlePerfChange(Number(e.target.value))}
-                style={{ width: "100%", accentColor: "#0f172a" }}
+                style={{ width: "100%", accentColor: "var(--ink)" }}
               />
             </div>
 
@@ -286,7 +286,7 @@ export default function ScoringCanauxPage() {
                   width: "100%",
                   padding: "8px 12px",
                   borderRadius: 8,
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--line)",
                   fontSize: 14,
                 }}
               >
@@ -298,12 +298,12 @@ export default function ScoringCanauxPage() {
               </select>
             </div>
 
-            <p style={{ margin: "0 0 20px", fontSize: 12, color: "#6b7280" }}>
+            <p style={{ margin: "0 0 20px", fontSize: 12, color: "var(--ink-3)" }}>
               Score canal = {formQuality} % score qualité Feedplug + {formPerf} % performance (données à venir via APIs).
             </p>
 
             {saveError && (
-              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#dc2626" }}>{saveError}</p>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--danger)" }}>{saveError}</p>
             )}
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
@@ -316,7 +316,7 @@ export default function ScoringCanauxPage() {
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: "#0f172a",
+                  background: "var(--ink)",
                   color: "#fff",
                   fontWeight: 500,
                   cursor: saving ? "not-allowed" : "pointer",

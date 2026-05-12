@@ -59,7 +59,7 @@ export default function IntegrationsPage() {
         style={{
           minHeight: "100vh",
           background:
-            "radial-gradient(circle at top left, rgba(148,163,184,0.12), transparent 24%), linear-gradient(180deg, #f8fafc 0%, #ffffff 28%)",
+            "radial-gradient(circle at top left, rgba(148,163,184,0.12), transparent 24%), linear-gradient(180deg, var(--paper-2) 0%, #ffffff 28%)",
           padding: "128px 24px 96px",
         }}
       >
@@ -83,7 +83,7 @@ export default function IntegrationsPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  color: "#64748b",
+                  color: "var(--ink-3)",
                   fontSize: 14,
                   fontWeight: 600,
                   textDecoration: "none",
@@ -99,9 +99,9 @@ export default function IntegrationsPage() {
                   gap: 8,
                   padding: "8px 12px",
                   borderRadius: 999,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  color: "#475569",
+                  background: "var(--paper-2)",
+                  border: "1px solid var(--line)",
+                  color: "var(--ink-2)",
                   fontSize: 13,
                   fontWeight: 700,
                   marginBottom: 18,
@@ -115,7 +115,7 @@ export default function IntegrationsPage() {
                   fontSize: "clamp(2.2rem, 4.2vw, 4.1rem)",
                   lineHeight: 0.97,
                   letterSpacing: "-0.055em",
-                  color: "#0f172a",
+                  color: "var(--ink)",
                 }}
               >
                 {t("title")}
@@ -123,7 +123,7 @@ export default function IntegrationsPage() {
               <p
                 style={{
                   margin: "22px 0 0",
-                  color: "#475569",
+                  color: "var(--ink-2)",
                   fontSize: 17,
                   lineHeight: 1.75,
                   maxWidth: 680,
@@ -147,14 +147,14 @@ export default function IntegrationsPage() {
                     key={label}
                     style={{
                       borderRadius: 22,
-                      border: "1px solid #e2e8f0",
-                      background: "#fbfdff",
+                      border: "1px solid var(--line)",
+                      background: "var(--paper)",
                       padding: "18px 18px 16px",
                     }}
                   >
-                    <Icon size={18} style={{ color: "#0f172a", marginBottom: 12 }} />
-                    <div style={{ color: "#0f172a", fontSize: 22, fontWeight: 700, letterSpacing: "-0.04em" }}>{value}</div>
-                    <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>{label}</div>
+                    <Icon size={18} style={{ color: "var(--ink)", marginBottom: 12 }} />
+                    <div style={{ color: "var(--ink)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.04em" }}>{value}</div>
+                    <div style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 4 }}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -163,8 +163,8 @@ export default function IntegrationsPage() {
             <div
               style={{
                 borderRadius: 30,
-                background: "#0f172a",
-                color: "#f8fafc",
+                background: "var(--ink)",
+                color: "var(--paper-2)",
                 padding: "30px 28px",
                 boxShadow: "0 24px 80px rgba(15,23,42,0.16)",
               }}
@@ -204,7 +204,7 @@ export default function IntegrationsPage() {
                       border: "1px solid rgba(148,163,184,0.18)",
                       background: "rgba(255,255,255,0.04)",
                       padding: "18px 18px 16px",
-                      color: "#f8fafc",
+                      color: "var(--paper-2)",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -231,14 +231,14 @@ export default function IntegrationsPage() {
           >
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 28, letterSpacing: "-0.04em", color: "#0f172a" }}>
+                <h2 style={{ margin: 0, fontSize: 28, letterSpacing: "-0.04em", color: "var(--ink)" }}>
                   Canaux et plateformes pris en charge
                 </h2>
-                <p style={{ margin: "10px 0 0", color: "#64748b", lineHeight: 1.7 }}>
+                <p style={{ margin: "10px 0 0", color: "var(--ink-3)", lineHeight: 1.7 }}>
                   Une même base catalogue, puis une logique d’adaptation propre à chaque destination.
                 </p>
               </div>
-              <Link href="/docs/export" style={{ color: "#0f172a", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid #cbd5e1", paddingBottom: 2 }}>
+              <Link href="/docs/export" style={{ color: "var(--ink)", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid var(--line-strong)", paddingBottom: 2 }}>
                 {t("seeExportGuide")}
               </Link>
             </div>
@@ -252,15 +252,15 @@ export default function IntegrationsPage() {
                   key={key}
                   style={{
                     padding: "22px 22px 20px",
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid var(--line)",
                     borderRadius: 24,
-                    backgroundColor: "#fbfdff",
+                    backgroundColor: "var(--paper)",
                   }}
                 >
-                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a", margin: "0 0 10px" }}>
+                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink)", margin: "0 0 10px" }}>
                     {t(`channelLabels.${key}`)}
                   </h2>
-                  <p style={{ margin: 0, color: "#475569", fontSize: 15, lineHeight: 1.7 }}>
+                  <p style={{ margin: 0, color: "var(--ink-2)", fontSize: 15, lineHeight: 1.7 }}>
                     {t(`channels.${key}`)}
                   </p>
                 </section>

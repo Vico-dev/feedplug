@@ -48,10 +48,10 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<ABTestStatus, { label: string; color: string; bg: string }> = {
-  DRAFT: { label: 'Brouillon', color: '#6b7280', bg: '#f3f4f6' },
-  RUNNING: { label: 'En cours', color: '#2563eb', bg: '#dbeafe' },
-  COMPLETED: { label: 'Terminé', color: '#16a34a', bg: '#dcfce7' },
-  CANCELLED: { label: 'Annulé', color: '#dc2626', bg: '#fee2e2' },
+  DRAFT: { label: 'Brouillon', color: 'var(--ink-3)', bg: 'var(--paper-2)' },
+  RUNNING: { label: 'En cours', color: 'var(--accent)', bg: 'var(--accent-bg)' },
+  COMPLETED: { label: 'Terminé', color: 'var(--success)', bg: 'var(--success-bg)' },
+  CANCELLED: { label: 'Annulé', color: 'var(--danger)', bg: 'var(--danger-bg)' },
 };
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -191,7 +191,7 @@ export default function ABTestsPage() {
 
       {/* Hero */}
       <div style={{
-        background: "linear-gradient(135deg, #0f766e 0%, #115e59 100%)",
+        background: "linear-gradient(135deg, #2A6FE8 0%, #1F58C0 100%)",
         borderRadius: "var(--card-radius)",
         padding: 28,
         marginBottom: 24,
@@ -246,7 +246,7 @@ export default function ABTestsPage() {
             padding: 20,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <TrendingUp size={18} style={{ color: "#86efac" }} />
+              <TrendingUp size={18} style={{ color: "#BBF7D0" }} />
               <span style={{ fontSize: 14, fontWeight: 500 }}>Exemple d&apos;impact</span>
             </div>
             <div style={{ display: "flex", gap: 16 }}>
@@ -257,7 +257,7 @@ export default function ABTestsPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.4)", fontSize: 18 }}>vs</div>
               <div style={{ flex: 1, backgroundColor: "rgba(52,211,153,0.3)", borderRadius: 12, padding: 16, border: "1px solid rgba(52,211,153,0.5)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#86efac", marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#BBF7D0", marginBottom: 6 }}>
                   <Sparkles size={10} />
                   Variante B
                 </div>
@@ -272,8 +272,8 @@ export default function ABTestsPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         <StatCard icon={TestTube} value={stats.total} label="Tests créés" accent="#6366f1" />
-        <StatCard icon={Play} value={stats.running} label="En cours" accent="#2563eb" />
-        <StatCard icon={Trophy} value={stats.completed} label="Terminés" accent="#16a34a" />
+        <StatCard icon={Play} value={stats.running} label="En cours" accent="var(--accent)" />
+        <StatCard icon={Trophy} value={stats.completed} label="Terminés" accent="var(--success)" />
       </div>
 
       {/* Types de tests */}

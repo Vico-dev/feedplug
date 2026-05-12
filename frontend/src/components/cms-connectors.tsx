@@ -73,11 +73,11 @@ interface CMSConnectorsProps {
 export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'ecommerce': return '#10b981'; // green
-      case 'content': return '#3b82f6'; // blue
-      case 'headless': return '#8b5cf6'; // purple
-      case 'website': return '#f59e0b'; // yellow
-      default: return '#6b7280'; // gray
+      case 'ecommerce': return 'var(--success)'; // green
+      case 'content': return 'var(--accent)'; // blue
+      case 'headless': return 'var(--accent)'; // purple
+      case 'website': return 'var(--warning)'; // yellow
+      default: return 'var(--ink-3)'; // gray
     }
   };
 
@@ -93,20 +93,20 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
 
   const getPopularityBadge = (popularity: string) => {
     switch (popularity) {
-      case 'high': return { label: 'Populaire', color: '#10b981' };
-      case 'medium': return { label: 'Standard', color: '#f59e0b' };
-      case 'low': return { label: 'Spécialisé', color: '#6b7280' };
-      default: return { label: 'Standard', color: '#6b7280' };
+      case 'high': return { label: 'Populaire', color: 'var(--success)' };
+      case 'medium': return { label: 'Standard', color: 'var(--warning)' };
+      case 'low': return { label: 'Spécialisé', color: 'var(--ink-3)' };
+      default: return { label: 'Standard', color: 'var(--ink-3)' };
     }
   };
 
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', marginBottom: '8px' }}>
           Connecteurs E-commerce disponibles
         </h3>
-        <p style={{ fontSize: '14px', color: '#6b7280' }}>
+        <p style={{ fontSize: '14px', color: 'var(--ink-3)' }}>
           Sélectionnez votre plateforme e-commerce pour une configuration optimisée
         </p>
       </div>
@@ -122,7 +122,7 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
               key={connector.id}
               onClick={() => onSelect(connector.id)}
               style={{
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 borderRadius: '12px',
                 padding: '20px',
                 backgroundColor: 'white',
@@ -131,12 +131,12 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
                 position: 'relative'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#2563eb';
+                e.currentTarget.style.borderColor = 'var(--accent)';
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.15)';
                 e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.borderColor = 'var(--line)';
                 e.currentTarget.style.boxShadow = 'none';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
@@ -152,7 +152,7 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   overflow: 'hidden'
                 }}>
                   <Image
@@ -186,7 +186,7 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
                   </div>
                 </div>
                   <div>
-                    <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 4px 0' }}>
                       {connector.name}
                     </h4>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -217,13 +217,13 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
               </div>
 
               {/* Description */}
-              <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '12px', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginBottom: '12px', lineHeight: '1.5' }}>
                 {connector.description}
               </p>
 
               {/* Features */}
               <div style={{ marginBottom: '12px' }}>
-                <p style={{ fontSize: '12px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                   Fonctionnalités :
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -232,11 +232,11 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
                       key={index}
                       style={{
                         fontSize: '11px',
-                        color: '#6b7280',
-                        backgroundColor: '#f3f4f6',
+                        color: 'var(--ink-3)',
+                        backgroundColor: 'var(--paper-2)',
                         padding: '2px 6px',
                         borderRadius: '4px',
-                        border: '1px solid #e5e7eb'
+                        border: '1px solid var(--line)'
                       }}
                     >
                       {feature}
@@ -251,11 +251,11 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '8px',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--paper-2)',
                 borderRadius: '6px',
                 fontSize: '12px',
                 fontWeight: '500',
-                color: '#2563eb'
+                color: 'var(--accent)'
               }}>
                 Cliquer pour configurer →
               </div>
@@ -265,20 +265,20 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
       </div>
 
       {/* Option API personnalisée */}
-      <div style={{ marginTop: '24px', padding: '20px', border: '2px dashed #d1d5db', borderRadius: '12px', textAlign: 'center' }}>
-        <Code style={{ width: '32px', height: '32px', color: '#6b7280', margin: '0 auto 12px auto' }} />
-        <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+      <div style={{ marginTop: '24px', padding: '20px', border: '2px dashed var(--line-strong)', borderRadius: '12px', textAlign: 'center' }}>
+        <Code style={{ width: '32px', height: '32px', color: 'var(--ink-3)', margin: '0 auto 12px auto' }} />
+        <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', marginBottom: '8px' }}>
           Autre plateforme ?
         </h4>
-        <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginBottom: '16px' }}>
           Votre plateforme n&apos;est pas listée ? Pas de problème, nous pouvons configurer une connexion API personnalisée.
         </p>
         <button
           onClick={() => onSelect('custom')}
           style={{
-            backgroundColor: '#f3f4f6',
-            color: '#374151',
-            border: '1px solid #d1d5db',
+            backgroundColor: 'var(--paper-2)',
+            color: 'var(--ink-2)',
+            border: '1px solid var(--line-strong)',
             padding: '8px 16px',
             borderRadius: '6px',
             fontSize: '14px',
@@ -286,10 +286,10 @@ export function CMSConnectors({ onSelect }: CMSConnectorsProps) {
             cursor: 'pointer'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#e5e7eb';
+            e.currentTarget.style.backgroundColor = 'var(--line)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#f3f4f6';
+            e.currentTarget.style.backgroundColor = 'var(--paper-2)';
           }}
         >
           Configurer une API personnalisée

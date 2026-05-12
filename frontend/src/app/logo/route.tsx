@@ -19,7 +19,7 @@ export async function GET() {
           justifyContent: "center",
           backgroundColor: "#ffffff",
           borderRadius: 8,
-          border: "2px solid #e5e7eb",
+          border: "2px solid #E5E5E5",
         }}
       >
         <span

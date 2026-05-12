@@ -154,23 +154,23 @@ export function NotificationCenter() {
 
   const getNotificationColor = (type: Notification['type']) => {
     switch (type) {
-      case 'success': return '#22c55e';
-      case 'error': return '#ef4444';
-      case 'warning': return '#f59e0b';
-      case 'info': return '#3b82f6';
-      case 'ab_test': return '#8b5cf6';
+      case 'success': return 'var(--success)';
+      case 'error': return 'var(--danger)';
+      case 'warning': return 'var(--warning)';
+      case 'info': return 'var(--accent)';
+      case 'ab_test': return 'var(--accent)';
       case 'performance': return '#06b6d4';
-      default: return '#6b7280';
+      default: return 'var(--ink-3)';
     }
   };
 
   const getPriorityColor = (priority: Notification['priority']) => {
     switch (priority) {
-      case 'urgent': return '#ef4444';
-      case 'high': return '#f59e0b';
-      case 'medium': return '#3b82f6';
-      case 'low': return '#6b7280';
-      default: return '#6b7280';
+      case 'urgent': return 'var(--danger)';
+      case 'high': return 'var(--warning)';
+      case 'medium': return 'var(--accent)';
+      case 'low': return 'var(--ink-3)';
+      default: return 'var(--ink-3)';
     }
   };
 
@@ -219,16 +219,16 @@ export function NotificationCenter() {
           border: 'none',
           borderRadius: '8px',
           cursor: 'pointer',
-          color: '#6b7280',
+          color: 'var(--ink-3)',
           transition: 'all 0.2s ease'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#f3f4f6';
-          e.currentTarget.style.color = '#374151';
+          e.currentTarget.style.backgroundColor = 'var(--paper-2)';
+          e.currentTarget.style.color = 'var(--ink-2)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#6b7280';
+          e.currentTarget.style.color = 'var(--ink-3)';
         }}
       >
         <Bell style={{ width: '20px', height: '20px' }} />
@@ -237,7 +237,7 @@ export function NotificationCenter() {
             position: 'absolute',
             top: '2px',
             right: '2px',
-            backgroundColor: '#ef4444',
+            backgroundColor: 'var(--danger)',
             color: 'white',
             borderRadius: '50%',
             width: '18px',
@@ -262,7 +262,7 @@ export function NotificationCenter() {
           right: 0,
           width: '400px',
           backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
+          border: '1px solid var(--line)',
           borderRadius: '12px',
           boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
           zIndex: 1000,
@@ -271,18 +271,18 @@ export function NotificationCenter() {
           {/* Header */}
           <div style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #e5e7eb',
+            borderBottom: '1px solid var(--line)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                 Notifications
               </h3>
               {unreadCount > 0 && (
                 <span style={{
-                  backgroundColor: '#ef4444',
+                  backgroundColor: 'var(--danger)',
                   color: 'white',
                   borderRadius: '12px',
                   padding: '2px 8px',
@@ -301,7 +301,7 @@ export function NotificationCenter() {
                   padding: '6px',
                   backgroundColor: 'transparent',
                   border: 'none',
-                  color: unreadCount === 0 ? '#9ca3af' : '#6b7280',
+                  color: unreadCount === 0 ? 'var(--ink-4)' : 'var(--ink-3)',
                   cursor: unreadCount === 0 ? 'not-allowed' : 'pointer',
                   borderRadius: '4px'
                 }}
@@ -314,7 +314,7 @@ export function NotificationCenter() {
                   padding: '6px',
                   backgroundColor: 'transparent',
                   border: 'none',
-                  color: '#6b7280',
+                  color: 'var(--ink-3)',
                   cursor: 'pointer',
                   borderRadius: '4px'
                 }}
@@ -327,7 +327,7 @@ export function NotificationCenter() {
                   padding: '6px',
                   backgroundColor: 'transparent',
                   border: 'none',
-                  color: '#6b7280',
+                  color: 'var(--ink-3)',
                   cursor: 'pointer',
                   borderRadius: '4px'
                 }}
@@ -340,7 +340,7 @@ export function NotificationCenter() {
           {/* Filters */}
           <div style={{
             padding: '12px 20px',
-            borderBottom: '1px solid #e5e7eb',
+            borderBottom: '1px solid var(--line)',
             display: 'flex',
             gap: '8px',
             overflowX: 'auto'
@@ -351,9 +351,9 @@ export function NotificationCenter() {
                 onClick={() => setFilter(filterOption.key)}
                 style={{
                   padding: '6px 12px',
-                  backgroundColor: filter === filterOption.key ? '#2563eb' : 'transparent',
-                  color: filter === filterOption.key ? 'white' : '#6b7280',
-                  border: '1px solid #e5e7eb',
+                  backgroundColor: filter === filterOption.key ? 'var(--accent)' : 'transparent',
+                  color: filter === filterOption.key ? 'white' : 'var(--ink-3)',
+                  border: '1px solid var(--line)',
                   borderRadius: '16px',
                   fontSize: '12px',
                   fontWeight: '500',
@@ -372,7 +372,7 @@ export function NotificationCenter() {
               <div style={{
                 padding: '40px 20px',
                 textAlign: 'center',
-                color: '#6b7280'
+                color: 'var(--ink-3)'
               }}>
                 <Bell style={{ width: '48px', height: '48px', margin: '0 auto 16px', opacity: 0.5 }} />
                 <p style={{ margin: 0, fontSize: '14px' }}>
@@ -390,16 +390,16 @@ export function NotificationCenter() {
                     key={notification.id}
                     style={{
                       padding: '16px 20px',
-                      borderBottom: '1px solid #f3f4f6',
-                      backgroundColor: notification.read ? 'white' : '#f8fafc',
+                      borderBottom: '1px solid var(--paper-2)',
+                      backgroundColor: notification.read ? 'white' : 'var(--paper-2)',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = notification.read ? '#f9fafb' : '#f1f5f9';
+                      e.currentTarget.style.backgroundColor = notification.read ? 'var(--paper-2)' : 'var(--paper-2)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = notification.read ? 'white' : '#f8fafc';
+                      e.currentTarget.style.backgroundColor = notification.read ? 'white' : 'var(--paper-2)';
                     }}
                     onClick={() => {
                       if (!notification.read) markAsRead(notification.id);
@@ -428,7 +428,7 @@ export function NotificationCenter() {
                           <h4 style={{
                             fontSize: '14px',
                             fontWeight: '600',
-                            color: '#111827',
+                            color: 'var(--ink)',
                             margin: 0,
                             flex: 1
                           }}>
@@ -445,7 +445,7 @@ export function NotificationCenter() {
 
                         <p style={{
                           fontSize: '13px',
-                          color: '#6b7280',
+                          color: 'var(--ink-3)',
                           margin: '0 0 8px 0',
                           lineHeight: 1.4
                         }}>
@@ -456,7 +456,7 @@ export function NotificationCenter() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{
                               fontSize: '12px',
-                              color: '#9ca3af',
+                              color: 'var(--ink-4)',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px'
@@ -467,7 +467,7 @@ export function NotificationCenter() {
                             {notification.metadata?.percentage && (
                               <span style={{
                                 fontSize: '12px',
-                                color: notification.type === 'performance' ? '#22c55e' : '#6b7280',
+                                color: notification.type === 'performance' ? 'var(--success)' : 'var(--ink-3)',
                                 fontWeight: '500'
                               }}>
                                 +{notification.metadata.percentage}%
@@ -485,8 +485,8 @@ export function NotificationCenter() {
                                 style={{
                                   padding: '4px 8px',
                                   backgroundColor: 'transparent',
-                                  color: '#2563eb',
-                                  border: '1px solid #2563eb',
+                                  color: 'var(--accent)',
+                                  border: '1px solid var(--accent)',
                                   borderRadius: '4px',
                                   fontSize: '11px',
                                   fontWeight: '500',
@@ -509,7 +509,7 @@ export function NotificationCenter() {
                                 padding: '4px',
                                 backgroundColor: 'transparent',
                                 border: 'none',
-                                color: '#9ca3af',
+                                color: 'var(--ink-4)',
                                 cursor: 'pointer',
                                 borderRadius: '4px'
                               }}
@@ -529,14 +529,14 @@ export function NotificationCenter() {
           {/* Footer */}
           <div style={{
             padding: '12px 20px',
-            borderTop: '1px solid #e5e7eb',
-            backgroundColor: '#f9fafb',
+            borderTop: '1px solid var(--line)',
+            backgroundColor: 'var(--paper-2)',
             textAlign: 'center'
           }}>
             <button
               style={{
                 fontSize: '12px',
-                color: '#2563eb',
+                color: 'var(--accent)',
                 backgroundColor: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -557,14 +557,14 @@ export function NotificationCenter() {
           right: 0,
           width: '300px',
           backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
+          border: '1px solid var(--line)',
           borderRadius: '12px',
           boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
           zIndex: 1001,
           marginTop: '8px',
           padding: '20px'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 16px 0' }}>
             Paramètres des notifications
           </h3>
           

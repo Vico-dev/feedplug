@@ -2379,7 +2379,7 @@ export function CatalogueWorkbench() {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-[#f8fbf8] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-[var(--paper-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                           <Table2 className="h-3.5 w-3.5" />
                           Catalogue
                         </span>
@@ -2457,7 +2457,7 @@ export function CatalogueWorkbench() {
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Etat du catalogue</p>
                 </div>
-                <span className="rounded-full border border-border/70 bg-[#f8fbf8] px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                <span className="rounded-full border border-border/70 bg-[var(--paper-2)] px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   Flux actif
                 </span>
               </div>
@@ -2507,7 +2507,7 @@ export function CatalogueWorkbench() {
                             "rounded-2xl border px-3 py-3 transition-colors",
                             pillarLead?.key === pillar.key
                               ? "border-rose-200 bg-rose-50/80"
-                              : "border-border/70 bg-[#f8fbf8]"
+                              : "border-border/70 bg-[var(--paper-2)]"
                           )}
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -2537,7 +2537,7 @@ export function CatalogueWorkbench() {
                             onClick={() => issue.smartView ? applySmartView(issue.smartView) : undefined}
                             className={cn(
                               "group w-full rounded-2xl border px-3 py-3 text-left transition-colors",
-                              issue.smartView ? "border-border/70 bg-white hover:border-slate-300 hover:bg-[#f8fbf8]" : "border-border/70 bg-white"
+                              issue.smartView ? "border-border/70 bg-white hover:border-slate-300 hover:bg-[var(--paper-2)]" : "border-border/70 bg-white"
                             )}
                           >
                             <div className="flex items-start justify-between gap-3">
@@ -2619,7 +2619,7 @@ export function CatalogueWorkbench() {
                   "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors",
                   activeSmartView === view.key
                     ? "border-slate-950 bg-slate-950 text-white"
-                    : "border-border/70 bg-white hover:bg-[#f8fbf8]",
+                    : "border-border/70 bg-white hover:bg-[var(--paper-2)]",
                   activeSmartView !== view.key && view.tone
                 )}
               >

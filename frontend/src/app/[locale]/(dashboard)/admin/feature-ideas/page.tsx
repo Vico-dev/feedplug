@@ -145,9 +145,9 @@ export default function AdminFeatureIdeasPage() {
                       {idea.email}
                     </a>
                   </DataTableTd>
-                  <DataTableTd style={{ color: "#4a4a4a" }}>{idea.name || "—"}</DataTableTd>
-                  <DataTableTd style={{ color: "#4a4a4a", maxWidth: 400 }}>{idea.idea}</DataTableTd>
-                  <DataTableTd style={{ color: "#6b7280", whiteSpace: "nowrap" }}>
+                  <DataTableTd style={{ color: "var(--ink-2)" }}>{idea.name || "—"}</DataTableTd>
+                  <DataTableTd style={{ color: "var(--ink-2)", maxWidth: 400 }}>{idea.idea}</DataTableTd>
+                  <DataTableTd style={{ color: "var(--ink-3)", whiteSpace: "nowrap" }}>
                     {new Date(idea.createdAt).toLocaleDateString("fr-FR")}
                   </DataTableTd>
                 </DataTableRow>
@@ -157,7 +157,7 @@ export default function AdminFeatureIdeasPage() {
 
           {totalPages > 1 && (
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 24 }}>
-              <span style={{ color: "#6b7280", fontSize: 14 }}>
+              <span style={{ color: "var(--ink-3)", fontSize: 14 }}>
                 {total} idée{total !== 1 ? "s" : ""} — page {page} / {totalPages}
               </span>
               <PageButtonSecondary disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>

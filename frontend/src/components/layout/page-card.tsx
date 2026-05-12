@@ -43,6 +43,7 @@ export function PageSectionTitle({
   return (
     <h2
       style={{
+        fontFamily: "var(--font-display)",
         fontSize: "var(--section-title-size)",
         fontWeight: "var(--section-title-fw)",
         color: "var(--section-title-color)",

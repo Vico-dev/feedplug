@@ -87,9 +87,9 @@ export default function DashboardPage() {
   }, [fetchDashboard]);
 
   const getScoreColor = (score: number) => {
-    if (score >= 70) return "#16a34a";
-    if (score >= 50) return "#d97706";
-    return "#dc2626";
+    if (score >= 70) return "var(--success)";
+    if (score >= 50) return "var(--warning)";
+    return "var(--danger)";
   };
 
   const formatLastImport = (iso: string | null) => {
@@ -160,21 +160,21 @@ export default function DashboardPage() {
                   justifyContent: "center",
                   width: "48px",
                   height: "48px",
-                  backgroundColor: "#f0f9ff",
-                  borderRadius: "2px",
+                  backgroundColor: "var(--accent-bg)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
-                <Calendar style={{ width: "24px", height: "24px", color: "#0ea5e9" }} />
+                <Calendar style={{ width: "24px", height: "24px", color: "var(--accent)" }} />
               </div>
               <div>
-                <h3 style={{ fontSize: "18px", fontWeight: "300", color: "#0a0a0a", margin: 0 }}>
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.015em", margin: 0 }}>
                   {t("dashboardPage.lastImport")}
                 </h3>
-                <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>{t("dashboardPage.sourceSync")}</p>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: 0 }}>{t("dashboardPage.sourceSync")}</p>
               </div>
             </div>
           </div>
-          <p style={{ fontSize: "15px", fontWeight: "500", color: "#111827", margin: 0 }}>
+          <p style={{ fontSize: "15px", fontWeight: "500", color: "var(--ink)", margin: 0 }}>
             {formatLastImport(d.lastImportAt)}
           </p>
         </PageCard>
@@ -190,20 +190,20 @@ export default function DashboardPage() {
                   justifyContent: "center",
                   width: "48px",
                   height: "48px",
-                  backgroundColor: "#f0fdf4",
-                  borderRadius: "2px",
+                  backgroundColor: "var(--success-soft)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
-                <Package style={{ width: "24px", height: "24px", color: "#16a34a" }} />
+                <Package style={{ width: "24px", height: "24px", color: "var(--success)" }} />
               </div>
               <div>
-                <h3 style={{ fontSize: "18px", fontWeight: "300", color: "#0a0a0a", margin: 0 }}>
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.015em", margin: 0 }}>
                   {t("dashboardPage.productsImported")}
                 </h3>
-                <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>{t("dashboardPage.totalCatalogue")}</p>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: 0 }}>{t("dashboardPage.totalCatalogue")}</p>
               </div>
             </div>
-            <p style={{ fontSize: "32px", fontWeight: "400", color: "#0a0a0a", margin: 0, lineHeight: 1 }}>
+            <p style={{ fontSize: "32px", fontWeight: "400", color: "var(--ink)", margin: 0, lineHeight: 1 }}>
               {d.totalProducts.toLocaleString()}
             </p>
           </div>
@@ -220,17 +220,17 @@ export default function DashboardPage() {
                   justifyContent: "center",
                   width: "48px",
                   height: "48px",
-                  backgroundColor: "#fef3c7",
-                  borderRadius: "2px",
+                  backgroundColor: "var(--warning-soft)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
-                <Zap style={{ width: "24px", height: "24px", color: "#d97706" }} />
+                <Zap style={{ width: "24px", height: "24px", color: "var(--warning)" }} />
               </div>
               <div>
-                <h3 style={{ fontSize: "18px", fontWeight: "300", color: "#0a0a0a", margin: 0 }}>
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.015em", margin: 0 }}>
                   {t("dashboardPage.avgScore")}
                 </h3>
-                <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: 0 }}>
                   {d.avgScore >= 70 ? t("dashboardPage.good") : d.avgScore >= 50 ? t("dashboardPage.toImprove") : t("dashboardPage.toOptimize")}
                 </p>
               </div>
@@ -244,7 +244,7 @@ export default function DashboardPage() {
                   <span
                     style={{
                       fontSize: "12px",
-                      color: evolutionTrend > 0 ? "#16a34a" : "#dc2626",
+                      color: evolutionTrend > 0 ? "var(--success)" : "var(--danger)",
                       display: "flex",
                       alignItems: "center",
                       gap: "2px",
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                     {evolutionTrend > 0 ? "+" : ""}
                     {evolutionTrend} {t("dashboardPage.evolution30d")}
                   </span>
-                  <span style={{ fontSize: "10px", color: "#9ca3af" }}>
+                  <span style={{ fontSize: "10px", color: "var(--ink-4)" }}>
                     {t("dashboardPage.trendBasedOnSyncs")}
                   </span>
                 </div>
@@ -274,20 +274,20 @@ export default function DashboardPage() {
                   justifyContent: "center",
                   width: "48px",
                   height: "48px",
-                  backgroundColor: "#f3f4f6",
-                  borderRadius: "2px",
+                  backgroundColor: "var(--paper-2)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
-                <Activity style={{ width: "24px", height: "24px", color: "#4a4a4a" }} />
+                <Activity style={{ width: "24px", height: "24px", color: "var(--ink-2)" }} />
               </div>
               <div>
-                <h3 style={{ fontSize: "18px", fontWeight: "300", color: "#0a0a0a", margin: 0 }}>
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.015em", margin: 0 }}>
                   {t("dashboardPage.successfulSyncs")}
                 </h3>
-                <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>{t("dashboardPage.last10Runs")}</p>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: 0 }}>{t("dashboardPage.last10Runs")}</p>
               </div>
             </div>
-            <p style={{ fontSize: "32px", fontWeight: "400", color: "#0a0a0a", margin: 0, lineHeight: 1 }}>
+            <p style={{ fontSize: "32px", fontWeight: "400", color: "var(--ink)", margin: 0, lineHeight: 1 }}>
               {d.runsSuccessRate != null ? `${d.runsSuccessRate}%` : "—"}
             </p>
           </div>
@@ -300,12 +300,12 @@ export default function DashboardPage() {
         <PageCard>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <BarChart3 style={{ width: "20px", height: "20px", color: "#6b7280" }} />
-              <h2 style={{ fontSize: "16px", fontWeight: "600", color: "#111827", margin: 0 }}>
+              <BarChart3 style={{ width: "20px", height: "20px", color: "var(--ink-3)" }} />
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em", margin: 0 }}>
                 {t("dashboardPage.scoreEvolutionTitle")}
               </h2>
             </div>
-            <p style={{ fontSize: "12px", color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: 0 }}>
               {t("dashboardPage.evolutionChartHint")}
             </p>
           </div>
@@ -318,10 +318,10 @@ export default function DashboardPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#9ca3af",
+                color: "var(--ink-4)",
                 fontSize: "13px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "2px",
+                backgroundColor: "var(--paper-2)",
+                borderRadius: "var(--r-md)",
               }}
             >
               {t("dashboardPage.evolutionAfterSyncs")}
@@ -332,23 +332,23 @@ export default function DashboardPage() {
         {/* Enrichissement IA */}
         <PageCard>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
-            <Sparkles style={{ width: "20px", height: "20px", color: "#0ea5e9" }} />
-            <h2 style={{ fontSize: "16px", fontWeight: "600", color: "#111827", margin: 0 }}>
+            <Sparkles style={{ width: "20px", height: "20px", color: "var(--accent)" }} />
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em", margin: 0 }}>
               {t("dashboardPage.enrichmentIA")}
             </h2>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <div style={{ padding: "16px", backgroundColor: "#f0f9ff", borderRadius: "2px", textAlign: "center" }}>
-              <p style={{ fontSize: "28px", fontWeight: "600", color: "#0ea5e9", margin: "0 0 4px" }}>
+            <div style={{ padding: "16px", backgroundColor: "var(--accent-bg)", borderRadius: "var(--r-md)", textAlign: "center" }}>
+              <p style={{ fontSize: "28px", fontWeight: "600", color: "var(--accent)", margin: "0 0 4px" }}>
                 {d.enrichment.optimizedTitles}
               </p>
-              <p style={{ fontSize: "12px", color: "#6b7280", margin: 0 }}>{t("dashboardPage.titlesOptimized")}</p>
+              <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: 0 }}>{t("dashboardPage.titlesOptimized")}</p>
             </div>
-            <div style={{ padding: "16px", backgroundColor: "#f0fdf4", borderRadius: "2px", textAlign: "center" }}>
-              <p style={{ fontSize: "28px", fontWeight: "600", color: "#16a34a", margin: "0 0 4px" }}>
+            <div style={{ padding: "16px", backgroundColor: "var(--success-soft)", borderRadius: "var(--r-md)", textAlign: "center" }}>
+              <p style={{ fontSize: "28px", fontWeight: "600", color: "var(--success)", margin: "0 0 4px" }}>
                 {d.enrichment.optimizedDescriptions}
               </p>
-              <p style={{ fontSize: "12px", color: "#6b7280", margin: 0 }}>{t("dashboardPage.descriptionsEnriched")}</p>
+              <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: 0 }}>{t("dashboardPage.descriptionsEnriched")}</p>
             </div>
           </div>
           {d.totalProducts > 0 && (
@@ -358,7 +358,7 @@ export default function DashboardPage() {
                   display: "flex",
                   justifyContent: "space-between",
                   fontSize: "12px",
-                  color: "#6b7280",
+                  color: "var(--ink-3)",
                   marginBottom: "6px",
                 }}
               >
@@ -369,16 +369,16 @@ export default function DashboardPage() {
                 style={{
                   width: "100%",
                   height: "6px",
-                  backgroundColor: "#e5e7eb",
-                  borderRadius: "2px",
+                  backgroundColor: "var(--line)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
                 <div
                   style={{
                     width: `${Math.min(100, Math.round((d.enrichment.optimizedTitles / d.totalProducts) * 100))}%`,
                     height: "6px",
-                    backgroundColor: "#0ea5e9",
-                    borderRadius: "2px",
+                    backgroundColor: "var(--accent)",
+                    borderRadius: "var(--r-md)",
                   }}
                 />
               </div>
@@ -390,19 +390,19 @@ export default function DashboardPage() {
       {/* Sources / Flux résumé + Actions rapides */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "32px" }}>
         <PageCard>
-          <h2 style={{ fontSize: "16px", fontWeight: "600", color: "#111827", margin: "0 0 16px" }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em", margin: "0 0 16px" }}>
             {t("dashboardPage.summary")}
           </h2>
           <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Database style={{ width: "18px", height: "18px", color: "#6b7280" }} />
-              <span style={{ fontSize: "14px", color: "#374151" }}>
+              <Database style={{ width: "18px", height: "18px", color: "var(--ink-3)" }} />
+              <span style={{ fontSize: "14px", color: "var(--ink-2)" }}>
                 <strong>{d.sources.active}</strong>/{d.sources.total} {t("dashboardPage.sourcesCount")}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Layers style={{ width: "18px", height: "18px", color: "#6b7280" }} />
-              <span style={{ fontSize: "14px", color: "#374151" }}>
+              <Layers style={{ width: "18px", height: "18px", color: "var(--ink-3)" }} />
+              <span style={{ fontSize: "14px", color: "var(--ink-2)" }}>
                 <strong>{d.feeds.active}</strong>/{d.feeds.total} {t("dashboardPage.feedsCount")}
               </span>
             </div>
@@ -411,7 +411,7 @@ export default function DashboardPage() {
 
         {/* Actions rapides — style flux */}
         <PageCard>
-          <h2 style={{ fontSize: "16px", fontWeight: "600", color: "#111827", margin: "0 0 16px" }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em", margin: "0 0 16px" }}>
             {t("dashboardPage.quickActions")}
           </h2>
           <div style={{ display: "grid", gap: "12px" }}>
@@ -422,19 +422,19 @@ export default function DashboardPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "14px",
-                border: "1px solid #e5e7eb",
-                borderRadius: "2px",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-md)",
                 textDecoration: "none",
-                color: "#374151",
+                color: "var(--ink-2)",
                 cursor: "pointer",
                 backgroundColor: "white",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <Database style={{ width: "18px", height: "18px", color: "#6b7280" }} />
+                <Database style={{ width: "18px", height: "18px", color: "var(--ink-3)" }} />
                 <span style={{ fontSize: "14px" }}>{t("dashboardPage.addSource")}</span>
               </div>
-              <ArrowRight style={{ width: "16px", height: "16px", color: "#9ca3af" }} />
+              <ArrowRight style={{ width: "16px", height: "16px", color: "var(--ink-4)" }} />
             </a>
             <a
               href={`${localePrefix}/optimiser/ia`}
@@ -443,19 +443,19 @@ export default function DashboardPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "14px",
-                border: "1px solid #e5e7eb",
-                borderRadius: "2px",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-md)",
                 textDecoration: "none",
-                color: "#374151",
+                color: "var(--ink-2)",
                 cursor: "pointer",
                 backgroundColor: "white",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <Sparkles style={{ width: "18px", height: "18px", color: "#0ea5e9" }} />
+                <Sparkles style={{ width: "18px", height: "18px", color: "var(--accent)" }} />
                 <span style={{ fontSize: "14px" }}>{t("dashboardPage.optimizeWithIA")}</span>
               </div>
-              <ArrowRight style={{ width: "16px", height: "16px", color: "#9ca3af" }} />
+              <ArrowRight style={{ width: "16px", height: "16px", color: "var(--ink-4)" }} />
             </a>
             <a
               href={`${localePrefix}/flux`}
@@ -464,19 +464,19 @@ export default function DashboardPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "14px",
-                border: "1px solid #e5e7eb",
-                borderRadius: "2px",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-md)",
                 textDecoration: "none",
-                color: "#374151",
+                color: "var(--ink-2)",
                 cursor: "pointer",
                 backgroundColor: "white",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <Layers style={{ width: "18px", height: "18px", color: "#6b7280" }} />
+                <Layers style={{ width: "18px", height: "18px", color: "var(--ink-3)" }} />
                 <span style={{ fontSize: "14px" }}>{t("dashboardPage.exportFeed")}</span>
               </div>
-              <ArrowRight style={{ width: "16px", height: "16px", color: "#9ca3af" }} />
+              <ArrowRight style={{ width: "16px", height: "16px", color: "var(--ink-4)" }} />
             </a>
           </div>
         </PageCard>
@@ -485,7 +485,7 @@ export default function DashboardPage() {
       {/* Dernières synchros — style flux */}
       {d.recentRuns.length > 0 && (
         <PageCard>
-          <h2 style={{ fontSize: "16px", fontWeight: "600", color: "#111827", margin: "0 0 16px" }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em", margin: "0 0 16px" }}>
             Dernières synchronisations
           </h2>
           <div style={{ display: "grid", gap: "8px" }}>
@@ -497,30 +497,30 @@ export default function DashboardPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "12px",
-                  border: "1px solid #f3f4f6",
-                  borderRadius: "2px",
+                  border: "1px solid var(--paper-2)",
+                  borderRadius: "var(--r-md)",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   {run.status === "SUCCESS" ? (
-                    <CheckCircle style={{ width: "16px", height: "16px", color: "#16a34a" }} />
+                    <CheckCircle style={{ width: "16px", height: "16px", color: "var(--success)" }} />
                   ) : run.status === "FAILED" ? (
-                    <AlertCircle style={{ width: "16px", height: "16px", color: "#dc2626" }} />
+                    <AlertCircle style={{ width: "16px", height: "16px", color: "var(--danger)" }} />
                   ) : (
-                    <Loader2 style={{ width: "16px", height: "16px", color: "#d97706" }} />
+                    <Loader2 style={{ width: "16px", height: "16px", color: "var(--warning)" }} />
                   )}
                   <div>
-                    <p style={{ fontSize: "13px", fontWeight: "500", color: "#111827", margin: 0 }}>
+                    <p style={{ fontSize: "13px", fontWeight: "500", color: "var(--ink)", margin: 0 }}>
                       {run.feedname}
                     </p>
-                    <p style={{ fontSize: "11px", color: "#6b7280", margin: 0 }}>
+                    <p style={{ fontSize: "11px", color: "var(--ink-3)", margin: 0 }}>
                       {run.totalinserted} insérés, {run.totalfetched} récupérés
                       {run.errormessage && ` — ${run.errormessage.substring(0, 60)}`}
                       {run.avgscoreafter != null && ` · Score: ${run.avgscoreafter}`}
                     </p>
                   </div>
                 </div>
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                <span style={{ fontSize: "11px", color: "var(--ink-4)" }}>
                   {run.finishedat
                     ? new Date(run.finishedat).toLocaleDateString("fr-FR", {
                         day: "numeric",
@@ -567,7 +567,7 @@ function ScoreEvolutionChart({ data }: { data: { date: string; avgScore: number 
         <path
           d={pathD}
           fill="none"
-          stroke="#0ea5e9"
+          stroke="var(--accent)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -578,13 +578,13 @@ function ScoreEvolutionChart({ data }: { data: { date: string; avgScore: number 
             cx={xScale(i)}
             cy={yScale(p.avgScore)}
             r="3"
-            fill="#0ea5e9"
+            fill="var(--accent)"
           />
         ))}
-        <text x={padding.left} y={height - 6} style={{ fontSize: "10px", fill: "#9ca3af" }}>
+        <text x={padding.left} y={height - 6} style={{ fontSize: "10px", fill: "var(--ink-4)" }}>
           {min}
         </text>
-        <text x={width - padding.right - 24} y={height - 6} style={{ fontSize: "10px", fill: "#9ca3af" }}>
+        <text x={width - padding.right - 24} y={height - 6} style={{ fontSize: "10px", fill: "var(--ink-4)" }}>
           {max}
         </text>
       </svg>

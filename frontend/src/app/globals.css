@@ -1,51 +1,58 @@
 @import "tailwindcss";
 @import "../styles/design-tokens.css";
 
+/* ─────────────────────────────────────────────────────────────
+   shadcn / Radix HSL tokens — remapped onto Tesla mineral.
+   background = paper, foreground = ink, primary = ink (CTA dark),
+   accent surface = paper-2, destructive = danger, ring = steel blue.
+   We force a single light theme — no dark mode for FeedPlug yet.
+   ───────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
+    --background:               0 0% 98%;          /* #FAFAFA */
+    --foreground:               0 0% 4%;           /* #0A0A0A */
+    --card:                     0 0% 100%;         /* #FFFFFF */
+    --card-foreground:          0 0% 4%;
+    --popover:                  0 0% 100%;
+    --popover-foreground:       0 0% 4%;
+    --primary:                  0 0% 4%;           /* ink */
+    --primary-foreground:       0 0% 98%;          /* paper */
+    --secondary:                0 0% 95%;          /* #F2F2F2 */
+    --secondary-foreground:     0 0% 4%;
+    --muted:                    0 0% 95%;
+    --muted-foreground:         0 0% 44%;          /* #6F6F6F */
+    --accent:                   0 0% 95%;
+    --accent-foreground:        0 0% 4%;
+    --destructive:              4  76% 40%;        /* #B42318 */
+    --destructive-foreground:   0 0% 98%;
+    --border:                   0 0% 90%;          /* #E5E5E5 */
+    --input:                    0 0% 90%;
+    --ring:                     217 80% 54%;       /* #2A6FE8 steel blue */
+    --radius:                   10px;              /* --r-lg */
   }
 
-  /* Désactivé : thème clair forcé (fond blanc) pour FeedPlug */
+  /* No real dark theme — alias to keep the same palette if anyone
+     toggles `.dark` somewhere in the app. */
   .dark {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --background:               0 0% 98%;
+    --foreground:               0 0% 4%;
+    --card:                     0 0% 100%;
+    --card-foreground:          0 0% 4%;
+    --popover:                  0 0% 100%;
+    --popover-foreground:       0 0% 4%;
+    --primary:                  0 0% 4%;
+    --primary-foreground:       0 0% 98%;
+    --secondary:                0 0% 95%;
+    --secondary-foreground:     0 0% 4%;
+    --muted:                    0 0% 95%;
+    --muted-foreground:         0 0% 44%;
+    --accent:                   0 0% 95%;
+    --accent-foreground:        0 0% 4%;
+    --destructive:              4 76% 40%;
+    --destructive-foreground:   0 0% 98%;
+    --border:                   0 0% 90%;
+    --input:                    0 0% 90%;
+    --ring:                     217 80% 54%;
   }
 }
 
@@ -58,7 +65,7 @@
     color-scheme: light;
   }
   html.dark {
-    color-scheme: light; /* Forcer fond clair même si dark est appliqué */
+    color-scheme: light;
   }
   html,
   body {
@@ -66,17 +73,95 @@
   }
   body {
     margin: 0;
-    background: var(--app-bg);
-    color: var(--app-text);
-    font-family: Inter, system-ui, sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   a {
     color: inherit;
   }
+  ::selection {
+    background: var(--accent);
+    color: #ffffff;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
-/* Spinner commun (PageLoading, etc.) */
+/* ─────────────────────────────────────────────────────────────
+   Editorial typography helpers — match the motion / landing
+   system design. Headlines use Bricolage Grotesque; italic
+   pivot words switch to Instrument Serif (used inside h1 em).
+   ───────────────────────────────────────────────────────────── */
+@layer base {
+  h1, .h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(var(--fs-44), 7.6vw, var(--fs-112));
+    line-height: 0.96;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+  h1 em, .h1 em {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ink-2);
+    letter-spacing: -0.02em;
+  }
+  h2, .h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(var(--fs-30), 3.6vw, var(--fs-56));
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+  h3, .h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--fs-24);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin: 0;
+  }
+  p, .body {
+    font-size: var(--fs-16);
+    line-height: 1.55;
+    color: var(--ink-2);
+    text-wrap: pretty;
+  }
+  .lede {
+    font-size: var(--fs-20);
+    line-height: 1.55;
+    color: var(--ink-2);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--fs-12);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  code, kbd, .mono {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+}
+
+/* Common spinner keyframe (PageLoading, etc.) */
 @keyframes page-spinner {
   to {
     transform: rotate(360deg);
@@ -91,6 +176,75 @@
 }
 
 .feedplug-focus-ring:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.28);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Marketing landing — animations & responsive overrides.
+   Extracted from the page component to avoid SSR/CSR hydration
+   mismatches on <style dangerouslySetInnerHTML> blocks.
+   ───────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { opacity: 0; }
+.fade-in.animate-in { animation: fadeUp 0.6s ease-out forwards; }
+.d1 { animation-delay: 0.05s; }
+.d2 { animation-delay: 0.10s; }
+.d3 { animation-delay: 0.15s; }
+.d4 { animation-delay: 0.20s; }
+
+.hero-h { animation: fadeUp 0.7s ease-out forwards; }
+.hero-p { animation: fadeUp 0.7s ease-out 0.15s forwards; opacity: 0; }
+.hero-f { animation: fadeUp 0.7s ease-out 0.30s forwards; opacity: 0; }
+.hero-c { animation: fadeUp 0.7s ease-out 0.45s forwards; opacity: 0; }
+
+.cta-btn {
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  transition: background var(--d-fast) var(--ease);
+}
+.cta-btn:hover { background: #1a1a1a; }
+
+.card-hover {
+  transition: box-shadow var(--d-base) var(--ease), border-color var(--d-base) var(--ease);
+  border: 1px solid var(--line);
+}
+.card-hover:hover {
+  box-shadow: var(--sh-md);
+  border-color: var(--line-strong);
+}
+
+.faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+.faq-answer.open { max-height: 300px; }
+.faq-chevron { transition: transform 0.25s ease; }
+.faq-chevron.open { transform: rotate(180deg); }
+
+.input-field {
+  transition: border-color var(--d-fast) var(--ease), box-shadow var(--d-fast) var(--ease);
+}
+.input-field:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+@media (max-width: 768px) {
+  .rg2 { grid-template-columns: 1fr !important; }
+  .rg3 { grid-template-columns: 1fr !important; }
+  .rg4 { grid-template-columns: 1fr 1fr !important; }
+  .rpad { padding: 60px 24px !important; }
+  .rh { padding: 100px 24px 72px !important; }
+  .rtxt { font-size: clamp(32px, 8vw, 56px) !important; }
+  .rtxt2 { font-size: clamp(26px, 6vw, 40px) !important; }
+  .rform { flex-direction: column !important; }
+  .channels-row { gap: 16px !important; }
+}
+@media (max-width: 480px) {
+  .rh { padding: 80px 20px 56px !important; }
+  .rpad { padding: 48px 20px !important; }
+  .rg4 { grid-template-columns: 1fr !important; }
 }

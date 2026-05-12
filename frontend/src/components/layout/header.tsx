@@ -14,15 +14,15 @@ const HEADER_MOBILE_BREAKPOINT = 768;
 const iconButtonStyle: React.CSSProperties = {
   width: 40,
   height: 40,
-  borderRadius: 12,
-  border: "1px solid var(--app-border)",
-  backgroundColor: "#ffffff",
-  color: "var(--app-text-muted)",
+  borderRadius: "var(--r-lg)",
+  border: "1px solid var(--line)",
+  backgroundColor: "var(--surface)",
+  color: "var(--ink-3)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  transition: "all 0.2s ease",
+  transition: "border-color var(--d-fast) var(--ease), color var(--d-fast) var(--ease)",
 };
 
 function getInitials(firstName?: string, lastName?: string, email?: string) {
@@ -114,14 +114,12 @@ export function Header() {
           onClick={toggleMobile}
           style={iconButtonStyle}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#ffffff";
-            e.currentTarget.style.borderColor = "var(--app-border-strong)";
-            e.currentTarget.style.color = "var(--app-text)";
+            e.currentTarget.style.borderColor = "var(--line-strong)";
+            e.currentTarget.style.color = "var(--ink)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#ffffff";
-            e.currentTarget.style.borderColor = "var(--app-border)";
-            e.currentTarget.style.color = "var(--app-text-muted)";
+            e.currentTarget.style.borderColor = "var(--line)";
+            e.currentTarget.style.color = "var(--ink-3)";
           }}
         >
           <Menu style={{ width: 18, height: 18 }} />
@@ -161,34 +159,34 @@ export function Header() {
                 gap: 10,
                 minHeight: 42,
                 padding: "4px 10px 4px 4px",
-                borderRadius: 14,
-                border: "1px solid rgba(15, 23, 42, 0.06)",
-                backgroundColor: "#ffffff",
-                color: "var(--app-text)",
+                borderRadius: "var(--r-lg)",
+                border: "1px solid var(--line)",
+                backgroundColor: "var(--surface)",
+                color: "var(--ink)",
                 cursor: "pointer",
-                transition: "all 0.2s ease",
+                transition: "border-color var(--d-fast) var(--ease)",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#ffffff";
-                e.currentTarget.style.borderColor = "var(--app-border-strong)";
+                e.currentTarget.style.borderColor = "var(--line-strong)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "#ffffff";
-                e.currentTarget.style.borderColor = "var(--app-border)";
+                e.currentTarget.style.borderColor = "var(--line)";
               }}
             >
               <div
                 style={{
                   width: 34,
                   height: 34,
-                  borderRadius: 12,
-                  backgroundColor: "var(--app-text)",
-                  color: "#fff",
+                  borderRadius: "var(--r-md)",
+                  backgroundColor: "var(--ink)",
+                  color: "var(--paper)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  fontFamily: "var(--font-display)",
                   fontSize: 12,
                   fontWeight: 700,
+                  letterSpacing: "-0.01em",
                   flexShrink: 0,
                 }}
               >
@@ -201,6 +199,7 @@ export function Header() {
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
+                    color: "var(--ink)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -212,7 +211,7 @@ export function Header() {
                 <span
                   style={{
                     fontSize: 12,
-                    color: "var(--app-text-muted)",
+                    color: "var(--ink-3)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -223,7 +222,7 @@ export function Header() {
                 </span>
               </div>
 
-              <ChevronDown style={{ width: 16, height: 16, color: "var(--app-text-soft)", flexShrink: 0 }} />
+              <ChevronDown style={{ width: 16, height: 16, color: "var(--ink-4)", flexShrink: 0 }} />
             </button>
 
             {showUserMenu && (
@@ -235,22 +234,24 @@ export function Header() {
                   top: "calc(100% + 10px)",
                   width: 260,
                   padding: 10,
-                  backgroundColor: "#ffffff",
-                  boxShadow: "var(--app-shadow-lg)",
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--r-xl)",
+                  boxShadow: "var(--sh-lg)",
                 }}
               >
                 <div
                   style={{
                     padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: "#f6f8f5",
+                    borderRadius: "var(--r-md)",
+                    backgroundColor: "var(--paper-2)",
                     marginBottom: 8,
                   }}
                 >
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
                     {user ? `${user.firstName} ${user.lastName}` : "Utilisateur"}
                   </p>
-                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--app-text-muted)" }}>
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--ink-3)" }}>
                     {user?.email ?? ""}
                   </p>
                 </div>
@@ -269,14 +270,14 @@ export function Header() {
                       gap: 10,
                       minHeight: 42,
                       padding: "0 12px",
-                      borderRadius: 12,
+                      borderRadius: "var(--r-md)",
                       textDecoration: "none",
-                      color: "var(--app-text)",
+                      color: "var(--ink)",
                       fontSize: 14,
                       fontWeight: 500,
                     }}
                   >
-                    <item.icon style={{ width: 16, height: 16, color: "var(--app-text-muted)" }} />
+                    <item.icon style={{ width: 16, height: 16, color: "var(--ink-3)" }} />
                     {item.label}
                   </a>
                 ))}
@@ -294,16 +295,16 @@ export function Header() {
                     gap: 10,
                     minHeight: 42,
                     padding: "0 12px",
-                    borderRadius: 12,
+                    borderRadius: "var(--r-md)",
                     border: "none",
                     background: "transparent",
-                    color: "var(--app-text)",
+                    color: "var(--ink)",
                     fontSize: 14,
                     fontWeight: 500,
                     cursor: "pointer",
                   }}
                 >
-                  <PlayCircle style={{ width: 16, height: 16, color: "var(--app-text-muted)" }} />
+                  <PlayCircle style={{ width: 16, height: 16, color: "var(--ink-3)" }} />
                   Revoir le guide
                 </button>
 
@@ -317,10 +318,10 @@ export function Header() {
                     gap: 10,
                     minHeight: 42,
                     padding: "0 12px",
-                    borderRadius: 12,
+                    borderRadius: "var(--r-md)",
                     border: "none",
                     background: "transparent",
-                    color: "var(--app-danger)",
+                    color: "var(--danger)",
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: "pointer",

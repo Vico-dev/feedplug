@@ -18,7 +18,7 @@ export default function Icon() {
           justifyContent: "center",
           backgroundColor: "#ffffff",
           borderRadius: 4,
-          border: "1px solid #e5e7eb",
+          border: "1px solid #E5E5E5",
         }}
       >
         <span

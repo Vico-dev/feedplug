@@ -300,7 +300,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>{label}</span>
       <input
         type={type}
         value={value}
@@ -308,10 +308,10 @@ function Field({
         style={{
           minHeight: 52,
           borderRadius: 14,
-          border: "1px solid #cbd5e1",
+          border: "1px solid var(--line-strong)",
           padding: "0 16px",
           fontSize: 15,
-          color: "#0f172a",
+          color: "var(--ink)",
           backgroundColor: "#ffffff",
         }}
       />
@@ -412,8 +412,8 @@ export default function DemoPage() {
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(180deg, #f8fafc 0%, #ffffff 34%, #f8fafc 100%)",
-        color: "#111827",
+          "linear-gradient(180deg, var(--paper-2) 0%, #ffffff 34%, var(--paper-2) 100%)",
+        color: "var(--ink)",
       }}
     >
       <MarketingHeader />
@@ -436,7 +436,7 @@ export default function DemoPage() {
               style={{
                 padding: 32,
                 borderRadius: 28,
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
                 backgroundColor: "#ffffff",
                 boxShadow: "0 22px 64px rgba(15,23,42,0.06)",
               }}
@@ -448,13 +448,13 @@ export default function DemoPage() {
                   gap: 8,
                   padding: "8px 12px",
                   borderRadius: 999,
-                  border: "1px solid #e5e7eb",
-                  backgroundColor: "#f8fafc",
+                  border: "1px solid var(--line)",
+                  backgroundColor: "var(--paper-2)",
                   fontSize: 12,
                   fontWeight: 700,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "#64748b",
+                  color: "var(--ink-3)",
                   marginBottom: 20,
                 }}
               >
@@ -477,7 +477,7 @@ export default function DemoPage() {
                   margin: "0 0 24px",
                   fontSize: 18,
                   lineHeight: 1.7,
-                  color: "#475569",
+                  color: "var(--ink-2)",
                   maxWidth: 720,
                 }}
               >
@@ -489,7 +489,7 @@ export default function DemoPage() {
                   marginBottom: 24,
                   padding: 18,
                   borderRadius: 22,
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid var(--line)",
                   background:
                     "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(255,255,255,1) 100%)",
                 }}
@@ -502,12 +502,12 @@ export default function DemoPage() {
                     padding: "7px 11px",
                     borderRadius: 999,
                     backgroundColor: "#ffffff",
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid var(--line)",
                     fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#64748b",
+                    color: "var(--ink-3)",
                     marginBottom: 12,
                   }}
                 >
@@ -518,7 +518,7 @@ export default function DemoPage() {
                     margin: "0 0 14px",
                     fontSize: 17,
                     lineHeight: 1.6,
-                    color: "#0f172a",
+                    color: "var(--ink)",
                   }}
                 >
                   {journey.title}
@@ -533,11 +533,11 @@ export default function DemoPage() {
                         gap: 10,
                         fontSize: 14,
                         lineHeight: 1.55,
-                        color: "#475569",
+                        color: "var(--ink-2)",
                       }}
                     >
                       <CheckCircle2
-                        style={{ width: 16, height: 16, color: "#059669", flexShrink: 0, marginTop: 2 }}
+                        style={{ width: 16, height: 16, color: "var(--success)", flexShrink: 0, marginTop: 2 }}
                       />
                       {point}
                     </div>
@@ -557,8 +557,8 @@ export default function DemoPage() {
                   style={{
                     padding: 20,
                     borderRadius: 20,
-                    border: "1px solid #e2e8f0",
-                    backgroundColor: "#f8fafc",
+                    border: "1px solid var(--line)",
+                    backgroundColor: "var(--paper-2)",
                   }}
                 >
                   <div
@@ -567,7 +567,7 @@ export default function DemoPage() {
                       height: 42,
                       borderRadius: 14,
                       backgroundColor: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid var(--line)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -579,7 +579,7 @@ export default function DemoPage() {
                   <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
                     {content.primaryCardTitle}
                   </h2>
-                  <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.65, color: "#64748b" }}>
+                  <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.65, color: "var(--ink-3)" }}>
                     {content.primaryCardDescription}
                   </p>
                   <a
@@ -590,7 +590,7 @@ export default function DemoPage() {
                       gap: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: "#111827",
+                      color: "var(--ink)",
                       textDecoration: "none",
                     }}
                   >
@@ -603,8 +603,8 @@ export default function DemoPage() {
                   style={{
                     padding: 20,
                     borderRadius: 20,
-                    border: "1px solid #e2e8f0",
-                    backgroundColor: "#f8fafc",
+                    border: "1px solid var(--line)",
+                    backgroundColor: "var(--paper-2)",
                   }}
                 >
                   <div
@@ -613,7 +613,7 @@ export default function DemoPage() {
                       height: 42,
                       borderRadius: 14,
                       backgroundColor: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid var(--line)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -625,7 +625,7 @@ export default function DemoPage() {
                   <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
                     {content.auditCardTitle}
                   </h2>
-                  <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.65, color: "#64748b" }}>
+                  <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.65, color: "var(--ink-3)" }}>
                     {content.auditCardDescription}
                   </p>
                   <Link
@@ -636,7 +636,7 @@ export default function DemoPage() {
                       gap: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: "#111827",
+                      color: "var(--ink)",
                       textDecoration: "none",
                     }}
                   >
@@ -655,10 +655,10 @@ export default function DemoPage() {
                       alignItems: "center",
                       gap: 10,
                       fontSize: 14,
-                      color: "#475569",
+                      color: "var(--ink-2)",
                     }}
                   >
-                    <CheckCircle2 style={{ width: 16, height: 16, color: "#059669", flexShrink: 0 }} />
+                    <CheckCircle2 style={{ width: 16, height: 16, color: "var(--success)", flexShrink: 0 }} />
                     {highlight}
                   </div>
                 ))}
@@ -669,7 +669,7 @@ export default function DemoPage() {
               style={{
                 padding: 28,
                 borderRadius: 28,
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
                 backgroundColor: "#ffffff",
                 boxShadow: "0 22px 64px rgba(15,23,42,0.05)",
               }}
@@ -679,7 +679,7 @@ export default function DemoPage() {
                   <h2 style={{ fontSize: 24, fontWeight: 620, margin: "0 0 10px" }}>
                     {content.formTitle}
                   </h2>
-                  <p style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.7, color: "#64748b" }}>
+                  <p style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
                     {content.formDescription}
                   </p>
 
@@ -710,11 +710,11 @@ export default function DemoPage() {
                       <div
                         style={{
                           borderRadius: 14,
-                          backgroundColor: "#fef2f2",
+                          backgroundColor: "var(--danger-bg)",
                           border: "1px solid #fecaca",
                           padding: "12px 14px",
                           fontSize: 14,
-                          color: "#b91c1c",
+                          color: "var(--danger)",
                         }}
                       >
                         {error}
@@ -728,7 +728,7 @@ export default function DemoPage() {
                         minHeight: 54,
                         borderRadius: 14,
                         border: "none",
-                        backgroundColor: "#111827",
+                        backgroundColor: "var(--ink)",
                         color: "#ffffff",
                         fontSize: 15,
                         fontWeight: 600,
@@ -745,12 +745,12 @@ export default function DemoPage() {
                   style={{
                     borderRadius: 20,
                     border: "1px solid #d1fae5",
-                    backgroundColor: "#f0fdf4",
+                    backgroundColor: "var(--success-bg)",
                     padding: 20,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <CheckCircle2 style={{ width: 18, height: 18, color: "#059669" }} />
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)" }} />
                     <strong style={{ fontSize: 16, color: "#065f46" }}>{content.successTitle}</strong>
                   </div>
                   <p style={{ margin: "0 0 18px", fontSize: 14, lineHeight: 1.65, color: "#047857" }}>
@@ -765,7 +765,7 @@ export default function DemoPage() {
                         gap: 10,
                         padding: "12px 16px",
                         borderRadius: 12,
-                        backgroundColor: "#111827",
+                        backgroundColor: "var(--ink)",
                         color: "#ffffff",
                         textDecoration: "none",
                         fontSize: 14,
@@ -782,7 +782,7 @@ export default function DemoPage() {
                         gap: 10,
                         padding: "12px 16px",
                         borderRadius: 12,
-                        border: "1px solid #bbf7d0",
+                        border: "1px solid #BBF7D0",
                         backgroundColor: "#ffffff",
                         color: "#065f46",
                         textDecoration: "none",
@@ -800,13 +800,13 @@ export default function DemoPage() {
                 style={{
                   marginTop: 22,
                   paddingTop: 18,
-                  borderTop: "1px solid #e5e7eb",
+                  borderTop: "1px solid var(--line)",
                   display: "grid",
                   gap: 12,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#475569" }}>
-                  <Clock3 style={{ width: 16, height: 16, color: "#64748b", flexShrink: 0 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--ink-2)" }}>
+                  <Clock3 style={{ width: 16, height: 16, color: "var(--ink-3)", flexShrink: 0 }} />
                   {content.reassurance}
                 </div>
                 <a
@@ -817,7 +817,7 @@ export default function DemoPage() {
                     gap: 10,
                     fontSize: 14,
                     fontWeight: 600,
-                    color: "#111827",
+                    color: "var(--ink)",
                     textDecoration: "none",
                   }}
                 >

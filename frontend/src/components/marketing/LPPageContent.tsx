@@ -31,7 +31,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
         minHeight: "100vh",
         backgroundColor: "#ffffff",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        color: "#111827",
+        color: "var(--ink)",
       }}
     >
       <MarketingHeader />
@@ -47,8 +47,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           style={{
             padding: "40px",
             borderRadius: 28,
-            border: "1px solid #e5e7eb",
-            background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+            border: "1px solid var(--line)",
+            background: "linear-gradient(180deg, var(--paper-2) 0%, #ffffff 100%)",
             boxShadow: "0 22px 64px rgba(15,23,42,0.06)",
           }}
         >
@@ -59,13 +59,13 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
               gap: 8,
               padding: "8px 12px",
               borderRadius: 999,
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--line)",
               backgroundColor: "#ffffff",
               fontSize: 12,
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "#6b7280",
+              color: "var(--ink-3)",
               marginBottom: 20,
             }}
           >
@@ -87,7 +87,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             style={{
               fontSize: 19,
               lineHeight: 1.72,
-              color: "#4b5563",
+              color: "var(--ink-3)",
               marginBottom: 28,
               maxWidth: 760,
             }}
@@ -103,7 +103,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 gap: 10,
                 padding: "14px 18px",
                 borderRadius: 12,
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 color: "#ffffff",
                 textDecoration: "none",
                 fontSize: 15,
@@ -122,8 +122,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 padding: "14px 18px",
                 borderRadius: 12,
                 backgroundColor: "#ffffff",
-                border: "1px solid #e5e7eb",
-                color: "#111827",
+                border: "1px solid var(--line)",
+                color: "var(--ink)",
                 textDecoration: "none",
                 fontSize: 15,
                 fontWeight: 600,
@@ -138,7 +138,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <div
               style={{
                 padding: 22,
-                border: "1px solid #dbeafe",
+                border: "1px solid var(--accent-bg)",
                 borderRadius: 18,
                 backgroundColor: "#f8fbff",
               }}
@@ -148,7 +148,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   margin: "0 0 10px",
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#1d4ed8",
+                  color: "var(--accent-2)",
                   letterSpacing: "0.01em",
                 }}
               >
@@ -159,7 +159,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   margin: "0 0 12px",
                   fontSize: 15,
                   lineHeight: 1.7,
-                  color: "#475569",
+                  color: "var(--ink-2)",
                 }}
               >
                 Vous vendez deja sur Shopify ? Consultez notre page dediee pour connecter Shopify,
@@ -171,7 +171,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 10,
-                  color: "#111827",
+                  color: "var(--ink)",
                   fontSize: 15,
                   fontWeight: 600,
                   textDecoration: "none",
@@ -185,7 +185,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <div
               style={{
                 padding: 22,
-                border: "1px solid #dcfce7",
+                border: "1px solid var(--success-bg)",
                 borderRadius: 18,
                 backgroundColor: "#f6fff8",
               }}
@@ -195,7 +195,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   margin: "0 0 10px",
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#15803d",
+                  color: "var(--success)",
                   letterSpacing: "0.01em",
                 }}
               >
@@ -206,7 +206,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   margin: "0 0 12px",
                   fontSize: 15,
                   lineHeight: 1.7,
-                  color: "#475569",
+                  color: "var(--ink-2)",
                 }}
               >
                 Vous voulez traiter les rejets et diagnostics Google plus vite ? Consultez la page dediee aux erreurs Merchant Center avec scoring produit et priorisation des blocages.
@@ -217,7 +217,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 10,
-                  color: "#111827",
+                  color: "var(--ink)",
                   fontSize: 15,
                   fontWeight: 600,
                   textDecoration: "none",
@@ -233,9 +233,9 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           <div
             style={{
               padding: 22,
-              border: "1px solid #fde68a",
+              border: "1px solid #FDE68A",
               borderRadius: 18,
-              backgroundColor: "#fffbeb",
+              backgroundColor: "var(--warning-bg)",
               maxWidth: 760,
               marginTop: isGoogleShoppingPage ? 18 : 20,
             }}
@@ -245,7 +245,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 margin: "0 0 10px",
                 fontSize: 14,
                 fontWeight: 600,
-                color: "#b45309",
+                color: "var(--warning)",
                 letterSpacing: "0.01em",
               }}
             >
@@ -256,7 +256,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 margin: "0 0 12px",
                 fontSize: 15,
                 lineHeight: 1.7,
-                color: "#475569",
+                color: "var(--ink-2)",
               }}
             >
               Vous vendez deja sur Shopify ? Consultez notre page dediee pour preparer un feed Amazon plus propre, verifier les variations et prioriser les fiches a corriger.
@@ -267,7 +267,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 10,
-                color: "#111827",
+                color: "var(--ink)",
                 fontSize: 15,
                 fontWeight: 600,
                 textDecoration: "none",
@@ -283,8 +283,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
       <section
         style={{
           padding: "72px 48px",
-          backgroundColor: "#fafaf9",
-          borderTop: "1px solid #eef2f7",
+          backgroundColor: "var(--paper-2)",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -304,7 +304,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
               padding: 24,
               margin: 0,
               backgroundColor: "#ffffff",
-              border: "1px solid #eceff3",
+              border: "1px solid var(--line)",
               borderRadius: 20,
             }}
           >
@@ -317,7 +317,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   gap: 12,
                   marginBottom: i === (t.raw("pain.items") as string[]).length - 1 ? 0 : 16,
                   fontSize: 16,
-                  color: "#4a4a4a",
+                  color: "var(--ink-2)",
                   lineHeight: 1.6,
                 }}
               >
@@ -325,7 +325,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   style={{
                     width: 20,
                     height: 20,
-                    color: "#dc2626",
+                    color: "var(--danger)",
                     flexShrink: 0,
                     marginTop: 2,
                   }}
@@ -340,7 +340,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
       <section
         style={{
           padding: "80px 48px",
-          borderTop: "1px solid #eef2f7",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -357,7 +357,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           <p
             style={{
               fontSize: 18,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               marginBottom: 48,
               lineHeight: 1.6,
             }}
@@ -382,9 +382,9 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   key={idx}
                   style={{
                     padding: 28,
-                    border: "1px solid #eceff3",
+                    border: "1px solid var(--line)",
                     borderRadius: 20,
-                    backgroundColor: "#fafaf9",
+                    backgroundColor: "var(--paper-2)",
                   }}
                 >
                   <div style={{ marginBottom: 16 }}>
@@ -402,7 +402,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   <p
                     style={{
                       fontSize: 15,
-                      color: "#6b7280",
+                      color: "var(--ink-3)",
                       lineHeight: 1.6,
                       margin: 0,
                     }}
@@ -419,8 +419,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
       <section
         style={{
           padding: "80px 48px",
-          backgroundColor: "#f8fafc",
-          borderTop: "1px solid #eef2f7",
+          backgroundColor: "var(--paper-2)",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -437,7 +437,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           <p
             style={{
               fontSize: 17,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               lineHeight: 1.7,
               marginBottom: 24,
             }}
@@ -450,7 +450,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
               padding: 24,
               margin: 0,
               backgroundColor: "#ffffff",
-              border: "1px solid #eceff3",
+              border: "1px solid var(--line)",
               borderRadius: 20,
             }}
           >
@@ -469,7 +469,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   style={{
                     width: 20,
                     height: 20,
-                    color: "#16a34a",
+                    color: "var(--success)",
                     flexShrink: 0,
                     marginTop: 2,
                   }}
@@ -487,7 +487,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
         style={{
           padding: "80px 48px",
           backgroundColor: "#ffffff",
-          borderTop: "1px solid #eef2f7",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -508,9 +508,9 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                   key={i}
                   style={{
                     padding: "20px 22px",
-                    border: "1px solid #eceff3",
+                    border: "1px solid var(--line)",
                     borderRadius: 18,
-                    backgroundColor: "#fafaf9",
+                    backgroundColor: "var(--paper-2)",
                   }}
                 >
                   <h3
@@ -518,7 +518,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                       fontSize: 16,
                       fontWeight: 600,
                       marginBottom: 8,
-                      color: "#111827",
+                      color: "var(--ink)",
                     }}
                   >
                     {item.q}
@@ -527,7 +527,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                     style={{
                       margin: 0,
                       fontSize: 15,
-                      color: "#6b7280",
+                      color: "var(--ink-3)",
                       lineHeight: 1.6,
                     }}
                   >
@@ -544,8 +544,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
         id="contact"
         style={{
           padding: "88px 48px",
-          backgroundColor: "#111827",
-          borderTop: "1px solid #eef2f7",
+          backgroundColor: "var(--ink)",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div
@@ -569,7 +569,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           <p
             style={{
               fontSize: 18,
-              color: "#d1d5db",
+              color: "var(--line-strong)",
               marginBottom: 32,
               lineHeight: 1.6,
             }}
@@ -584,7 +584,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
               gap: 12,
               padding: "15px 24px",
               backgroundColor: "#fff",
-              color: "#111827",
+              color: "var(--ink)",
               textDecoration: "none",
               fontSize: 15,
               fontWeight: 600,
@@ -600,8 +600,8 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
       <footer
         style={{
           padding: "48px 48px",
-          backgroundColor: "#fafaf9",
-          borderTop: "1px solid #eef2f7",
+          backgroundColor: "var(--paper-2)",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div
@@ -620,7 +620,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             style={{
               fontSize: 16,
               fontWeight: 650,
-              color: "#111827",
+              color: "var(--ink)",
               textDecoration: "none",
             }}
           >
@@ -630,7 +630,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/optimiser-flux-google-shopping"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -640,7 +640,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/optimiser-flux-amazon"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -650,7 +650,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/optimiser-flux-rakuten"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -660,7 +660,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/optimiser-flux-cdiscount"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -670,7 +670,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -680,7 +680,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/docs"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}
@@ -690,7 +690,7 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
             <Link
               href="/docs/score"
               style={{
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 fontSize: 14,
                 textDecoration: "none",
               }}

@@ -681,7 +681,7 @@ export default function OptimiserPage() {
                         width: 18,
                         height: 18,
                         borderRadius: 4,
-                        backgroundColor: channel.ruleCount > 0 ? "var(--app-text)" : "#e5e7eb",
+                        backgroundColor: channel.ruleCount > 0 ? "var(--app-text)" : "var(--line)",
                         color: channel.ruleCount > 0 ? "white" : "var(--app-text-muted)",
                         display: "flex",
                         alignItems: "center",

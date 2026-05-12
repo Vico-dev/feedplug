@@ -13,7 +13,7 @@ export default function RegisterLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", fontFamily: "var(--font-sans)" }}>
       <AuthPageHeader />
       {children}
     </div>

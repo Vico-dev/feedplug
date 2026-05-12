@@ -334,7 +334,7 @@ export default function MarketingLandingPage() {
         position: 'sticky',
         top: 0,
         backgroundColor: '#ffffff',
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid var(--line)',
         zIndex: 1000,
         padding: '24px 0'
       }}>
@@ -361,7 +361,7 @@ export default function MarketingLandingPage() {
           <div className="responsive-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '48px' }}>
             <a href="#solutions" className="nav-link" style={{
               textDecoration: 'none',
-              color: '#4a4a4a',
+              color: 'var(--ink-2)',
               fontSize: '14px',
               fontWeight: '400',
               letterSpacing: '0.01em'
@@ -370,7 +370,7 @@ export default function MarketingLandingPage() {
             </a>
             <Link href="/demo" className="nav-link" style={{
               textDecoration: 'none',
-              color: '#4a4a4a',
+              color: 'var(--ink-2)',
               fontSize: '14px',
               fontWeight: '400',
               letterSpacing: '0.01em'
@@ -379,7 +379,7 @@ export default function MarketingLandingPage() {
             </Link>
             <Link href="/docs" className="nav-link" style={{
               textDecoration: 'none',
-              color: '#4a4a4a',
+              color: 'var(--ink-2)',
               fontSize: '14px',
               fontWeight: '400',
               letterSpacing: '0.01em'
@@ -418,7 +418,7 @@ export default function MarketingLandingPage() {
             fontWeight: '500',
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             marginBottom: '32px'
           }}>
             Synchronisation produits multi-canal
@@ -437,14 +437,14 @@ export default function MarketingLandingPage() {
             <br />
             en synchronisant vos produits
             <br />
-            <span style={{ fontWeight: '400', color: '#4a4a4a' }}>sur tous vos canaux</span>
+            <span style={{ fontWeight: '400', color: 'var(--ink-2)' }}>sur tous vos canaux</span>
           </h1>
           
           <p className="hero-description responsive-text-small" style={{
             fontSize: '22px',
             lineHeight: '1.6',
             marginBottom: '48px',
-            color: '#4a4a4a',
+            color: 'var(--ink-2)',
             maxWidth: '720px',
             fontWeight: '300',
             letterSpacing: '-0.01em'
@@ -466,7 +466,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -475,7 +475,7 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
                 <input
                   type="text"
@@ -486,7 +486,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -495,7 +495,7 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
               </div>
               
@@ -509,7 +509,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -518,7 +518,7 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
                 <input
                   type="tel"
@@ -529,7 +529,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -538,7 +538,7 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
               </div>
               
@@ -552,7 +552,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -561,7 +561,7 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
                 <input
                   type="text"
@@ -572,7 +572,7 @@ export default function MarketingLandingPage() {
                   className="input-focus"
                   style={{
                     padding: '16px 20px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--line-strong)',
                     fontSize: '15px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
@@ -581,13 +581,13 @@ export default function MarketingLandingPage() {
                     borderRadius: '2px'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#0a0a0a'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
                 />
               </div>
               
               {error && (
                 <div style={{
-                  color: '#dc2626',
+                  color: 'var(--danger)',
                   fontSize: '14px',
                   marginBottom: '16px',
                   animation: 'fadeIn 0.3s ease-out'
@@ -634,17 +634,17 @@ export default function MarketingLandingPage() {
             <div className="success-message" style={{
               maxWidth: '640px',
               padding: '32px',
-              border: '1px solid #d1d5db',
-              backgroundColor: '#f9fafb',
+              border: '1px solid var(--line-strong)',
+              backgroundColor: 'var(--paper-2)',
               borderRadius: '2px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />
+                <CheckCircle style={{ width: '20px', height: '20px', color: 'var(--success)' }} />
                 <div style={{ fontSize: '16px', fontWeight: '500', color: '#0a0a0a' }}>
                   Merci pour votre intérêt
                 </div>
               </div>
-              <p style={{ fontSize: '15px', color: '#4a4a4a', margin: 0, lineHeight: '1.5' }}>
+              <p style={{ fontSize: '15px', color: 'var(--ink-2)', margin: 0, lineHeight: '1.5' }}>
                 Notre équipe vous contactera dans les 24h pour planifier une démonstration personnalisée.
               </p>
             </div>
@@ -656,7 +656,7 @@ export default function MarketingLandingPage() {
       <section id="solutions" className="responsive-padding" style={{
         padding: '120px 48px',
         backgroundColor: '#fafafa',
-        borderTop: '1px solid #e5e7eb'
+        borderTop: '1px solid var(--line)'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div className="fade-in-element" style={{
@@ -664,7 +664,7 @@ export default function MarketingLandingPage() {
             fontWeight: '500',
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             marginBottom: '16px'
           }}>
             Solutions
@@ -737,7 +737,7 @@ export default function MarketingLandingPage() {
                   </h3>
                   <p style={{
                     fontSize: '15px',
-                    color: '#6b7280',
+                    color: 'var(--ink-3)',
                     lineHeight: '1.6',
                     margin: 0,
                     fontWeight: '300'
@@ -755,7 +755,7 @@ export default function MarketingLandingPage() {
       <section className="responsive-padding" style={{
         padding: '120px 48px',
         backgroundColor: '#ffffff',
-        borderTop: '1px solid #e5e7eb'
+        borderTop: '1px solid var(--line)'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div className="fade-in-element" style={{
@@ -763,7 +763,7 @@ export default function MarketingLandingPage() {
             fontWeight: '500',
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             marginBottom: '16px'
           }}>
             Expansion
@@ -784,7 +784,7 @@ export default function MarketingLandingPage() {
           
           <p className="fade-in-element delay-200 responsive-text-small" style={{
             fontSize: '18px',
-            color: '#4a4a4a',
+            color: 'var(--ink-2)',
             marginBottom: '64px',
             fontWeight: '300',
             maxWidth: '720px',
@@ -802,18 +802,18 @@ export default function MarketingLandingPage() {
             {/* Nouveaux canaux */}
             <div className="fade-in-element delay-300" style={{
               padding: '48px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               backgroundColor: '#fafafa',
               transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.borderColor = 'var(--line)';
             }}>
               <div style={{ marginBottom: '24px' }}>
                 <Rocket style={{ width: '32px', height: '32px', color: '#0a0a0a' }} />
@@ -829,7 +829,7 @@ export default function MarketingLandingPage() {
               </h3>
               <p style={{
                 fontSize: '16px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 lineHeight: '1.6',
                 marginBottom: '32px',
                 fontWeight: '300'
@@ -842,13 +842,13 @@ export default function MarketingLandingPage() {
                 gap: '16px'
               }}>
                 {[
-                  { icon: <Clock style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Configuration en 5 minutes' },
-                  { icon: <Zap style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Mise en ligne automatique' },
-                  { icon: <Target style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Adaptation automatique des formats' }
+                  { icon: <Clock style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Configuration en 5 minutes' },
+                  { icon: <Zap style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Mise en ligne automatique' },
+                  { icon: <Target style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Adaptation automatique des formats' }
                 ].map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {item.icon}
-                    <span style={{ fontSize: '15px', color: '#4a4a4a', fontWeight: '300' }}>
+                    <span style={{ fontSize: '15px', color: 'var(--ink-2)', fontWeight: '300' }}>
                       {item.text}
                     </span>
                   </div>
@@ -859,18 +859,18 @@ export default function MarketingLandingPage() {
             {/* Nouveaux marchés */}
             <div className="fade-in-element delay-400" style={{
               padding: '48px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               backgroundColor: '#fafafa',
               transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.borderColor = 'var(--line)';
             }}>
               <div style={{ marginBottom: '24px' }}>
                 <MapPin style={{ width: '32px', height: '32px', color: '#0a0a0a' }} />
@@ -886,7 +886,7 @@ export default function MarketingLandingPage() {
               </h3>
               <p style={{
                 fontSize: '16px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 lineHeight: '1.6',
                 marginBottom: '32px',
                 fontWeight: '300'
@@ -899,13 +899,13 @@ export default function MarketingLandingPage() {
                 gap: '16px'
               }}>
                 {[
-                  { icon: <Globe style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Multi-pays et multi-langues' },
-                  { icon: <Zap style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Déploiement instantané' },
-                  { icon: <CheckCircle style={{ width: '16px', height: '16px', color: '#6b7280' }} />, text: 'Conformité locale automatique' }
+                  { icon: <Globe style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Multi-pays et multi-langues' },
+                  { icon: <Zap style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Déploiement instantané' },
+                  { icon: <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />, text: 'Conformité locale automatique' }
                 ].map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {item.icon}
-                    <span style={{ fontSize: '15px', color: '#4a4a4a', fontWeight: '300' }}>
+                    <span style={{ fontSize: '15px', color: 'var(--ink-2)', fontWeight: '300' }}>
                       {item.text}
                     </span>
                   </div>
@@ -917,7 +917,7 @@ export default function MarketingLandingPage() {
           {/* Cas d'usage */}
           <div className="fade-in-element delay-300 responsive-grid-3" style={{
             backgroundColor: '#fafafa',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             borderRadius: '2px',
             padding: '48px',
             marginTop: '48px',
@@ -963,7 +963,7 @@ export default function MarketingLandingPage() {
                   </h4>
                   <p style={{
                     fontSize: '15px',
-                    color: '#6b7280',
+                    color: 'var(--ink-3)',
                     lineHeight: '1.6',
                     margin: 0,
                     fontWeight: '300'
@@ -980,7 +980,7 @@ export default function MarketingLandingPage() {
       <section className="responsive-padding" style={{
         padding: '120px 48px',
         backgroundColor: '#fafafa',
-        borderTop: '1px solid #e5e7eb'
+        borderTop: '1px solid var(--line)'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div className="fade-in-element" style={{
@@ -988,7 +988,7 @@ export default function MarketingLandingPage() {
             fontWeight: '500',
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             marginBottom: '16px'
           }}>
             Fonctionnalités avancées
@@ -1009,7 +1009,7 @@ export default function MarketingLandingPage() {
           
           <p className="fade-in-element delay-200 responsive-text-small" style={{
             fontSize: '18px',
-            color: '#4a4a4a',
+            color: 'var(--ink-2)',
             marginBottom: '64px',
             fontWeight: '300',
             maxWidth: '720px',
@@ -1027,19 +1027,19 @@ export default function MarketingLandingPage() {
             {/* Analytics & Performance */}
             <div className="feature-card fade-in-element delay-200" style={{
               padding: '40px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               backgroundColor: '#ffffff',
               transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.borderColor = 'var(--line)';
               e.currentTarget.style.boxShadow = 'none';
             }}>
               <div className="icon-hover" style={{ marginBottom: '24px', display: 'inline-block' }}>
@@ -1056,7 +1056,7 @@ export default function MarketingLandingPage() {
               </h3>
               <p style={{
                 fontSize: '15px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 lineHeight: '1.6',
                 marginBottom: '24px',
                 fontWeight: '300'
@@ -1075,8 +1075,8 @@ export default function MarketingLandingPage() {
                   'Alertes de performance'
                 ].map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a', flexShrink: 0 }} />
-                    <span style={{ fontSize: '14px', color: '#4a4a4a', fontWeight: '300' }}>
+                    <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '14px', color: 'var(--ink-2)', fontWeight: '300' }}>
                       {item}
                     </span>
                   </div>
@@ -1087,19 +1087,19 @@ export default function MarketingLandingPage() {
             {/* A/B Testing */}
             <div className="feature-card fade-in-element delay-300" style={{
               padding: '40px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               backgroundColor: '#ffffff',
               transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.borderColor = 'var(--line)';
               e.currentTarget.style.boxShadow = 'none';
             }}>
               <div className="icon-hover" style={{ marginBottom: '24px', display: 'inline-block' }}>
@@ -1116,7 +1116,7 @@ export default function MarketingLandingPage() {
               </h3>
               <p style={{
                 fontSize: '15px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 lineHeight: '1.6',
                 marginBottom: '24px',
                 fontWeight: '300'
@@ -1135,8 +1135,8 @@ export default function MarketingLandingPage() {
                   'Recommandations d\'optimisation'
                 ].map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a', flexShrink: 0 }} />
-                    <span style={{ fontSize: '14px', color: '#4a4a4a', fontWeight: '300' }}>
+                    <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '14px', color: 'var(--ink-2)', fontWeight: '300' }}>
                       {item}
                     </span>
                   </div>
@@ -1147,19 +1147,19 @@ export default function MarketingLandingPage() {
             {/* Scoring & IA */}
             <div className="feature-card fade-in-element delay-400" style={{
               padding: '40px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               backgroundColor: '#ffffff',
               transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.borderColor = 'var(--line)';
               e.currentTarget.style.boxShadow = 'none';
             }}>
               <div className="icon-hover" style={{ marginBottom: '24px', display: 'inline-block' }}>
@@ -1176,7 +1176,7 @@ export default function MarketingLandingPage() {
               </h3>
               <p style={{
                 fontSize: '15px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 lineHeight: '1.6',
                 marginBottom: '24px',
                 fontWeight: '300'
@@ -1195,8 +1195,8 @@ export default function MarketingLandingPage() {
                   'Détection d&apos;anomalies'
                 ].map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a', flexShrink: 0 }} />
-                    <span style={{ fontSize: '14px', color: '#4a4a4a', fontWeight: '300' }}>
+                    <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '14px', color: 'var(--ink-2)', fontWeight: '300' }}>
                       {item}
                     </span>
                   </div>
@@ -1208,7 +1208,7 @@ export default function MarketingLandingPage() {
           {/* Bénéfices concrets */}
           <div className="fade-in-element delay-300 responsive-grid-3" style={{
             backgroundColor: '#ffffff',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             borderRadius: '2px',
             padding: '48px',
             display: 'grid',
@@ -1247,7 +1247,7 @@ export default function MarketingLandingPage() {
                 </h4>
                 <p style={{
                   fontSize: '15px',
-                  color: '#6b7280',
+                  color: 'var(--ink-3)',
                   lineHeight: '1.6',
                   margin: 0,
                   fontWeight: '300'
@@ -1264,7 +1264,7 @@ export default function MarketingLandingPage() {
       <section id="contact" className="responsive-padding" style={{
         padding: '120px 48px',
         backgroundColor: '#ffffff',
-        borderTop: '1px solid #e5e7eb'
+        borderTop: '1px solid var(--line)'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', textAlign: 'left' }}>
           <div style={{
@@ -1272,7 +1272,7 @@ export default function MarketingLandingPage() {
             fontWeight: '500',
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             marginBottom: '16px'
           }}>
             Contact
@@ -1291,7 +1291,7 @@ export default function MarketingLandingPage() {
           
           <p className="fade-in-element delay-100 responsive-text-small" style={{
             fontSize: '18px',
-            color: '#4a4a4a',
+            color: 'var(--ink-2)',
             marginBottom: '48px',
             fontWeight: '300',
             maxWidth: '560px',
@@ -1313,7 +1313,7 @@ export default function MarketingLandingPage() {
             }}>
               contact@feedplug.com
             </a>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '16px 0 0 0' }}>
+            <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '16px 0 0 0' }}>
               Réponse sous 24h
             </p>
           </div>
@@ -1323,7 +1323,7 @@ export default function MarketingLandingPage() {
       {/* Footer Corporate */}
       <footer className="responsive-padding" style={{
         backgroundColor: '#fafafa',
-        borderTop: '1px solid #e5e7eb',
+        borderTop: '1px solid var(--line)',
         padding: '64px 48px',
         marginTop: '120px'
       }}>
@@ -1348,7 +1348,7 @@ export default function MarketingLandingPage() {
               </div>
               <p style={{
                 fontSize: '14px',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 margin: 0,
                 lineHeight: '1.6',
                 maxWidth: '280px',
@@ -1364,16 +1364,16 @@ export default function MarketingLandingPage() {
                 fontWeight: '500',
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 marginBottom: '16px'
               }}>
                 Legal
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <a href="#" style={{ color: '#4a4a4a', fontSize: '14px', textDecoration: 'none', fontWeight: '300' }}>
+                <a href="#" style={{ color: 'var(--ink-2)', fontSize: '14px', textDecoration: 'none', fontWeight: '300' }}>
                   Confidentialité
                 </a>
-                <a href="#" style={{ color: '#4a4a4a', fontSize: '14px', textDecoration: 'none', fontWeight: '300' }}>
+                <a href="#" style={{ color: 'var(--ink-2)', fontSize: '14px', textDecoration: 'none', fontWeight: '300' }}>
                   Conditions d&apos;utilisation
                 </a>
               </div>
@@ -1382,9 +1382,9 @@ export default function MarketingLandingPage() {
           
           <div style={{
             paddingTop: '32px',
-            borderTop: '1px solid #e5e7eb',
+            borderTop: '1px solid var(--line)',
             fontSize: '13px',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             fontWeight: '300'
           }}>
             © 2024 FeedPlug. Tous droits réservés.

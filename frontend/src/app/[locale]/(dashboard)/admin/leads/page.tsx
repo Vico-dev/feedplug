@@ -239,7 +239,7 @@ export default function AdminLeadsPage() {
         alignItems: 'center'
       }}>
         <div style={{ position: 'relative', flex: '1', minWidth: '250px' }}>
-          <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
+          <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: 'var(--ink-4)' }} />
           <input
             type="text"
             placeholder="Rechercher par nom, email, entreprise..."
@@ -248,7 +248,7 @@ export default function AdminLeadsPage() {
             style={{
               width: '100%',
               padding: '10px 12px 10px 40px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               fontSize: '14px',
               outline: 'none'
@@ -261,7 +261,7 @@ export default function AdminLeadsPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{
             padding: '10px 12px',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             borderRadius: '2px',
             fontSize: '14px',
             outline: 'none',
@@ -281,7 +281,7 @@ export default function AdminLeadsPage() {
           onChange={(e) => setLocaleFilter(e.target.value)}
           style={{
             padding: '10px 12px',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             borderRadius: '2px',
             fontSize: '14px',
             outline: 'none',
@@ -317,47 +317,47 @@ export default function AdminLeadsPage() {
       {/* Liste des leads */}
       <div style={{
         backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
+        border: '1px solid var(--line)',
         borderRadius: '2px',
         overflow: 'hidden',
         boxShadow: 'none'
       }}>
         {filteredLeads.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--ink-3)' }}>
             <p>Aucun lead trouvé</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Contact</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Entreprise</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Fonction</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Locale</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Statut</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Marketing</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Date</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Actions</th>
+                <tr style={{ backgroundColor: 'var(--paper-2)', borderBottom: '1px solid var(--line)' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Contact</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Entreprise</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Fonction</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Locale</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Statut</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Marketing</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Date</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLeads.map((lead) => (
-                  <tr key={lead.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <tr key={lead.id} style={{ borderBottom: '1px solid var(--paper-2)' }}>
                     <td style={{ padding: '16px' }}>
                       <div>
                         <div style={{ fontWeight: '500', color: '#0a0a0a', marginBottom: '4px' }}>
                           {lead.firstName} {lead.lastName}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                           <Mail size={12} />
-                          <a href={`mailto:${lead.email}`} style={{ color: '#2563eb', textDecoration: 'none' }}>
+                          <a href={`mailto:${lead.email}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
                             {lead.email}
                           </a>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                           <Phone size={12} />
-                          <a href={`tel:${lead.phone}`} style={{ color: '#2563eb', textDecoration: 'none' }}>
+                          <a href={`tel:${lead.phone}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
                             {lead.phone}
                           </a>
                         </div>
@@ -365,11 +365,11 @@ export default function AdminLeadsPage() {
                     </td>
                     <td style={{ padding: '16px', color: '#0a0a0a' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Building size={14} style={{ color: '#6b7280' }} />
+                        <Building size={14} style={{ color: 'var(--ink-3)' }} />
                         {lead.company}
                       </div>
                     </td>
-                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
+                    <td style={{ padding: '16px', color: 'var(--ink-3)', fontSize: '14px' }}>
                       {lead.jobTitle}
                     </td>
                     <td style={{ padding: '16px' }}>
@@ -379,7 +379,7 @@ export default function AdminLeadsPage() {
                         fontSize: '12px',
                         fontWeight: '500',
                         backgroundColor: '#fafafa',
-                        color: '#4a4a4a'
+                        color: 'var(--ink-2)'
                       }}>
                         {lead.locale?.toUpperCase() || 'N/A'}
                       </span>
@@ -396,27 +396,27 @@ export default function AdminLeadsPage() {
                             ? 'Désinscrit'
                             : (nurtureStageLabels[lead.nurtureStage || ''] || 'Non initialisé')}
                         </StatusBadge>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Opt-in: {lead.marketingOptIn && !lead.unsubscribedAt ? 'Oui' : 'Non'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Prochain: {formatDateTime(lead.nextMarketingEmailAt)}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Dernier: {formatDateTime(lead.lastMarketingEmailAt)}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Clics: {lead.marketingClickCount || 0}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Dernier clic: {formatDateTime(lead.lastMarketingClickAt)}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                           Cible: {lead.lastMarketingClickTarget || '—'}
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
+                    <td style={{ padding: '16px', color: 'var(--ink-3)', fontSize: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Calendar size={14} />
                         {new Date(lead.createdAt).toLocaleDateString('fr-FR', {
@@ -436,8 +436,8 @@ export default function AdminLeadsPage() {
                           }}
                           style={{
                             padding: '6px 12px',
-                            backgroundColor: '#f3f4f6',
-                            border: '1px solid #e5e7eb',
+                            backgroundColor: 'var(--paper-2)',
+                            border: '1px solid var(--line)',
                             borderRadius: '2px',
                             fontSize: '12px',
                             cursor: 'pointer',
@@ -455,7 +455,7 @@ export default function AdminLeadsPage() {
                           disabled={sendingLeadId === lead.id || !!lead.unsubscribedAt || lead.marketingOptIn === false}
                           style={{
                             padding: '6px 12px',
-                            backgroundColor: sendingLeadId === lead.id ? '#9ca3af' : '#0a0a0a',
+                            backgroundColor: sendingLeadId === lead.id ? 'var(--ink-4)' : '#0a0a0a',
                             color: '#ffffff',
                             border: 'none',
                             borderRadius: '2px',
@@ -489,8 +489,8 @@ export default function AdminLeadsPage() {
             disabled={page === 1}
             style={{
               padding: '8px 16px',
-              backgroundColor: page === 1 ? '#f3f4f6' : '#ffffff',
-              border: '1px solid #e5e7eb',
+              backgroundColor: page === 1 ? 'var(--paper-2)' : '#ffffff',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               cursor: page === 1 ? 'not-allowed' : 'pointer',
               opacity: page === 1 ? 0.5 : 1,
@@ -500,7 +500,7 @@ export default function AdminLeadsPage() {
           >
             Précédent
           </button>
-          <span style={{ color: '#6b7280', fontSize: '14px' }}>
+          <span style={{ color: 'var(--ink-3)', fontSize: '14px' }}>
             Page {page} sur {Math.ceil(total / limit)}
           </span>
           <button
@@ -508,8 +508,8 @@ export default function AdminLeadsPage() {
             disabled={page >= Math.ceil(total / limit)}
             style={{
               padding: '8px 16px',
-              backgroundColor: page >= Math.ceil(total / limit) ? '#f3f4f6' : '#ffffff',
-              border: '1px solid #e5e7eb',
+              backgroundColor: page >= Math.ceil(total / limit) ? 'var(--paper-2)' : '#ffffff',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               cursor: page >= Math.ceil(total / limit) ? 'not-allowed' : 'pointer',
               opacity: page >= Math.ceil(total / limit) ? 0.5 : 1,
@@ -544,7 +544,7 @@ export default function AdminLeadsPage() {
             width: '90%',
             maxHeight: '90vh',
             overflow: 'auto',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             boxShadow: 'none'
           }}>
             <h2 style={{ fontSize: '20px', fontWeight: '400', marginBottom: '20px', color: '#0a0a0a' }}>
@@ -561,7 +561,7 @@ export default function AdminLeadsPage() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   outline: 'none'
@@ -586,7 +586,7 @@ export default function AdminLeadsPage() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   resize: 'vertical',
@@ -601,8 +601,8 @@ export default function AdminLeadsPage() {
                 onClick={() => setEditingLead(null)}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: '#f3f4f6',
-                  border: '1px solid #e5e7eb',
+                  backgroundColor: 'var(--paper-2)',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   cursor: 'pointer',
                   fontSize: '14px',

@@ -310,9 +310,9 @@ export default function ParametresPage() {
       />
 
       <DashboardStatGrid>
-        <DashboardStatCard icon={<User size={20} />} label="Compte" value={account?.name || user?.account?.name || "Mon compte"} hint={user?.email || "Profil utilisateur"} accent="#0f766e" />
-        <DashboardStatCard icon={<Users size={20} />} label="Membres" value={users.length || 1} hint={canInvite ? "Invitations disponibles" : "Gestion limitee selon votre role"} accent="#2563eb" />
-        <DashboardStatCard icon={<Shield size={20} />} label="Securite" value="Active" hint="Acces, mot de passe et roles centralises ici" accent="#d97706" />
+        <DashboardStatCard icon={<User size={20} />} label="Compte" value={account?.name || user?.account?.name || "Mon compte"} hint={user?.email || "Profil utilisateur"} accent="#2A6FE8" />
+        <DashboardStatCard icon={<Users size={20} />} label="Membres" value={users.length || 1} hint={canInvite ? "Invitations disponibles" : "Gestion limitee selon votre role"} accent="var(--accent)" />
+        <DashboardStatCard icon={<Shield size={20} />} label="Securite" value="Active" hint="Acces, mot de passe et roles centralises ici" accent="var(--warning)" />
       </DashboardStatGrid>
 
       <div
@@ -340,7 +340,7 @@ export default function ParametresPage() {
               gap: "8px",
               padding: "12px 16px",
               backgroundColor: activeTab === tab.id ? "var(--app-text)" : "transparent",
-              color: activeTab === tab.id ? "white" : "#6b7280",
+              color: activeTab === tab.id ? "white" : "var(--ink-3)",
               border: "none",
               borderRadius: "12px",
               fontSize: "14px",
@@ -350,14 +350,14 @@ export default function ParametresPage() {
             }}
             onMouseEnter={(e) => {
               if (activeTab !== tab.id) {
-                e.currentTarget.style.backgroundColor = "#f9fafb";
-                e.currentTarget.style.color = "#374151";
+                e.currentTarget.style.backgroundColor = "var(--paper-2)";
+                e.currentTarget.style.color = "var(--ink-2)";
               }
             }}
             onMouseLeave={(e) => {
               if (activeTab !== tab.id) {
                 e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.color = "#6b7280";
+                e.currentTarget.style.color = "var(--ink-3)";
               }
             }}
           >
@@ -390,7 +390,7 @@ export default function ParametresPage() {
                     Informations du profil
                   </h2>
                   {!profileEditing ? (
-                    <button type="button" onClick={() => setProfileEditing(true)} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 12px", backgroundColor: "transparent", color: "#6b7280", border: "1px solid var(--app-border)", borderRadius: "12px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+                    <button type="button" onClick={() => setProfileEditing(true)} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 12px", backgroundColor: "transparent", color: "var(--ink-3)", border: "1px solid var(--app-border)", borderRadius: "12px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
                       <Edit style={{ width: "14px", height: "14px" }} />
                       Modifier
                     </button>
@@ -403,21 +403,21 @@ export default function ParametresPage() {
                       style={{
                         width: "80px",
                         height: "80px",
-                        backgroundColor: "#f3f4f6",
+                        backgroundColor: "var(--paper-2)",
                         borderRadius: "50%",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        border: "2px solid #e5e7eb",
+                        border: "2px solid var(--line)",
                       }}
                     >
-                      <User style={{ width: "32px", height: "32px", color: "#9ca3af" }} />
+                      <User style={{ width: "32px", height: "32px", color: "var(--ink-4)" }} />
                     </div>
                     <div>
-                      <p style={{ fontSize: "14px", color: "#374151", margin: 0 }}>
+                      <p style={{ fontSize: "14px", color: "var(--ink-2)", margin: 0 }}>
                         {user?.firstName} {user?.lastName}
                       </p>
-                      <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0 0" }}>
+                      <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "4px 0 0 0" }}>
                         {user?.email}
                       </p>
                     </div>
@@ -425,7 +425,7 @@ export default function ParametresPage() {
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                     <div>
-                      <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#374151", marginBottom: "6px" }}>
+                      <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "6px" }}>
                         Prénom
                       </label>
                       <input
@@ -437,7 +437,7 @@ export default function ParametresPage() {
                       />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#374151", marginBottom: "6px" }}>
+                      <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "6px" }}>
                         Nom
                       </label>
                       <input
@@ -451,22 +451,22 @@ export default function ParametresPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#374151", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "6px" }}>
                       Email
                     </label>
                     <input
                       type="email"
                       value={user?.email ?? ""}
                       disabled
-                      style={{ ...baseInputStyle, backgroundColor: "#f9fafb", color: "#6b7280" }}
+                      style={{ ...baseInputStyle, backgroundColor: "var(--paper-2)", color: "var(--ink-3)" }}
                     />
-                    <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0 0" }}>
+                    <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "4px 0 0 0" }}>
                       L&apos;email ne peut pas être modifié ici.
                     </p>
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#374151", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "6px" }}>
                       Entreprise
                     </label>
                     <input
@@ -479,7 +479,7 @@ export default function ParametresPage() {
                   </div>
 
                   {profileEditing && (
-                    <div style={{ display: "flex", gap: "12px", paddingTop: "16px", borderTop: "1px solid #f3f4f6" }}>
+                    <div style={{ display: "flex", gap: "12px", paddingTop: "16px", borderTop: "1px solid var(--paper-2)" }}>
                       <PageButtonPrimary onClick={handleSaveProfile} disabled={profileSaving}>
                         <Save style={{ width: "16px", height: "16px" }} />
                         {profileSaving ? t("common.saving") : t("common.save")}
@@ -509,10 +509,10 @@ export default function ParametresPage() {
                 </h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                   <div>
-                    <h3 style={{ fontSize: "14px", fontWeight: "500", color: "#374151", margin: "0 0 12px 0" }}>
+                    <h3 style={{ fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", margin: "0 0 12px 0" }}>
                       Mot de passe
                     </h3>
-                    <button type="button" style={{ width: "100%", minHeight: 44, backgroundColor: "transparent", color: "#2563eb", border: "1px solid #93c5fd", borderRadius: "12px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }} onClick={() => setChangePasswordOpen(true)}>
+                    <button type="button" style={{ width: "100%", minHeight: 44, backgroundColor: "transparent", color: "var(--accent)", border: "1px solid #93c5fd", borderRadius: "12px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }} onClick={() => setChangePasswordOpen(true)}>
                       <Key style={{ width: "16px", height: "16px" }} />
                       Changer le mot de passe
                     </button>
@@ -527,7 +527,7 @@ export default function ParametresPage() {
               <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#0a0a0a", margin: "0 0 8px 0" }}>
                 Équipe
               </h2>
-              <p style={{ fontSize: "14px", color: "#6b7280", margin: "0 0 24px 0" }}>
+              <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 24px 0" }}>
                 Invitez des collaborateurs et gérez les accès à votre compte.
               </p>
 
@@ -541,14 +541,14 @@ export default function ParametresPage() {
                     backgroundColor: "#fafafa",
                   }}
                 >
-                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#374151", margin: "0 0 16px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "var(--ink-2)", margin: "0 0 16px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <UserPlus style={{ width: "18px", height: "18px" }} />
                     Inviter un membre
                   </h3>
                   <form onSubmit={handleInvite} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "#374151", marginBottom: "4px" }}>Prénom</label>
+                        <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "4px" }}>Prénom</label>
                         <input
                           type="text"
                           value={inviteForm.firstName}
@@ -558,7 +558,7 @@ export default function ParametresPage() {
                         />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "#374151", marginBottom: "4px" }}>Nom</label>
+                        <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "4px" }}>Nom</label>
                         <input
                           type="text"
                           value={inviteForm.lastName}
@@ -569,7 +569,7 @@ export default function ParametresPage() {
                       </div>
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "#374151", marginBottom: "4px" }}>Email *</label>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "4px" }}>Email *</label>
                       <input
                         type="email"
                         value={inviteForm.email}
@@ -580,7 +580,7 @@ export default function ParametresPage() {
                       />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "#374151", marginBottom: "4px" }}>Rôle</label>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "4px" }}>Rôle</label>
                       <select
                         value={inviteForm.role}
                         onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value as typeof inviteForm.role }))}
@@ -597,7 +597,7 @@ export default function ParametresPage() {
                         style={{
                           fontSize: "13px",
                           margin: 0,
-                          color: inviteMessage.type === "error" ? "#dc2626" : "#16a34a",
+                          color: inviteMessage.type === "error" ? "var(--danger)" : "var(--success)",
                         }}
                       >
                         {inviteMessage.text}
@@ -612,17 +612,17 @@ export default function ParametresPage() {
               )}
 
               {!canInvite && (
-                <p style={{ fontSize: "14px", color: "#6b7280", marginBottom: "24px" }}>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", marginBottom: "24px" }}>
                   Seuls les propriétaires et managers peuvent inviter de nouveaux membres.
                 </p>
               )}
 
-              <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#374151", margin: "0 0 12px 0" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: "600", color: "var(--ink-2)", margin: "0 0 12px 0" }}>
                 Membres du compte
               </h3>
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ border: "1px solid var(--line)", borderRadius: "2px", overflow: "hidden" }}>
                 {users.length === 0 ? (
-                  <div style={{ padding: "24px", textAlign: "center", color: "#6b7280" }}>
+                  <div style={{ padding: "24px", textAlign: "center", color: "var(--ink-3)" }}>
                     Aucun autre membre pour le moment.
                   </div>
                 ) : (
@@ -635,7 +635,7 @@ export default function ParametresPage() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "14px 16px",
-                          borderBottom: "1px solid #f3f4f6",
+                          borderBottom: "1px solid var(--paper-2)",
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -644,13 +644,13 @@ export default function ParametresPage() {
                               width: "40px",
                               height: "40px",
                               borderRadius: "50%",
-                              backgroundColor: "#e5e7eb",
+                              backgroundColor: "var(--line)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontSize: "14px",
                               fontWeight: "600",
-                              color: "#374151",
+                              color: "var(--ink-2)",
                             }}
                           >
                             {(u.firstName?.[0] || u.email[0]).toUpperCase()}
@@ -660,14 +660,14 @@ export default function ParametresPage() {
                             <p style={{ margin: 0, fontSize: "14px", fontWeight: "500", color: "#0a0a0a" }}>
                               {u.firstName} {u.lastName}
                             </p>
-                            <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#6b7280" }}>
+                            <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--ink-3)" }}>
                               {u.email} • {ROLE_LABELS[u.role] || u.role}
                             </p>
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           {u.id === user?.id ? (
-                            <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>Vous</span>
+                            <span style={{ fontSize: "12px", color: "var(--ink-3)", fontWeight: "500" }}>Vous</span>
                           ) : canManageRoles ? (
                             <>
                               <button
@@ -677,9 +677,9 @@ export default function ParametresPage() {
                                   padding: "6px 12px",
                                   fontSize: "12px",
                                   fontWeight: "500",
-                                  color: "#374151",
-                                  backgroundColor: "#f9fafb",
-                                  border: "1px solid #e5e7eb",
+                                  color: "var(--ink-2)",
+                                  backgroundColor: "var(--paper-2)",
+                                  border: "1px solid var(--line)",
                                   borderRadius: "2px",
                                   cursor: "pointer",
                                 }}
@@ -693,9 +693,9 @@ export default function ParametresPage() {
                                   padding: "6px 12px",
                                   fontSize: "12px",
                                   fontWeight: "500",
-                                  color: "#dc2626",
+                                  color: "var(--danger)",
                                   backgroundColor: "transparent",
-                                  border: "1px solid #dc2626",
+                                  border: "1px solid var(--danger)",
                                   borderRadius: "2px",
                                   cursor: "pointer",
                                 }}
@@ -714,7 +714,7 @@ export default function ParametresPage() {
           )}
 
           {(activeTab === "notifications" || activeTab === "integrations" || activeTab === "billing") && (
-            <div style={{ ...panelStyle, padding: "48px", textAlign: "center", color: "#6b7280" }}>
+            <div style={{ ...panelStyle, padding: "48px", textAlign: "center", color: "var(--ink-3)" }}>
               <p style={{ margin: 0 }}>Cette section sera bientôt disponible.</p>
             </div>
           )}
@@ -725,7 +725,7 @@ export default function ParametresPage() {
                 Sécurité
               </h2>
               <div>
-                <h3 style={{ fontSize: "14px", fontWeight: "500", color: "#374151", margin: "0 0 12px 0" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", margin: "0 0 12px 0" }}>
                   Mot de passe
                 </h3>
                 <button
@@ -733,8 +733,8 @@ export default function ParametresPage() {
                   style={{
                     padding: "12px",
                     backgroundColor: "transparent",
-                    color: "#3b82f6",
-                    border: "1px solid #3b82f6",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
                     borderRadius: "2px",
                     fontSize: "14px",
                     fontWeight: "500",
@@ -778,7 +778,7 @@ export default function ParametresPage() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "600" }}>Changer le rôle</h3>
-                <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "#6b7280" }}>{roleEdit.userName}</p>
+                <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "var(--ink-3)" }}>{roleEdit.userName}</p>
                 <select
                   defaultValue={roleEdit.currentRole}
                   id="role-select"
@@ -789,7 +789,7 @@ export default function ParametresPage() {
                   ))}
                 </select>
                 <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setRoleEdit(null)} disabled={roleSaving} style={{ padding: "8px 16px", border: "1px solid #e5e7eb", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
+                  <button type="button" onClick={() => setRoleEdit(null)} disabled={roleSaving} style={{ padding: "8px 16px", border: "1px solid var(--line)", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
                   <button
                     type="button"
                     disabled={roleSaving}
@@ -832,16 +832,16 @@ export default function ParametresPage() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: "600" }}>Retirer du compte</h3>
-                <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "#6b7280" }}>
+                <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "var(--ink-3)" }}>
                   Êtes-vous sûr de vouloir retirer <strong>{removeConfirm.userName}</strong> du compte ? Il ne pourra plus accéder au tableau de bord.
                 </p>
                 <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setRemoveConfirm(null)} disabled={removeSending} style={{ padding: "8px 16px", border: "1px solid #e5e7eb", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
+                  <button type="button" onClick={() => setRemoveConfirm(null)} disabled={removeSending} style={{ padding: "8px 16px", border: "1px solid var(--line)", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
                   <button
                     type="button"
                     disabled={removeSending}
                     onClick={() => handleRemoveUser(removeConfirm.userId)}
-                    style={{ padding: "8px 16px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "2px", cursor: removeSending ? "not-allowed" : "pointer" }}
+                    style={{ padding: "8px 16px", backgroundColor: "var(--danger)", color: "white", border: "none", borderRadius: "2px", cursor: removeSending ? "not-allowed" : "pointer" }}
                   >
                     {removeSending ? "Suppression…" : "Retirer"}
                   </button>
@@ -897,7 +897,7 @@ export default function ParametresPage() {
                       minLength={8}
                       style={baseInputStyle}
                     />
-                    <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0 0" }}>8+ caractères, 1 majuscule, 1 chiffre</p>
+                    <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "4px 0 0 0" }}>8+ caractères, 1 majuscule, 1 chiffre</p>
                   </div>
                   <div style={{ marginBottom: "16px" }}>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: "500", marginBottom: "4px" }}>Confirmer le nouveau mot de passe</label>
@@ -909,9 +909,9 @@ export default function ParametresPage() {
                       style={baseInputStyle}
                     />
                   </div>
-                  {changePasswordError && <p style={{ color: "#dc2626", fontSize: "13px", margin: "0 0 12px 0" }}>{changePasswordError}</p>}
+                  {changePasswordError && <p style={{ color: "var(--danger)", fontSize: "13px", margin: "0 0 12px 0" }}>{changePasswordError}</p>}
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                    <button type="button" onClick={() => setChangePasswordOpen(false)} disabled={changePasswordSending} style={{ padding: "8px 16px", border: "1px solid #e5e7eb", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
+                    <button type="button" onClick={() => setChangePasswordOpen(false)} disabled={changePasswordSending} style={{ padding: "8px 16px", border: "1px solid var(--line)", borderRadius: "2px", cursor: "pointer" }}>{t("common.cancel")}</button>
                     <button type="submit" disabled={changePasswordSending} style={{ padding: "8px 16px", backgroundColor: "#0a0a0a", color: "white", border: "none", borderRadius: "2px", cursor: changePasswordSending ? "not-allowed" : "pointer" }}>
                       {changePasswordSending ? t("common.saving") : t("parametres.changePassword")}
                     </button>

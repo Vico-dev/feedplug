@@ -590,11 +590,11 @@ export default async function ShopifyGoogleShoppingPage({
   const proofCopy = getProofCopy(locale);
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", color: "#111827" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", color: "var(--ink)" }}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .shopify-lp-shell { font-family: var(--font-geist-sans), sans-serif; }
+            .shopify-lp-shell { font-family: var(--font-sans), sans-serif; }
             .shopify-lp-fade {
               animation: shopifyLpFadeUp .7s ease-out forwards;
             }
@@ -607,7 +607,7 @@ export default async function ShopifyGoogleShoppingPage({
 	            .shopify-lp-card:hover {
 	              transform: translateY(-3px);
 	              box-shadow: 0 16px 48px rgba(15, 23, 42, 0.08);
-	              border-color: #cbd5e1;
+	              border-color: var(--line-strong);
 	            }
 	            .shopify-lp-dashboard {
 	              position: relative;
@@ -704,7 +704,7 @@ export default async function ShopifyGoogleShoppingPage({
 	            position: "relative",
 	            padding: "120px 48px 88px",
 	            background:
-	              "radial-gradient(circle at top right, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(16,185,129,0.12), transparent 24%), #111827",
+	              "radial-gradient(circle at top right, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(16,185,129,0.12), transparent 24%), var(--ink)",
 	            overflow: "hidden",
 	          }}
 	        >
@@ -812,7 +812,7 @@ export default async function ShopifyGoogleShoppingPage({
                       fontSize: 14,
                     }}
                   >
-                    <CheckCircle2 style={{ width: 14, height: 14, color: "#34d399" }} />
+                    <CheckCircle2 style={{ width: 14, height: 14, color: "var(--success)" }} />
                     {item}
                   </span>
                 ))}
@@ -836,7 +836,7 @@ export default async function ShopifyGoogleShoppingPage({
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
                 margin: "0 0 34px",
-                color: "#111827",
+                color: "var(--ink)",
               }}
             >
               {copy.painTitle}
@@ -857,12 +857,12 @@ export default async function ShopifyGoogleShoppingPage({
                   style={{
                     padding: 24,
                     borderRadius: 14,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  <AlertCircle style={{ width: 18, height: 18, color: "#dc2626", marginBottom: 14 }} />
-                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "#475569" }}>{item}</p>
+                  <AlertCircle style={{ width: 18, height: 18, color: "var(--danger)", marginBottom: 14 }} />
+                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-2)" }}>{item}</p>
                 </div>
               ))}
             </div>
@@ -873,9 +873,9 @@ export default async function ShopifyGoogleShoppingPage({
           className="shopify-lp-section"
           style={{
             padding: "88px 48px",
-            backgroundColor: "#f8fafc",
-            borderTop: "1px solid #e5e7eb",
-            borderBottom: "1px solid #e5e7eb",
+            backgroundColor: "var(--paper-2)",
+            borderTop: "1px solid var(--line)",
+            borderBottom: "1px solid var(--line)",
           }}
         >
           <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -885,7 +885,7 @@ export default async function ShopifyGoogleShoppingPage({
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
                 margin: "0 0 14px",
-                color: "#111827",
+                color: "var(--ink)",
               }}
             >
               {copy.methodTitle}
@@ -896,7 +896,7 @@ export default async function ShopifyGoogleShoppingPage({
                 margin: "0 0 34px",
                 fontSize: 17,
                 lineHeight: 1.72,
-                color: "#64748b",
+                color: "var(--ink-3)",
               }}
             >
               {copy.methodSubtitle}
@@ -921,7 +921,7 @@ export default async function ShopifyGoogleShoppingPage({
                       padding: 26,
                       borderRadius: 16,
                       backgroundColor: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid var(--line)",
                     }}
                   >
                     <div
@@ -936,7 +936,7 @@ export default async function ShopifyGoogleShoppingPage({
                         marginBottom: 18,
                       }}
                     >
-                      <Icon style={{ width: 20, height: 20, color: "#1d4ed8" }} />
+                      <Icon style={{ width: 20, height: 20, color: "var(--accent-2)" }} />
                     </div>
                     <h3
                       style={{
@@ -944,12 +944,12 @@ export default async function ShopifyGoogleShoppingPage({
                         fontSize: 18,
                         lineHeight: 1.38,
                         fontWeight: 650,
-                        color: "#0f172a",
+                        color: "var(--ink)",
                       }}
                     >
                       {step.title}
                     </h3>
-                    <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#64748b" }}>{step.body}</p>
+                    <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-3)" }}>{step.body}</p>
                   </div>
                 );
               })}
@@ -974,7 +974,7 @@ export default async function ShopifyGoogleShoppingPage({
                 padding: 30,
                 borderRadius: 18,
                 backgroundColor: "#ffffff",
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
               }}
             >
               <div
@@ -982,14 +982,14 @@ export default async function ShopifyGoogleShoppingPage({
                   width: 46,
                   height: 46,
                   borderRadius: 14,
-                  backgroundColor: "#f3f4f6",
+                  backgroundColor: "var(--paper-2)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: 18,
                 }}
               >
-                <Sparkles style={{ width: 22, height: 22, color: "#111827" }} />
+                <Sparkles style={{ width: 22, height: 22, color: "var(--ink)" }} />
               </div>
               <h2
                 style={{
@@ -997,7 +997,7 @@ export default async function ShopifyGoogleShoppingPage({
                   fontSize: "clamp(24px, 3vw, 32px)",
                   fontWeight: 600,
                   letterSpacing: "-0.03em",
-                  color: "#111827",
+                  color: "var(--ink)",
                 }}
               >
                 {copy.benefitsTitle}
@@ -1005,8 +1005,8 @@ export default async function ShopifyGoogleShoppingPage({
               <div style={{ display: "grid", gap: 14 }}>
                 {copy.benefits.map((item) => (
                   <div key={item} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <CheckCircle2 style={{ width: 18, height: 18, color: "#16a34a", flexShrink: 0, marginTop: 3 }} />
-                    <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#475569" }}>{item}</p>
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)", flexShrink: 0, marginTop: 3 }} />
+                    <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-2)" }}>{item}</p>
                   </div>
                 ))}
               </div>
@@ -1017,9 +1017,9 @@ export default async function ShopifyGoogleShoppingPage({
               style={{
                 padding: 30,
                 borderRadius: 18,
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 color: "#ffffff",
-                border: "1px solid #0f172a",
+                border: "1px solid var(--ink)",
               }}
             >
               <h2
@@ -1032,7 +1032,7 @@ export default async function ShopifyGoogleShoppingPage({
               >
                 {copy.errorsTitle}
               </h2>
-              <p style={{ margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "#cbd5e1" }}>
+              <p style={{ margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "var(--line-strong)" }}>
                 {copy.errorsIntro}
               </p>
               <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 10 }}>
@@ -1050,9 +1050,9 @@ export default async function ShopifyGoogleShoppingPage({
           className="shopify-lp-section"
           style={{
             padding: "88px 48px",
-            backgroundColor: "#f8fafc",
-            borderTop: "1px solid #e5e7eb",
-            borderBottom: "1px solid #e5e7eb",
+            backgroundColor: "var(--paper-2)",
+            borderTop: "1px solid var(--line)",
+            borderBottom: "1px solid var(--line)",
           }}
         >
           <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -1062,12 +1062,12 @@ export default async function ShopifyGoogleShoppingPage({
                 fontSize: "clamp(28px, 4vw, 36px)",
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
-                color: "#111827",
+                color: "var(--ink)",
               }}
             >
               {proofCopy.title}
             </h2>
-            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "#64748b" }}>
+            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "var(--ink-3)" }}>
               {proofCopy.intro}
             </p>
 
@@ -1087,7 +1087,7 @@ export default async function ShopifyGoogleShoppingPage({
                   padding: 30,
                   borderRadius: 18,
                   backgroundColor: "#ffffff",
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--line)",
                 }}
               >
                 <div
@@ -1095,14 +1095,14 @@ export default async function ShopifyGoogleShoppingPage({
                     width: 46,
                     height: 46,
                     borderRadius: 14,
-                    backgroundColor: "#f3f4f6",
+                    backgroundColor: "var(--paper-2)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     marginBottom: 18,
                   }}
                 >
-                  <AlertCircle style={{ width: 22, height: 22, color: "#2563eb" }} />
+                  <AlertCircle style={{ width: 22, height: 22, color: "var(--accent)" }} />
                 </div>
                 <h3
                   style={{
@@ -1110,17 +1110,17 @@ export default async function ShopifyGoogleShoppingPage({
                     fontSize: "clamp(24px, 3vw, 32px)",
                     fontWeight: 600,
                     letterSpacing: "-0.03em",
-                    color: "#111827",
+                    color: "var(--ink)",
                   }}
                 >
                   {proofCopy.detectTitle}
                 </h3>
-                <p style={{ margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "#64748b" }}>
+                <p style={{ margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "var(--ink-3)" }}>
                   {proofCopy.detectIntro}
                 </p>
                 <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 10 }}>
                   {proofCopy.detectItems.map((item) => (
-                    <li key={item} style={{ fontSize: 15, lineHeight: 1.72, color: "#475569" }}>
+                    <li key={item} style={{ fontSize: 15, lineHeight: 1.72, color: "var(--ink-2)" }}>
                       {item}
                     </li>
                   ))}
@@ -1133,18 +1133,18 @@ export default async function ShopifyGoogleShoppingPage({
                   style={{
                     padding: 24,
                     borderRadius: 16,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#dc2626", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--danger)", marginBottom: 12 }}>
                     {proofCopy.beforeTitle}
                   </div>
                   <div style={{ display: "grid", gap: 10 }}>
                     {proofCopy.beforeItems.map((item) => (
                       <div key={item} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <AlertCircle style={{ width: 16, height: 16, color: "#dc2626", flexShrink: 0, marginTop: 4 }} />
-                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#475569" }}>{item}</p>
+                        <AlertCircle style={{ width: 16, height: 16, color: "var(--danger)", flexShrink: 0, marginTop: 4 }} />
+                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-2)" }}>{item}</p>
                       </div>
                     ))}
                   </div>
@@ -1155,8 +1155,8 @@ export default async function ShopifyGoogleShoppingPage({
                   style={{
                     padding: 24,
                     borderRadius: 16,
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #0f172a",
+                    backgroundColor: "var(--ink)",
+                    border: "1px solid var(--ink)",
                   }}
                 >
                   <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5eead4", marginBottom: 12 }}>
@@ -1165,8 +1165,8 @@ export default async function ShopifyGoogleShoppingPage({
                   <div style={{ display: "grid", gap: 10 }}>
                     {proofCopy.afterItems.map((item) => (
                       <div key={item} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <CheckCircle2 style={{ width: 16, height: 16, color: "#34d399", flexShrink: 0, marginTop: 4 }} />
-                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#e2e8f0" }}>{item}</p>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: "var(--success)", flexShrink: 0, marginTop: 4 }} />
+                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--line)" }}>{item}</p>
                       </div>
                     ))}
                   </div>
@@ -1190,17 +1190,17 @@ export default async function ShopifyGoogleShoppingPage({
                   style={{
                     padding: 24,
                     borderRadius: 16,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     backgroundColor: "#ffffff",
                   }}
                 >
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <CheckCircle2 style={{ width: 18, height: 18, color: "#16a34a", flexShrink: 0, marginTop: 4 }} />
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)", flexShrink: 0, marginTop: 4 }} />
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>
                         {proofCopy.gainsTitle}
                       </div>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#475569" }}>{item}</p>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-2)" }}>{item}</p>
                     </div>
                   </div>
                 </div>
@@ -1213,8 +1213,8 @@ export default async function ShopifyGoogleShoppingPage({
           className="shopify-lp-section"
           style={{
             padding: "88px 48px",
-            backgroundColor: "#f8fafc",
-            borderTop: "1px solid #e5e7eb",
+            backgroundColor: "var(--paper-2)",
+            borderTop: "1px solid var(--line)",
           }}
         >
           <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -1224,12 +1224,12 @@ export default async function ShopifyGoogleShoppingPage({
                 fontSize: "clamp(28px, 4vw, 36px)",
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
-                color: "#111827",
+                color: "var(--ink)",
               }}
             >
               {copy.linksTitle}
             </h2>
-            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "#64748b" }}>
+            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "var(--ink-3)" }}>
               {copy.linksIntro}
             </p>
 
@@ -1265,12 +1265,12 @@ export default async function ShopifyGoogleShoppingPage({
                 fontSize: "clamp(28px, 4vw, 36px)",
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
-                color: "#111827",
+                color: "var(--ink)",
               }}
             >
               {faqCopy.title}
             </h2>
-            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "#64748b" }}>
+            <p style={{ maxWidth: 760, margin: "0 0 24px", fontSize: 16, lineHeight: 1.72, color: "var(--ink-3)" }}>
               {faqCopy.intro}
             </p>
 
@@ -1282,14 +1282,14 @@ export default async function ShopifyGoogleShoppingPage({
                   style={{
                     padding: 24,
                     borderRadius: 16,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  <h3 style={{ margin: "0 0 10px", fontSize: 18, lineHeight: 1.45, fontWeight: 650, color: "#0f172a" }}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 18, lineHeight: 1.45, fontWeight: 650, color: "var(--ink)" }}>
                     {item.question}
                   </h3>
-                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#64748b" }}>{item.answer}</p>
+                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-3)" }}>{item.answer}</p>
                 </div>
               ))}
             </div>
@@ -1300,8 +1300,8 @@ export default async function ShopifyGoogleShoppingPage({
           className="shopify-lp-section"
           style={{
             padding: "104px 48px",
-            backgroundColor: "#111827",
-            borderTop: "1px solid #0f172a",
+            backgroundColor: "var(--ink)",
+            borderTop: "1px solid var(--ink)",
           }}
         >
           <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
@@ -1338,7 +1338,7 @@ export default async function ShopifyGoogleShoppingPage({
           style={{
             padding: "56px 48px",
             backgroundColor: "#ffffff",
-            borderTop: "1px solid #f3f4f6",
+            borderTop: "1px solid var(--paper-2)",
           }}
         >
           <div
@@ -1352,8 +1352,8 @@ export default async function ShopifyGoogleShoppingPage({
             }}
           >
             <div style={{ maxWidth: 280 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#111827", marginBottom: 10 }}>FeedPlug</div>
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: "#6b7280" }}>{copy.heroSubtitle}</p>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", marginBottom: 10 }}>FeedPlug</div>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: "var(--ink-3)" }}>{copy.heroSubtitle}</p>
             </div>
 
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
@@ -1384,7 +1384,7 @@ const primaryHeroCtaStyle = {
   padding: "15px 24px",
   borderRadius: 10,
   backgroundColor: "#ffffff",
-  color: "#111827",
+  color: "var(--ink)",
   textDecoration: "none",
   fontSize: 15,
   fontWeight: 600,
@@ -1409,7 +1409,7 @@ const linkCardStyle = {
   gap: 10,
   padding: 24,
   borderRadius: 16,
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--line)",
   backgroundColor: "#ffffff",
   textDecoration: "none",
 } satisfies React.CSSProperties;
@@ -1417,13 +1417,13 @@ const linkCardStyle = {
 const linkCardLabelStyle = {
   fontSize: 14,
   fontWeight: 700,
-  color: "#111827",
+  color: "var(--ink)",
 } satisfies React.CSSProperties;
 
 const linkCardTextStyle = {
   fontSize: 15,
   lineHeight: 1.72,
-  color: "#64748b",
+  color: "var(--ink-3)",
 } satisfies React.CSSProperties;
 
 const primaryDarkCtaStyle = {
@@ -1433,7 +1433,7 @@ const primaryDarkCtaStyle = {
   padding: "15px 24px",
   borderRadius: 10,
   backgroundColor: "#ffffff",
-  color: "#111827",
+  color: "var(--ink)",
   textDecoration: "none",
   fontSize: 15,
   fontWeight: 600,
@@ -1454,7 +1454,7 @@ const secondaryDarkCtaStyle = {
 } satisfies React.CSSProperties;
 
 const footerLinkStyle = {
-  color: "#6b7280",
+  color: "var(--ink-3)",
   textDecoration: "none",
   fontSize: 14,
 } satisfies React.CSSProperties;
@@ -1505,7 +1505,7 @@ function FeedPlugShowcase({ copy }: { copy: ScreenCopy }) {
               marginBottom: 18,
             }}
           >
-            <Sparkles style={{ width: 14, height: 14, color: "#bfdbfe" }} />
+            <Sparkles style={{ width: 14, height: 14, color: "var(--accent-bg)" }} />
             <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(226,232,240,0.7)" }}>
               {copy.panelEyebrow}
             </span>
@@ -1513,20 +1513,20 @@ function FeedPlugShowcase({ copy }: { copy: ScreenCopy }) {
 
           <div className="shopify-lp-showcase-flow">
             <SimpleStep
-              icon={<ShoppingBag style={{ width: 18, height: 18, color: "#bfdbfe" }} />}
+              icon={<ShoppingBag style={{ width: 18, height: 18, color: "var(--accent-bg)" }} />}
               index="01"
               title={copy.sourceLabel}
               meta={copy.sourceMeta}
             />
             <SimpleStep
-              icon={<Sparkles style={{ width: 18, height: 18, color: "#bbf7d0" }} />}
+              icon={<Sparkles style={{ width: 18, height: 18, color: "#BBF7D0" }} />}
               index="02"
               title={copy.optimizeLabel}
               meta={copy.optimizeMeta}
               highlighted
             />
             <SimpleStep
-              icon={<RefreshCw style={{ width: 18, height: 18, color: "#bfdbfe" }} />}
+              icon={<RefreshCw style={{ width: 18, height: 18, color: "var(--accent-bg)" }} />}
               index="03"
               title={copy.exportLabel}
               meta={copy.exportMeta}
@@ -1585,7 +1585,7 @@ function FeedPlugShowcase({ copy }: { copy: ScreenCopy }) {
               >
                 <span
                   className="shopify-lp-dashboard-pulse"
-                  style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: "#34d399" }}
+                  style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: "var(--success)" }}
                 />
                 {copy.readinessLabel}
               </div>
@@ -1656,7 +1656,7 @@ function ResultRow({ label, tone }: { label: string; tone: "blue" | "emerald" | 
     emerald: {
       border: "rgba(52,211,153,0.18)",
       background: "rgba(52,211,153,0.08)",
-      dot: "#34d399",
+      dot: "var(--success)",
     },
     violet: {
       border: "rgba(167,139,250,0.18)",
@@ -1680,7 +1680,7 @@ function ResultRow({ label, tone }: { label: string; tone: "blue" | "emerald" | 
       }}
     >
       <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: colors.dot }} />
-      <span style={{ fontSize: 14, lineHeight: 1.55, color: "#f8fafc" }}>{label}</span>
+      <span style={{ fontSize: 14, lineHeight: 1.55, color: "var(--paper-2)" }}>{label}</span>
     </div>
   );
 }

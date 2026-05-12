@@ -206,7 +206,7 @@ function getChannelLogo(channelKey: string) {
     return <FaGoogle className="h-5 w-5 text-[#4285F4]" aria-hidden />;
   }
   if (channelKey === 'amazon') {
-    return <FaAmazon className="h-5 w-5 text-[#111827]" aria-hidden />;
+    return <FaAmazon className="h-5 w-5 text-[var(--ink)]" aria-hidden />;
   }
   if (channelKey === 'meta') {
     return <FaMeta className="h-5 w-5 text-[#0866FF]" aria-hidden />;
@@ -1117,7 +1117,7 @@ export default function ProductDetailPage() {
       <Card className="mb-6 overflow-hidden border-border/80 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
         <CardContent className="p-0">
           <div className="grid gap-0 xl:grid-cols-[320px_1fr_320px]">
-            <div className="border-b border-border bg-[#fafcfa] p-5 xl:border-b-0 xl:border-r">
+            <div className="border-b border-border bg-[var(--paper)] p-5 xl:border-b-0 xl:border-r">
               <div className="overflow-hidden rounded-xl border border-border bg-background">
                 {item.imageUrl ? (
                   <img
@@ -1216,7 +1216,7 @@ export default function ProductDetailPage() {
               </div>
 
               {descriptionPreview && (
-                <div className="rounded-xl border border-border/80 bg-[#fafcfa] p-4">
+                <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4">
                   <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Résumé marchand</div>
                   <p className="text-sm leading-6 text-foreground">{descriptionPreview}</p>
                 </div>
@@ -1257,17 +1257,17 @@ export default function ProductDetailPage() {
                 </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-[#fafcfa] px-3 py-3">
+                  <div className="rounded-xl border border-border bg-[var(--paper)] px-3 py-3">
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Blocages requis</div>
                     <div className="mt-1 text-lg font-semibold text-foreground">{missingRequiredCount}</div>
                   </div>
-                  <div className="rounded-xl border border-border bg-[#fafcfa] px-3 py-3">
+                  <div className="rounded-xl border border-border bg-[var(--paper)] px-3 py-3">
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground">À enrichir</div>
                     <div className="mt-1 text-lg font-semibold text-foreground">{missingRecommendedCount}</div>
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-xl border border-border bg-[#fafcfa] p-4">
+                <div className="mt-5 rounded-xl border border-border bg-[var(--paper)] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-xs uppercase tracking-wide text-muted-foreground">Prochaine action recommandée</div>
@@ -1375,7 +1375,7 @@ export default function ProductDetailPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-xl border border-border/80 bg-[#fafcfa] p-4">
+              <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Score</div>
                 <div className="mt-1 text-2xl font-semibold text-foreground">{globalScore}/100</div>
               </div>
@@ -1387,7 +1387,7 @@ export default function ProductDetailPage() {
                 <div className="text-xs uppercase tracking-wide text-amber-700">À enrichir</div>
                 <div className="mt-1 text-2xl font-semibold text-amber-900">{missingRecommendedCount}</div>
               </div>
-              <div className="rounded-xl border border-border/80 bg-[#fafcfa] p-4">
+              <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Statut</div>
                 <div className="mt-1 text-base font-semibold text-foreground">{isEligibleGoogle ? 'Prêt à diffuser' : 'À finaliser'}</div>
               </div>
@@ -1395,7 +1395,7 @@ export default function ProductDetailPage() {
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
               <div className="space-y-4">
-                <div className="rounded-xl border border-border/80 bg-[#fcfdfc] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                   <div className="mb-3 text-sm font-semibold text-foreground">Checklist produit</div>
                   {productScore?.qualityDetails ? (
                     <div className="space-y-2">
@@ -1424,11 +1424,11 @@ export default function ProductDetailPage() {
                 </div>
 
                 {recommendationMessages.length > 0 && (
-                  <div className="rounded-xl border border-border/80 bg-[#fcfdfc] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                  <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                     <div className="mb-3 text-sm font-semibold text-foreground">Alertes et conseils</div>
                     <div className="space-y-2">
                       {recommendationMessages.map((rec: RecommendationItem, idx: number) => (
-                        <div key={idx} className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-[#fafcfa] px-3 py-2 text-sm">
+                        <div key={idx} className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-[var(--paper)] px-3 py-2 text-sm">
                           <span className="text-foreground">{rec.message || ''}</span>
                           {typeof rec.field === 'string' && rec.field.length > 0 && (
                             <Button variant="ghost" size="sm" className="h-auto min-h-9 whitespace-normal px-2 py-1 text-left" onClick={() => scrollToField(String(rec.field))}>
@@ -1443,7 +1443,7 @@ export default function ProductDetailPage() {
               </div>
 
               <div className="space-y-4">
-                <div ref={sectionRefs.diffusion} className="rounded-xl border border-border/80 bg-[#fcfdfc] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                <div ref={sectionRefs.diffusion} className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-foreground">Canaux de sortie</div>
                     <Badge variant="outline" className="bg-background">
@@ -1457,7 +1457,7 @@ export default function ProductDetailPage() {
                         className={cn(
                           'rounded-xl border p-4 transition-colors',
                           channel.statusLabel === 'Actif'
-                            ? 'border-border/80 bg-[#fafcfa]'
+                            ? 'border-border/80 bg-[var(--paper)]'
                             : 'border-border/70 bg-slate-50/70 opacity-70 grayscale-[0.18]'
                         )}
                       >
@@ -1529,7 +1529,7 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                <details className="rounded-xl border border-border/80 bg-[#fcfdfc] shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                <details className="rounded-xl border border-border/80 bg-[var(--paper)] shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                   <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground flex items-center justify-between">
                     <span>Voir le détail du score</span>
                     <span className="text-xs text-muted-foreground">{globalScore}/100</span>
@@ -1562,7 +1562,7 @@ export default function ProductDetailPage() {
                         );
                       })}
                     </div>
-                    <div className="rounded-xl border border-border/80 bg-[#fafcfa] p-4">
+                    <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4">
                       <h4 className="mb-2 text-sm font-semibold text-foreground">Évolution du score</h4>
                       {loadingScoreHistory ? (
                         <p className="text-sm text-muted-foreground">Chargement…</p>
@@ -1576,7 +1576,7 @@ export default function ProductDetailPage() {
                           height={180}
                           showGrid={true}
                           showTooltip={true}
-                          colors={[globalScore >= 80 ? '#16a34a' : globalScore >= 60 ? '#d97706' : '#dc2626']}
+                          colors={[globalScore >= 80 ? 'var(--success)' : globalScore >= 60 ? 'var(--warning)' : 'var(--danger)']}
                         />
                       ) : (
                         <p className="text-sm text-muted-foreground">
@@ -1604,7 +1604,7 @@ export default function ProductDetailPage() {
       </Card>
       <div>
       <div className="mb-6 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-border/80 bg-[#fafcfa] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+        <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Champs mappés</div>
           <div className="mt-1 text-2xl font-semibold text-foreground">{mappedFieldCount}</div>
           <p className="mt-1 text-sm text-muted-foreground">Attributs déjà reçus depuis le flux marchand.</p>
@@ -1644,7 +1644,7 @@ export default function ProductDetailPage() {
                 </Button>
               </div>
             ) : (
-              <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[#fafcfa] text-muted-foreground">
+              <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--paper)] text-muted-foreground">
                 <Package className="w-12 h-12" />
               </div>
             )}
@@ -1924,7 +1924,7 @@ export default function ProductDetailPage() {
 
       {/* Tous les champs du mapping + champs supplémentaires */}
       {item && item.feed && (item.feed.mappingJson || item.feed.mappingjson) && Object.keys(item.feed.mappingJson || item.feed.mappingjson || {}).length > 0 && (
-        <details className="mb-6 rounded-xl border border-border/80 bg-[#fcfdfc] shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+        <details className="mb-6 rounded-xl border border-border/80 bg-[var(--paper)] shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-foreground flex items-center justify-between">
             <span>Voir le mapping complet du flux</span>
             <span className="text-xs text-muted-foreground">{mappedFieldCount} champ(s)</span>
@@ -1966,7 +1966,7 @@ export default function ProductDetailPage() {
                     <div className="text-xs uppercase tracking-wide text-red-700">Alertes détectées</div>
                     <div className="mt-1 text-2xl font-semibold text-red-900">{enrichmentAlertsCount}</div>
                   </div>
-                  <div className="rounded-xl border border-border/80 bg-[#fcfdfc] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                  <div className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">Action recommandée</div>
                     <div className="mt-1 text-sm font-semibold text-foreground">
                       {enrichmentOpportunityCount > 0 ? 'Prévisualiser puis appliquer les champs utiles' : 'Rien d’urgent à compléter'}
@@ -1987,7 +1987,7 @@ export default function ProductDetailPage() {
                       const isPreviewOpen = previewEnrichmentField === field;
                       const fieldLabel = field === 'google_product_category' ? 'Catégorie Google' : field === 'description' ? 'Description' : field === 'product_type' ? 'Type de produit' : field;
                       return (
-                        <div key={field} className="rounded-xl border border-border/80 bg-[#fafcfa] p-4 shadow-[0_8px_20px_rgba(15,23,42,0.03)]">
+                        <div key={field} className="rounded-xl border border-border/80 bg-[var(--paper)] p-4 shadow-[0_8px_20px_rgba(15,23,42,0.03)]">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <span className="font-medium text-foreground">{fieldLabel}</span>
                             <div className="flex gap-2">
@@ -2030,7 +2030,7 @@ export default function ProductDetailPage() {
                   </div>
                 )}
                 {enrichmentAnalysis.alertsCount > 0 && (
-                  <details className="rounded-xl border border-border/80 bg-[#fcfdfc] shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
+                  <details className="rounded-xl border border-border/80 bg-[var(--paper)] shadow-[0_8px_24px_rgba(15,23,42,0.03)]">
                     <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground flex items-center justify-between">
                       <span>Voir les alertes détectées</span>
                       <span className="text-xs text-muted-foreground">{enrichmentAlertsCount}</span>

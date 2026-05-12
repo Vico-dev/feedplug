@@ -9,13 +9,15 @@ const baseStyle: React.CSSProperties = {
   gap: 8,
   minHeight: "var(--btn-height)",
   padding: "0 var(--btn-padding-x)",
+  fontFamily: "var(--font-sans)",
   fontSize: 14,
   fontWeight: 600,
+  letterSpacing: "-0.005em",
   border: "none",
-  borderRadius: 12,
+  borderRadius: "var(--r-lg)",
   cursor: "pointer",
   whiteSpace: "nowrap",
-  transition: "all 0.2s ease",
+  transition: "background-color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease), color var(--d-fast) var(--ease)",
 };
 
 export function PageButtonPrimary({
@@ -46,15 +48,13 @@ export function PageButtonPrimary({
       onMouseEnter={(e) => {
         if (!disabled) {
           e.currentTarget.style.backgroundColor = "var(--btn-primary-bg-hover)";
-          e.currentTarget.style.transform = "translateY(-1px)";
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)";
-        e.currentTarget.style.transform = "translateY(0)";
       }}
       onFocus={(e) => {
-        e.currentTarget.style.outline = "2px solid var(--spinner-color)";
+        e.currentTarget.style.outline = "2px solid var(--accent)";
         e.currentTarget.style.outlineOffset = "2px";
       }}
       onBlur={(e) => {
@@ -97,18 +97,16 @@ export function PageButtonSecondary({
       onMouseEnter={(e) => {
         if (!disabled) {
           e.currentTarget.style.backgroundColor = "var(--btn-secondary-bg-hover)";
-          e.currentTarget.style.borderColor = "var(--app-border-strong)";
-          e.currentTarget.style.transform = "translateY(-1px)";
+          e.currentTarget.style.borderColor = "var(--line-strong)";
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = "var(--btn-secondary-bg)";
         e.currentTarget.style.color = "var(--btn-secondary-color)";
-        e.currentTarget.style.borderColor = "var(--app-border)";
-        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.borderColor = "var(--line)";
       }}
       onFocus={(e) => {
-        e.currentTarget.style.outline = "2px solid var(--btn-primary-bg)";
+        e.currentTarget.style.outline = "2px solid var(--accent)";
         e.currentTarget.style.outlineOffset = "2px";
       }}
       onBlur={(e) => {
@@ -139,22 +137,20 @@ export function PageButtonDanger({
       disabled={disabled}
       style={{
         ...baseStyle,
-        backgroundColor: "#dc2626",
-        color: "#fff",
-        boxShadow: "var(--app-shadow-sm)",
+        backgroundColor: "var(--danger)",
+        color: "#ffffff",
+        boxShadow: "var(--sh-sm)",
         opacity: disabled ? 0.6 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
         ...style,
       }}
       onMouseEnter={(e) => {
         if (!disabled) {
-          e.currentTarget.style.backgroundColor = "#b91c1c";
-          e.currentTarget.style.transform = "translateY(-1px)";
+          e.currentTarget.style.backgroundColor = "#8C1B12";
         }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "#dc2626";
-        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.backgroundColor = "var(--danger)";
       }}
       {...rest}
     >

@@ -38,7 +38,7 @@ export default function AuthPageShell({
         style={{
           minHeight: "calc(100vh - 84px)",
           background:
-            "radial-gradient(circle at top left, rgba(148,163,184,0.12), transparent 22%), linear-gradient(180deg, #f8fafc 0%, #ffffff 30%)",
+            "radial-gradient(circle at top left, rgba(148,163,184,0.12), transparent 22%), linear-gradient(180deg, var(--paper-2) 0%, #ffffff 30%)",
           padding: "44px 24px 80px",
         }}
       >
@@ -59,9 +59,9 @@ export default function AuthPageShell({
                 gap: 8,
                 padding: "8px 12px",
                 borderRadius: 999,
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
+                background: "var(--paper-2)",
+                border: "1px solid var(--line)",
+                color: "var(--ink-2)",
                 fontSize: 13,
                 fontWeight: 700,
                 marginBottom: 18,
@@ -75,7 +75,7 @@ export default function AuthPageShell({
                 fontSize: "clamp(2.2rem, 4vw, 4rem)",
                 lineHeight: 0.97,
                 letterSpacing: "-0.055em",
-                color: "#0f172a",
+                color: "var(--ink)",
                 maxWidth: 640,
               }}
             >
@@ -84,7 +84,7 @@ export default function AuthPageShell({
             <p
               style={{
                 margin: "22px 0 0",
-                color: "#475569",
+                color: "var(--ink-2)",
                 fontSize: 17,
                 lineHeight: 1.75,
                 maxWidth: 640,
@@ -108,9 +108,9 @@ export default function AuthPageShell({
                     gap: 12,
                     padding: "15px 16px",
                     borderRadius: 18,
-                    background: "#fbfdff",
-                    border: "1px solid #e2e8f0",
-                    color: "#334155",
+                    background: "var(--paper)",
+                    border: "1px solid var(--line)",
+                    color: "var(--ink-2)",
                     lineHeight: 1.65,
                   }}
                 >
@@ -119,7 +119,7 @@ export default function AuthPageShell({
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      background: "#111827",
+                      background: "var(--ink)",
                       marginTop: 10,
                       flexShrink: 0,
                     }}

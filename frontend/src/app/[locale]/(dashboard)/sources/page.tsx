@@ -211,9 +211,9 @@ function getSourceReadiness(source: FeedSource, primaryFeed?: Feed) {
 
   if (!primaryFeed) {
     return {
-      tone: '#b45309',
-      bg: '#fffbeb',
-      border: '#fcd34d',
+      tone: 'var(--warning)',
+      bg: 'var(--warning-bg)',
+      border: 'var(--warning)',
       label: 'Flux à finaliser',
       text: 'Aucun flux n’est encore associé à cette source. Reprenez la configuration avant la première synchro.',
       canSync: false,
@@ -224,8 +224,8 @@ function getSourceReadiness(source: FeedSource, primaryFeed?: Feed) {
 
   if (mappingCount === 0 || !syncCoverage.hasMinimumSyncFields) {
     return {
-      tone: '#b91c1c',
-      bg: '#fef2f2',
+      tone: 'var(--danger)',
+      bg: 'var(--danger-bg)',
       border: '#fecaca',
       label: 'Mapping requis',
       text: mappingCount === 0
@@ -237,9 +237,9 @@ function getSourceReadiness(source: FeedSource, primaryFeed?: Feed) {
 
   if (source.status !== 'ACTIVE') {
     return {
-      tone: '#92400e',
-      bg: '#fffbeb',
-      border: '#fcd34d',
+      tone: 'var(--warning)',
+      bg: 'var(--warning-bg)',
+      border: 'var(--warning)',
       label: 'Source en pause',
       text: `Le mapping est prêt (${mappingCount} champ(s)), mais la source est actuellement en pause.`,
       canSync: true,
@@ -247,9 +247,9 @@ function getSourceReadiness(source: FeedSource, primaryFeed?: Feed) {
   }
 
   return {
-    tone: '#166534',
-    bg: '#f0fdf4',
-    border: '#bbf7d0',
+    tone: 'var(--success)',
+    bg: 'var(--success-bg)',
+    border: '#BBF7D0',
     label: hasAttempt ? 'Prête à resynchroniser' : 'Prête pour la première synchro',
     text: `Flux prêt avec ${mappingCount} champ(s) mappé(s). Vous pouvez synchroniser maintenant ou ouvrir le catalogue.`,
     canSync: true,
@@ -267,26 +267,26 @@ function getSourceAttemptBadge(source: FeedSource, feed?: Feed, locale = 'fr-FR'
   if (!latestAttemptAt && !runStatus) {
     return {
       label: 'Aucune tentative',
-      tone: '#475569',
-      bg: '#f8fafc',
-      border: '#e2e8f0',
+      tone: 'var(--ink-2)',
+      bg: 'var(--paper-2)',
+      border: 'var(--line)',
     };
   }
 
   if (runStatus === 'FAILED') {
     return {
       label: `Dernière tentative: ${formatSourceDate(latestAttemptAt, locale)}`,
-      tone: '#b91c1c',
-      bg: '#fef2f2',
+      tone: 'var(--danger)',
+      bg: 'var(--danger-bg)',
       border: '#fecaca',
     };
   }
 
   return {
     label: `Dernière tentative: ${formatSourceDate(latestAttemptAt, locale)}`,
-    tone: '#1d4ed8',
-    bg: '#eff6ff',
-    border: '#bfdbfe',
+    tone: 'var(--accent-2)',
+    bg: 'var(--accent-bg)',
+    border: 'var(--accent-bg)',
   };
 }
 
@@ -303,8 +303,8 @@ function getLatestRunSummary(feed?: Feed, locale = 'fr-FR') {
 
   if (run.status === 'FAILED') {
     return {
-      tone: '#b91c1c',
-      bg: '#fef2f2',
+      tone: 'var(--danger)',
+      bg: 'var(--danger-bg)',
       border: '#fecaca',
       label: 'Dernière synchro en erreur',
       text: run.errorMessage
@@ -315,9 +315,9 @@ function getLatestRunSummary(feed?: Feed, locale = 'fr-FR') {
 
   if (changed > 0) {
     return {
-      tone: '#166534',
-      bg: '#f0fdf4',
-      border: '#bbf7d0',
+      tone: 'var(--success)',
+      bg: 'var(--success-bg)',
+      border: '#BBF7D0',
       label: 'Dernière synchro utile',
       text: `${inserted} importé(s), ${updated} mis à jour • ${finishedAt}`,
     };
@@ -325,18 +325,18 @@ function getLatestRunSummary(feed?: Feed, locale = 'fr-FR') {
 
   if (fetched > 0 || skipped > 0) {
     return {
-      tone: '#1d4ed8',
-      bg: '#eff6ff',
-      border: '#bfdbfe',
+      tone: 'var(--accent-2)',
+      bg: 'var(--accent-bg)',
+      border: 'var(--accent-bg)',
       label: 'Dernière synchro sans changement',
       text: `${fetched} ligne(s) lue(s), ${skipped} ignorée(s) • ${finishedAt}`,
     };
   }
 
   return {
-    tone: '#475569',
-    bg: '#f8fafc',
-    border: '#cbd5e1',
+    tone: 'var(--ink-2)',
+    bg: 'var(--paper-2)',
+    border: 'var(--line-strong)',
     label: 'Dernière synchro',
     text: finishedAt,
   };
@@ -1017,9 +1017,9 @@ export default function SourcesPage() {
           padding: '14px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: '500',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxWidth: '480px', maxHeight: '85vh',
           display: 'flex', alignItems: 'flex-start', gap: '10px',
-          backgroundColor: toast.type === 'success' ? '#f0fdf4' : toast.type === 'error' ? '#fef2f2' : '#eff6ff',
-          border: `1px solid ${toast.type === 'success' ? '#bbf7d0' : toast.type === 'error' ? '#fecaca' : '#bfdbfe'}`,
-          color: toast.type === 'success' ? '#166534' : toast.type === 'error' ? '#991b1b' : '#1e40af',
+          backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : toast.type === 'error' ? 'var(--danger-bg)' : 'var(--accent-bg)',
+          border: `1px solid ${toast.type === 'success' ? '#BBF7D0' : toast.type === 'error' ? '#fecaca' : 'var(--accent-bg)'}`,
+          color: toast.type === 'success' ? 'var(--success)' : toast.type === 'error' ? 'var(--danger)' : 'var(--accent-2)',
           animation: 'fadeIn 0.3s ease'
         }}>
           {toast.type === 'success' ? <CheckCircle style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: 2 }} /> :
@@ -1049,34 +1049,34 @@ export default function SourcesPage() {
             label="Sources connectees"
             value={loading ? '...' : totalSources}
             hint={!loading && activeSources > 0 ? `${activeSources} active${activeSources > 1 ? 's' : ''}` : 'Aucune source active pour le moment'}
-            accent="#0f766e"
+            accent="#2A6FE8"
           />
           <DashboardStatCard
             icon={<RefreshCw size={20} />}
             label="Prêtes à synchroniser"
             value={loading ? '...' : sourcesReadyToSync}
             hint={loading ? '...' : sourcesNeedingMapping > 0 ? `${sourcesNeedingMapping} mapping(s) à compléter` : 'Toutes les sources configurées sont prêtes'}
-            accent="#2563eb"
+            accent="var(--accent)"
           />
           <DashboardStatCard
             icon={<Layers size={20} />}
             label="Sources secondaires"
             value={Object.values(enrichmentSourcesByFeed).reduce((sum, list) => sum + list.length, 0)}
             hint="Attributs additionnels relies au catalogue principal"
-            accent="#d97706"
+            accent="var(--warning)"
           />
         </DashboardStatGrid>
 
         <PageCard style={{ padding: '20px 22px', border: '1px solid rgba(226,232,240,0.9)', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
           <div style={{ display: 'flex', flexDirection: isCompactViewport ? 'column' : 'row', alignItems: isCompactViewport ? 'flex-start' : 'center', justifyContent: 'space-between', gap: '16px' }}>
             <div style={{ maxWidth: '760px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#64748b', marginBottom: '10px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: '10px' }}>
                 Workflow source
               </div>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
                 Connectez une boutique ou un fichier, validez le mapping puis synchronisez le catalogue.
               </div>
-              <div style={{ fontSize: '14px', lineHeight: 1.6, color: '#64748b' }}>
+              <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--ink-3)' }}>
                 Le parcours recommandé reste simple : connexion, analyse, mapping, puis première synchronisation.
               </div>
             </div>
@@ -1157,7 +1157,7 @@ export default function SourcesPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: sourceFeeds.length > 0 && isExpanded ? '16px' : '0' }}>
                   <div style={{ flex: 1, minWidth: '260px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{source.name}</h3>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>{source.name}</h3>
                       <StatusBadge variant={source.status === 'ACTIVE' ? 'success' : 'error'}>
                         {source.status === 'ACTIVE' ? 'Actif' : 'En pause'}
                       </StatusBadge>
@@ -1166,9 +1166,9 @@ export default function SourcesPage() {
                           style={{
                             padding: '5px 10px',
                             borderRadius: '999px',
-                            backgroundColor: '#eff6ff',
-                            border: '1px solid #bfdbfe',
-                            color: '#1d4ed8',
+                            backgroundColor: 'var(--accent-bg)',
+                            border: '1px solid var(--accent-bg)',
+                            color: 'var(--accent-2)',
                             fontSize: '12px',
                             fontWeight: 700,
                             display: 'inline-flex',
@@ -1181,16 +1181,16 @@ export default function SourcesPage() {
                         </span>
                       )}
                       {sourceFeeds.length > 0 && (
-                        <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                        <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                           {sourceFeeds.length} flux
                         </span>
                       )}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
-                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                         {source.connector}
                       </span>
-                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                         {formatSourceFrequency(source.defaultFreq)}
                       </span>
                       <span
@@ -1207,7 +1207,7 @@ export default function SourcesPage() {
                         {attemptBadge.label}
                       </span>
                     </div>
-                    <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+                    <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                       {sourceFeeds.length > 0
                         ? 'Le flux principal est déjà relié à cette source. Vous pouvez compléter le mapping, synchroniser ou ouvrir le catalogue.'
                         : 'Terminez la configuration pour créer le premier flux exploitable depuis cette source.'}
@@ -1221,7 +1221,7 @@ export default function SourcesPage() {
                         style={{
                           padding: '8px 12px',
                           backgroundColor: '#ffffff',
-                          border: '1px solid #e5e7eb',
+                          border: '1px solid var(--line)',
                           borderRadius: '10px',
                           cursor: 'pointer',
                           fontSize: '14px',
@@ -1241,7 +1241,7 @@ export default function SourcesPage() {
                           disabled={isSyncing}
                           style={{
                           padding: '8px 12px',
-                          backgroundColor: isSyncing ? '#1d4ed8' : '#0a0a0a',
+                          backgroundColor: isSyncing ? 'var(--accent-2)' : '#0a0a0a',
                           border: 'none',
                           borderRadius: '10px',
                           cursor: isSyncing ? 'not-allowed' : 'pointer',
@@ -1270,7 +1270,7 @@ export default function SourcesPage() {
                         style={{
                           padding: '8px 12px',
                           backgroundColor: '#ffffff',
-                          border: '1px solid #e5e7eb',
+                          border: '1px solid var(--line)',
                           borderRadius: '10px',
                           cursor: 'pointer',
                           fontSize: '14px',
@@ -1293,7 +1293,7 @@ export default function SourcesPage() {
                         borderRadius: '10px',
                         cursor: 'pointer',
                         fontSize: '14px',
-                        color: '#dc2626',
+                        color: 'var(--danger)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px'
@@ -1319,7 +1319,7 @@ export default function SourcesPage() {
                         style={{
                         padding: '8px 12px',
                         backgroundColor: '#ffffff',
-                        border: '1px solid #e5e7eb',
+                        border: '1px solid var(--line)',
                         borderRadius: '10px',
                         cursor: 'pointer',
                         fontSize: '14px'
@@ -1340,9 +1340,9 @@ export default function SourcesPage() {
                   <div style={{
                     padding: '12px 14px',
                     borderRadius: '12px',
-                    border: `1px solid ${isSyncing ? '#bfdbfe' : sourceGuidance.border}`,
-                    backgroundColor: isSyncing ? '#eff6ff' : sourceGuidance.bg,
-                    color: isSyncing ? '#1d4ed8' : sourceGuidance.tone
+                    border: `1px solid ${isSyncing ? 'var(--accent-bg)' : sourceGuidance.border}`,
+                    backgroundColor: isSyncing ? 'var(--accent-bg)' : sourceGuidance.bg,
+                    color: isSyncing ? 'var(--accent-2)' : sourceGuidance.tone
                   }}>
                     <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
                       {isSyncing ? 'Synchronisation en cours' : sourceGuidance.label}
@@ -1374,24 +1374,24 @@ export default function SourcesPage() {
 
                 {/* Détails du flux (expandable) */}
                 {isExpanded && sourceFeeds.length > 0 && (
-                  <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                  <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
                     {sourceFeeds.map(feed => {
                       const enrichmentList = enrichmentSourcesByFeed[feed.id] || [];
                       return (
-                        <div key={feed.id} style={{ padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', marginBottom: '12px', border: '1px solid #e2e8f0' }}>
+                        <div key={feed.id} style={{ padding: '14px', backgroundColor: 'var(--paper-2)', borderRadius: '12px', marginBottom: '12px', border: '1px solid var(--line)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
                             <div>
-                              <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '4px' }}>
+                              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)', marginBottom: '4px' }}>
                                 {feed.name}
                               </div>
-                              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                                 Mapping: {Object.keys(feed.mappingJson || {}).length} champs
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <button
                                 onClick={() => handleOpenEditMapping(source, feed)}
-                                style={{ padding: '6px 10px', fontSize: '12px', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                style={{ padding: '6px 10px', fontSize: '12px', backgroundColor: 'white', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                               >
                                 <Settings style={{ width: '12px', height: '12px' }} />
                                 Mapping
@@ -1406,15 +1406,15 @@ export default function SourcesPage() {
                             </div>
                           </div>
                           {enrichmentList.length > 0 && (
-                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e5e7eb' }}>
-                              <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '6px' }}>
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
+                              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '6px' }}>
                                 Sources secondaires ({enrichmentList.length})
                               </div>
                               {enrichmentList.map(es => (
                                 <div key={es.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', backgroundColor: 'white', borderRadius: '8px', marginBottom: '6px', fontSize: '13px', gap: '12px', flexWrap: 'wrap' }}>
                                   <div>
                                     <span style={{ fontWeight: '500' }}>{es.name}</span>
-                                    <span style={{ color: '#6b7280', marginLeft: '8px' }}>
+                                    <span style={{ color: 'var(--ink-3)', marginLeft: '8px' }}>
                                       {Object.keys(es.mappingJson || {}).length} champs • {es.lastSyncAt ? `Sync: ${new Date(es.lastSyncAt).toLocaleDateString('fr-FR')}` : 'Jamais sync'}
                                     </span>
                                   </div>
@@ -1422,13 +1422,13 @@ export default function SourcesPage() {
                                     <button
                                       onClick={() => handleApplyEnrichment(feed.id)}
                                       disabled={applyingEnrichment === feed.id}
-                                      style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: applyingEnrichment === feed.id ? 'not-allowed' : 'pointer', backgroundColor: 'white' }}
+                                      style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid var(--line)', borderRadius: '6px', cursor: applyingEnrichment === feed.id ? 'not-allowed' : 'pointer', backgroundColor: 'white' }}
                                     >
                                       {applyingEnrichment === feed.id ? '…' : 'Appliquer'}
                                     </button>
                                     <button
                                       onClick={() => setEnrichmentSourceToDelete(es)}
-                                      style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #fecaca', color: '#dc2626', borderRadius: '6px', cursor: 'pointer', backgroundColor: 'white' }}
+                                      style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #fecaca', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', backgroundColor: 'white' }}
                                     >
                                       Supprimer
                                     </button>
@@ -1469,9 +1469,9 @@ export default function SourcesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#111827', margin: 0 }}>Sélectionnez un connecteur</h2>
+              <h2 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>Sélectionnez un connecteur</h2>
               <button onClick={() => resetModal()} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X style={{ width: '24px', height: '24px', color: '#6b7280' }} />
+                <X style={{ width: '24px', height: '24px', color: 'var(--ink-3)' }} />
               </button>
             </div>
 
@@ -1483,26 +1483,26 @@ export default function SourcesPage() {
                     key={connector.id}
                     onClick={() => connector.available && setSelectedConnector(connector.id)}
                     style={{
-                      border: '2px solid #e5e7eb',
+                      border: '2px solid var(--line)',
                       borderRadius: '8px',
                       padding: '20px',
                       cursor: connector.available ? 'pointer' : 'not-allowed',
                       opacity: connector.available ? 1 : 0.5,
-                      backgroundColor: connector.available ? 'white' : '#f9fafb',
+                      backgroundColor: connector.available ? 'white' : 'var(--paper-2)',
                       transition: 'all 0.2s',
                       position: 'relative'
                     }}
                   >
                     {!connector.available && (
-                      <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: '#fbbf24', color: '#78350f', fontSize: '10px', fontWeight: '600', padding: '4px 8px', borderRadius: '4px' }}>
+                      <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'var(--warning)', color: '#78350f', fontSize: '10px', fontWeight: '600', padding: '4px 8px', borderRadius: '4px' }}>
                         Bientôt
                       </div>
                     )}
-                    <Icon style={{ width: '32px', height: '32px', color: connector.available ? '#0a0a0a' : '#9ca3af', marginBottom: '12px' }} />
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: connector.available ? '#111827' : '#9ca3af', marginBottom: '4px' }}>
+                    <Icon style={{ width: '32px', height: '32px', color: connector.available ? '#0a0a0a' : 'var(--ink-4)', marginBottom: '12px' }} />
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: connector.available ? 'var(--ink)' : 'var(--ink-4)', marginBottom: '4px' }}>
                       {connector.name}
                     </h3>
-                    <p style={{ fontSize: '13px', color: connector.available ? '#6b7280' : '#9ca3af', margin: 0 }}>
+                    <p style={{ fontSize: '13px', color: connector.available ? 'var(--ink-3)' : 'var(--ink-4)', margin: 0 }}>
                       {connector.description}
                     </p>
                   </div>
@@ -1523,8 +1523,8 @@ export default function SourcesPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#111827', margin: 0 }}>Connecter Shopify</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Connexion OAuth en un clic pour importer vos produits</p>
+                <h2 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>Connecter Shopify</h2>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginTop: '4px' }}>Connexion OAuth en un clic pour importer vos produits</p>
               </div>
               <button onClick={() => resetModal()} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X style={{ width: '24px', height: '24px' }} />
@@ -1533,12 +1533,12 @@ export default function SourcesPage() {
             <div style={{ marginBottom: '16px' }}>
               <button
                 onClick={() => { setSelectedConnector(null); setShopifyError(null); }}
-                style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#6b7280', marginBottom: '20px' }}
+                style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--ink-3)', marginBottom: '20px' }}
               >
                 <ArrowLeft style={{ width: '14px', height: '14px' }} />
                 Retour
               </button>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                 Nom de votre boutique Shopify
               </label>
               <input
@@ -1549,25 +1549,25 @@ export default function SourcesPage() {
                 style={{
                   width: '100%',
                   padding: '12px',
-                  border: shopifyError ? '2px solid #ef4444' : '1px solid #e5e7eb',
+                  border: shopifyError ? '2px solid var(--danger)' : '1px solid var(--line)',
                   borderRadius: '6px',
                   fontSize: '14px',
                   outline: 'none'
                 }}
               />
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '6px' }}>
                 Exemple : vous pouvez saisir ma-boutique, ma-boutique.myshopify.com ou l’URL directe de la boutique
               </p>
             </div>
             {shopifyError && (
-              <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: '#dc2626', fontSize: '14px', marginBottom: '16px' }}>
+              <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: 'var(--danger)', fontSize: '14px', marginBottom: '16px' }}>
                 {shopifyError}
               </div>
             )}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => resetModal()}
-                style={{ padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', backgroundColor: 'white', color: '#6b7280' }}
+                style={{ padding: '10px 20px', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', backgroundColor: 'white', color: 'var(--ink-3)' }}
               >
                 Annuler
               </button>
@@ -1576,7 +1576,7 @@ export default function SourcesPage() {
                 disabled={shopifyConnecting || !shopifyShopName.trim()}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: shopifyConnecting || !shopifyShopName.trim() ? '#9ca3af' : '#0a0a0a',
+                  backgroundColor: shopifyConnecting || !shopifyShopName.trim() ? 'var(--ink-4)' : '#0a0a0a',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -1614,8 +1614,8 @@ export default function SourcesPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#111827', margin: 0 }}>Connecter PrestaShop</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Connexion via URL de boutique et clé API webservice</p>
+                <h2 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>Connecter PrestaShop</h2>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginTop: '4px' }}>Connexion via URL de boutique et clé API webservice</p>
               </div>
               <button onClick={() => resetModal()} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X style={{ width: '24px', height: '24px' }} />
@@ -1624,7 +1624,7 @@ export default function SourcesPage() {
 
             <button
               onClick={() => { setSelectedConnector(null); setModalError(null); }}
-              style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#6b7280', marginBottom: '20px' }}
+              style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--ink-3)', marginBottom: '20px' }}
             >
               <ArrowLeft style={{ width: '14px', height: '14px' }} />
               Retour
@@ -1632,7 +1632,7 @@ export default function SourcesPage() {
 
             <div style={{ display: 'grid', gap: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                   Nom de la source
                 </label>
                 <input
@@ -1640,12 +1640,12 @@ export default function SourcesPage() {
                   value={sourceName}
                   onChange={(e) => setSourceName(e.target.value)}
                   placeholder="Catalogue PrestaShop principal"
-                  style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                  style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                   URL de la boutique
                 </label>
                 <input
@@ -1653,12 +1653,12 @@ export default function SourcesPage() {
                   value={prestashopShopUrl}
                   onChange={(e) => setPrestashopShopUrl(e.target.value)}
                   placeholder="https://ma-boutique.com"
-                  style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                  style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                   Clé API webservice
                 </label>
                 <input
@@ -1666,16 +1666,16 @@ export default function SourcesPage() {
                   value={prestashopApiKey}
                   onChange={(e) => setPrestashopApiKey(e.target.value)}
                   placeholder="Votre clé API PrestaShop"
-                  style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                  style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', lineHeight: 1.5 }}>
+                <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '6px', lineHeight: 1.5 }}>
                   Activez le webservice PrestaShop et autorisez au minimum la lecture sur la ressource produits.
                 </p>
               </div>
             </div>
 
             {modalError && (
-              <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: '#dc2626', fontSize: '14px', marginTop: '16px' }}>
+              <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: 'var(--danger)', fontSize: '14px', marginTop: '16px' }}>
                 {modalError}
               </div>
             )}
@@ -1683,7 +1683,7 @@ export default function SourcesPage() {
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
               <button
                 onClick={() => resetModal()}
-                style={{ padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', backgroundColor: 'white', color: '#6b7280' }}
+                style={{ padding: '10px 20px', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', backgroundColor: 'white', color: 'var(--ink-3)' }}
               >
                 Annuler
               </button>
@@ -1692,7 +1692,7 @@ export default function SourcesPage() {
                 disabled={creatingSource || !sourceName.trim() || !prestashopShopUrl.trim() || !prestashopApiKey.trim()}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: (creatingSource || !sourceName.trim() || !prestashopShopUrl.trim() || !prestashopApiKey.trim()) ? '#9ca3af' : '#0a0a0a',
+                  backgroundColor: (creatingSource || !sourceName.trim() || !prestashopShopUrl.trim() || !prestashopApiKey.trim()) ? 'var(--ink-4)' : '#0a0a0a',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -1717,18 +1717,18 @@ export default function SourcesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header avec bouton retour */}
-            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: isCompactViewport ? 'flex-start' : 'center', gap: '12px', flexWrap: 'wrap', minWidth: 0 }}>
                 <button 
                   onClick={() => { setSelectedConnector(null); setCsvAnalysis(null); setModalError(null); }}
-                  style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#6b7280' }}
+                  style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--ink-3)' }}
                 >
                   <ArrowLeft style={{ width: '14px', height: '14px' }} />
                   Retour
                 </button>
                 <div>
-                  <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#111827', margin: 0 }}>Import CSV/XML</h2>
-                  <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Importez via fichier ou URL publique</p>
+                  <h2 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>Import CSV/XML</h2>
+                  <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginTop: '4px' }}>Importez via fichier ou URL publique</p>
                 </div>
               </div>
               <button onClick={() => resetModal()} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -1750,8 +1750,8 @@ export default function SourcesPage() {
                     <div
                       key={step.id}
                       style={{
-                        border: `1px solid ${isActive ? '#93c5fd' : isDone ? '#bbf7d0' : '#e5e7eb'}`,
-                        backgroundColor: isActive ? '#eff6ff' : isDone ? '#f0fdf4' : '#f9fafb',
+                        border: `1px solid ${isActive ? '#93c5fd' : isDone ? '#BBF7D0' : 'var(--line)'}`,
+                        backgroundColor: isActive ? 'var(--accent-bg)' : isDone ? 'var(--success-bg)' : 'var(--paper-2)',
                         borderRadius: '10px',
                         padding: '14px'
                       }}
@@ -1766,21 +1766,21 @@ export default function SourcesPage() {
                           justifyContent: 'center',
                           fontSize: '12px',
                           fontWeight: '700',
-                          backgroundColor: isDone ? '#16a34a' : isActive ? '#2563eb' : '#e5e7eb',
-                          color: isDone || isActive ? '#ffffff' : '#6b7280'
+                          backgroundColor: isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--line)',
+                          color: isDone || isActive ? '#ffffff' : 'var(--ink-3)'
                         }}>
                           {isDone ? '✓' : step.id}
                         </div>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827' }}>{step.title}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ink)' }}>{step.title}</div>
                       </div>
-                      <div style={{ fontSize: '12px', lineHeight: 1.45, color: '#6b7280' }}>{step.description}</div>
+                      <div style={{ fontSize: '12px', lineHeight: 1.45, color: 'var(--ink-3)' }}>{step.description}</div>
                     </div>
                   );
                 })}
               </div>
 
               <div style={{
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 backgroundColor: '#fafafa',
                 borderRadius: '10px',
                 padding: '14px 16px',
@@ -1792,22 +1792,22 @@ export default function SourcesPage() {
                 flexWrap: 'wrap'
               }}>
                 <div>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                     Étape en cours
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--ink)', marginBottom: '2px' }}>
                     {csvSteps[csvCurrentStep - 1]?.title}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#6b7280' }}>{csvNextAction}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>{csvNextAction}</div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                   {csvAnalysisReady ? 'Analyse prête' : 'Création bloquée tant que le fichier n’est pas analysé'}
                 </div>
               </div>
 
               {/* Nom de la source */}
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                   Nom de la source *
                 </label>
                 <input
@@ -1815,7 +1815,7 @@ export default function SourcesPage() {
                   value={sourceName}
                   onChange={(e) => setSourceName(e.target.value)}
                   placeholder="Ex: Catalogue principal"
-                  style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                  style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                 />
               </div>
 
@@ -1826,8 +1826,8 @@ export default function SourcesPage() {
                   style={{
                     padding: '8px 16px',
                     backgroundColor: uploadMode === 'file' ? '#0a0a0a' : 'white',
-                    color: uploadMode === 'file' ? 'white' : '#6b7280',
-                    border: '1px solid #e5e7eb',
+                    color: uploadMode === 'file' ? 'white' : 'var(--ink-3)',
+                    border: '1px solid var(--line)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px'
@@ -1841,8 +1841,8 @@ export default function SourcesPage() {
                   style={{
                     padding: '8px 16px',
                     backgroundColor: uploadMode === 'url' ? '#0a0a0a' : 'white',
-                    color: uploadMode === 'url' ? 'white' : '#6b7280',
-                    border: '1px solid #e5e7eb',
+                    color: uploadMode === 'url' ? 'white' : 'var(--ink-3)',
+                    border: '1px solid var(--line)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px'
@@ -1859,11 +1859,11 @@ export default function SourcesPage() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleFileDrop}
                   style={{
-                    border: '2px dashed #d1d5db',
+                    border: '2px dashed var(--line-strong)',
                     borderRadius: '8px',
                     padding: isCompactViewport ? '24px 16px' : '40px',
                     textAlign: 'center',
-                    backgroundColor: csvFile ? '#f0fdf4' : '#fafafa',
+                    backgroundColor: csvFile ? 'var(--success-bg)' : '#fafafa',
                     marginBottom: '24px',
                     cursor: 'pointer'
                   }}
@@ -1871,24 +1871,24 @@ export default function SourcesPage() {
                 >
                   {csvFile ? (
                     <>
-                      <CheckCircle style={{ width: '48px', height: '48px', color: '#22c55e', margin: '0 auto 12px' }} />
-                      <p style={{ fontSize: '16px', fontWeight: '500', color: '#16a34a', marginBottom: '4px' }}>{csvFile.name}</p>
-                      <p style={{ fontSize: '14px', color: '#6b7280' }}>{(csvFile.size / 1024).toFixed(0)} KB</p>
+                      <CheckCircle style={{ width: '48px', height: '48px', color: 'var(--success)', margin: '0 auto 12px' }} />
+                      <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--success)', marginBottom: '4px' }}>{csvFile.name}</p>
+                      <p style={{ fontSize: '14px', color: 'var(--ink-3)' }}>{(csvFile.size / 1024).toFixed(0)} KB</p>
                       <button
                         onClick={(e) => { e.stopPropagation(); setCsvFile(null); }}
-                        style={{ marginTop: '12px', padding: '6px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+                        style={{ marginTop: '12px', padding: '6px 12px', backgroundColor: 'var(--danger)', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
                       >
                         Supprimer
                       </button>
                     </>
                   ) : (
                     <>
-                      <Upload style={{ width: '48px', height: '48px', color: '#9ca3af', margin: '0 auto 12px' }} />
-                      <p style={{ fontSize: '16px', fontWeight: '500', color: '#111827', marginBottom: '4px' }}>
+                      <Upload style={{ width: '48px', height: '48px', color: 'var(--ink-4)', margin: '0 auto 12px' }} />
+                      <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--ink)', marginBottom: '4px' }}>
                         Glissez-déposez votre fichier ici
                       </p>
-                      <p style={{ fontSize: '14px', color: '#6b7280' }}>ou cliquez pour parcourir</p>
-                      <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>Formats supportés: CSV, XML, TSV, TXT</p>
+                      <p style={{ fontSize: '14px', color: 'var(--ink-3)' }}>ou cliquez pour parcourir</p>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-4)', marginTop: '8px' }}>Formats supportés: CSV, XML, TSV, TXT</p>
                     </>
                   )}
                   <input
@@ -1901,7 +1901,7 @@ export default function SourcesPage() {
                 </div>
               ) : (
                 <div style={{ marginBottom: '24px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
                     URL du fichier CSV/XML *
                   </label>
                   <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
@@ -1910,7 +1910,7 @@ export default function SourcesPage() {
                       value={csvUrl}
                       onChange={(e) => setCsvUrl(e.target.value)}
                       placeholder="https://example.com/products.csv"
-                      style={{ flex: 1, padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                      style={{ flex: 1, padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                     />
                   </div>
                 </div>
@@ -1918,7 +1918,7 @@ export default function SourcesPage() {
 
               {/* Erreur dans la modale */}
               {modalError && (
-                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px 16px', marginBottom: '16px', color: '#dc2626', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px 16px', marginBottom: '16px', color: 'var(--danger)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
                   {modalError}
                 </div>
@@ -1932,9 +1932,9 @@ export default function SourcesPage() {
                   style={{
                     width: '100%',
                     padding: '14px',
-                    backgroundColor: analyzingCsv ? '#e5e7eb' : csvAnalysis ? '#f3f4f6' : '#0a0a0a',
-                    color: csvAnalysis ? '#374151' : 'white',
-                    border: csvAnalysis ? '1px solid #d1d5db' : 'none',
+                    backgroundColor: analyzingCsv ? 'var(--line)' : csvAnalysis ? 'var(--paper-2)' : '#0a0a0a',
+                    color: csvAnalysis ? 'var(--ink-2)' : 'white',
+                    border: csvAnalysis ? '1px solid var(--line-strong)' : 'none',
                     borderRadius: '6px',
                     fontSize: '15px',
                     fontWeight: '500',
@@ -1948,14 +1948,14 @@ export default function SourcesPage() {
 
               {/* Résultat du mapping auto avec possibilité de modification */}
               {csvAnalysis && (
-                <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '20px', marginBottom: '24px' }}>
+                <div style={{ backgroundColor: 'var(--success-bg)', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '20px', marginBottom: '24px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                    <CheckCircle style={{ width: '20px', height: '20px', color: '#22c55e' }} />
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#16a34a', margin: 0 }}>
+                    <CheckCircle style={{ width: '20px', height: '20px', color: 'var(--success)' }} />
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--success)', margin: 0 }}>
                       Analyse terminée
                     </h3>
                   </div>
-                  <p style={{ fontSize: '14px', color: '#166534', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--success)', marginBottom: '16px' }}>
                     {(csvAnalysis.columns?.length ?? 0)} colonnes trouvées • {Object.keys(mapping).length} champs déjà associés • {customMappings.length} champ{customMappings.length > 1 ? 's' : ''} custom conservé{customMappings.length > 1 ? 's' : ''}
                   </p>
 
@@ -1978,25 +1978,25 @@ export default function SourcesPage() {
                           : 'Aucun champ obligatoire sur cette vue.'}
                       </div>
                     </div>
-                    <div style={{ backgroundColor: 'white', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                    <div style={{ backgroundColor: 'white', border: '1px solid #FDE68A', borderRadius: '8px', padding: '12px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                         Colonnes à revoir
                       </div>
-                      <div style={{ fontSize: '22px', fontWeight: 700, color: '#92400e' }}>
+                      <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--warning)' }}>
                         {csvUnmappedColumns.length}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#b45309' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--warning)' }}>
                         Elles peuvent être ignorées, mappées ou gardées en custom.
                       </div>
                     </div>
-                    <div style={{ backgroundColor: 'white', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                    <div style={{ backgroundColor: 'white', border: '1px solid var(--accent-bg)', borderRadius: '8px', padding: '12px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                         Statut du mapping
                       </div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e3a8a', lineHeight: 1.2 }}>
                         {missingRequiredFields.length === 0 ? 'Prêt à créer la source' : 'Création possible, synchro à compléter'}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#1d4ed8' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--accent-2)' }}>
                         {missingRequiredFields.length === 0
                           ? 'Les champs attendus par le flux cible sont couverts.'
                           : `${missingRequiredFields.length} champ${missingRequiredFields.length > 1 ? 's' : ''} clé${missingRequiredFields.length > 1 ? 's' : ''} reste${missingRequiredFields.length > 1 ? 'nt' : ''} à vérifier.`}
@@ -2023,50 +2023,50 @@ export default function SourcesPage() {
                   )}
 
                   {/* Mapping modifiable — noms alignés avec le backend */}
-                  <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '16px' }}>
+                  <div style={{ backgroundColor: 'white', border: '1px solid var(--line)', borderRadius: '6px', padding: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         Mapping des colonnes
                       </h4>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                         Modifiez ou complétez si besoin
                       </span>
                     </div>
                     <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '6px' }}>Flux de sortie cible</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '6px' }}>Flux de sortie cible</label>
                       <select
                         value={mappingOutputChannel}
                         onChange={(e) => setMappingOutputChannel(e.target.value as MappingOutputChannel)}
-                        style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                        style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                       >
                         {CHANNEL_OPTIONS.map(opt => (
                           <option key={opt.id} value={opt.id}>{opt.label}</option>
                         ))}
                       </select>
-                      <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                      <p style={{ fontSize: '11px', color: 'var(--ink-4)', marginTop: '4px' }}>
                         Les champs affichés correspondent au format attendu par la plateforme. Vous pourrez exporter vers GMC, Meta, Amazon, etc. depuis le même catalogue.
                       </p>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: isCompactViewport ? '50vh' : '400px', overflowY: 'auto', overflowX: 'hidden', paddingRight: '4px' }}>
                       {(CHANNEL_OPTIONS.find(c => c.id === mappingOutputChannel)?.fieldGroups ?? MAPPING_FIELDS_GROUPS).map(({ group, fields }) => (
                         <div key={group}>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>{group}</div>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>{group}</div>
                           <div style={{ display: 'grid', gap: '8px' }}>
                             {fields.map(({ key, label, required }) => (
                               <div key={key} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '200px minmax(0, 1fr)', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                                <label style={{ fontSize: '13px', fontWeight: required ? '600' : '500', color: '#374151' }}>
-                                  {label} {required && <span style={{ color: '#dc2626' }}>*</span>}
-                                  {mapping[key] && <Check style={{ width: '12px', height: '12px', color: '#22c55e', display: 'inline', marginLeft: '4px' }} />}
+                                <label style={{ fontSize: '13px', fontWeight: required ? '600' : '500', color: 'var(--ink-2)' }}>
+                                  {label} {required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                                  {mapping[key] && <Check style={{ width: '12px', height: '12px', color: 'var(--success)', display: 'inline', marginLeft: '4px' }} />}
                                 </label>
                                 <select
                                   value={mapping[key] || ''}
                                   onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}
                                   style={{
                                     padding: '8px 10px',
-                                    border: `1px solid ${mapping[key] ? '#22c55e' : '#e5e7eb'}`,
+                                    border: `1px solid ${mapping[key] ? 'var(--success)' : 'var(--line)'}`,
                                     borderRadius: '4px',
                                     fontSize: '13px',
-                                    backgroundColor: mapping[key] ? '#f0fdf4' : 'white'
+                                    backgroundColor: mapping[key] ? 'var(--success-bg)' : 'white'
                                   }}
                                 >
                                   <option value="">-- Non mappé --</option>
@@ -2082,16 +2082,16 @@ export default function SourcesPage() {
                       {/* Colonnes non mappées : permettre de mapper les colonnes restantes */}
                       {csvUnmappedColumns.length > 0 ? (
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>
                               Colonnes non mappées ({csvUnmappedColumns.length})
                             </div>
-                            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '8px' }}>
                               FeedPlug garde ces colonnes seulement si vous les associez à un champ standard ou à un champ personnalisé.
                             </p>
                             <div style={{ display: 'grid', gap: '8px' }}>
                               {csvUnmappedColumns.map((col: string) => (
                                 <div key={col} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '180px minmax(0, 1fr)', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                                  <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
+                                  <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
                                   <select
                                     value={Object.entries(mapping).find(([, v]) => v === col)?.[0] || ''}
                                     onChange={(e) => {
@@ -2106,7 +2106,7 @@ export default function SourcesPage() {
                                       }
                                       setMapping(next);
                                     }}
-                                    style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                    style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                                   >
                                     <option value="">-- Ignorer --</option>
                                     {fieldsForSelectedChannel.map(({ key, label }) => (
@@ -2121,22 +2121,22 @@ export default function SourcesPage() {
                             </div>
                           </div>
                       ) : (
-                        <div style={{ padding: '12px 14px', borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', color: '#475569' }}>
+                        <div style={{ padding: '12px 14px', borderRadius: '8px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', fontSize: '12px', color: 'var(--ink-2)' }}>
                           Toutes les colonnes détectées sont déjà associées à un champ standard ou custom.
                         </div>
                       )}
                       {customMappings.length > 0 && (
                         <div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>
                             Champs personnalisés ({customMappings.length})
                           </div>
-                          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                          <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '8px' }}>
                             Ces champs seront conservés dans les données produit comme attributs custom, même s&apos;ils ne sont pas requis par GMC.
                           </p>
                           <div style={{ display: 'grid', gap: '8px' }}>
                             {customMappings.map(([target, column]) => (
                               <div key={`${target}-${column}`} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '180px minmax(0, 1fr) auto', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>
+                                <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>
                                   {column}
                                 </span>
                                 <input
@@ -2151,7 +2151,7 @@ export default function SourcesPage() {
                                     setMapping(next);
                                   }}
                                   placeholder="ex: pickup_slot_label"
-                                  style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                  style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                                 />
                                 <button
                                   type="button"
@@ -2160,7 +2160,7 @@ export default function SourcesPage() {
                                     delete next[target];
                                     setMapping(next);
                                   }}
-                                  style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: '#dc2626', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                                  style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: 'var(--danger)', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
                                 >
                                   Retirer
                                 </button>
@@ -2174,13 +2174,13 @@ export default function SourcesPage() {
 
                   {/* Aperçu */}
                   {csvAnalysis.preview && csvAnalysis.preview.length > 0 && (
-                    <div style={{ marginTop: '16px', padding: '16px', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>
+                    <div style={{ marginTop: '16px', padding: '16px', backgroundColor: 'white', border: '1px solid var(--line)', borderRadius: '6px' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)', marginBottom: '12px' }}>
                         Aperçu (3 premiers produits)
                       </h4>
                       <div style={{ display: 'grid', gap: '8px' }}>
                         {csvAnalysis.preview.map((item: CsvPreviewRow, idx: number) => (
-                          <div key={idx} style={{ fontSize: '12px', padding: '8px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
+                          <div key={idx} style={{ fontSize: '12px', padding: '8px', backgroundColor: 'var(--paper-2)', borderRadius: '4px' }}>
                             <strong>{item.title || `Produit ${idx + 1}`}</strong>
                             {item.price && ` • ${item.price}`}
                             {item.brand && ` • ${item.brand}`}
@@ -2194,7 +2194,7 @@ export default function SourcesPage() {
 
               {/* Actions */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'stretch' : 'center', flexDirection: isCompactViewport ? 'column' : 'row', gap: '12px' }}>
-                <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                <div style={{ fontSize: '12px', color: 'var(--ink-4)' }}>
                   {!csvNameReady && 'Nom requis'}
                   {csvNameReady && !csvInputReady && ' • Fichier ou URL requis'}
                   {csvNameReady && csvInputReady && !csvAnalysisReady && ' • Analyse requise'}
@@ -2205,7 +2205,7 @@ export default function SourcesPage() {
                 <div style={{ display: 'flex', gap: '12px', width: isCompactViewport ? '100%' : 'auto', flexDirection: isCompactViewport ? 'column-reverse' : 'row' }}>
                   <button
                     onClick={() => resetModal()}
-                    style={{ padding: '12px 24px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}
+                    style={{ padding: '12px 24px', border: '1px solid var(--line-strong)', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}
                   >
                     Annuler
                   </button>
@@ -2214,7 +2214,7 @@ export default function SourcesPage() {
                     disabled={creatingSource || !csvAnalysis || !sourceName.trim()}
                     style={{
                       padding: '12px 24px',
-                      backgroundColor: (creatingSource || !csvAnalysis || !sourceName.trim()) ? '#d1d5db' : '#0a0a0a',
+                      backgroundColor: (creatingSource || !csvAnalysis || !sourceName.trim()) ? 'var(--line-strong)' : '#0a0a0a',
                       color: 'white',
                       border: 'none',
                       borderRadius: '6px',
@@ -2242,14 +2242,14 @@ export default function SourcesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '20px' }}>
-              <div style={{ padding: '12px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
-                <Trash2 style={{ width: '24px', height: '24px', color: '#dc2626' }} />
+              <div style={{ padding: '12px', backgroundColor: 'var(--danger-bg)', borderRadius: '8px' }}>
+                <Trash2 style={{ width: '24px', height: '24px', color: 'var(--danger)' }} />
               </div>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 8px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px' }}>
                   Supprimer cette source ?
                 </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                   La source « {sourceToDelete.name} » et ses flux associés seront définitivement supprimés. Cette action est irréversible.
                 </p>
               </div>
@@ -2258,14 +2258,14 @@ export default function SourcesPage() {
               <button
                 onClick={() => setSourceToDelete(null)}
                 disabled={deletingSource}
-                style={{ padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: 'white', cursor: deletingSource ? 'not-allowed' : 'pointer', fontSize: '14px' }}
+                style={{ padding: '10px 20px', border: '1px solid var(--line)', borderRadius: '6px', backgroundColor: 'white', cursor: deletingSource ? 'not-allowed' : 'pointer', fontSize: '14px' }}
               >
                 Annuler
               </button>
               <button
                 onClick={handleDeleteSource}
                 disabled={deletingSource}
-                style={{ padding: '10px 20px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', cursor: deletingSource ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500' }}
+                style={{ padding: '10px 20px', backgroundColor: 'var(--danger)', color: 'white', border: 'none', borderRadius: '6px', cursor: deletingSource ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500' }}
               >
                 {deletingSource ? 'Suppression...' : 'Supprimer'}
               </button>
@@ -2282,8 +2282,8 @@ export default function SourcesPage() {
           <div style={{ backgroundColor: 'white', borderRadius: '8px', maxWidth: '900px', width: '100%', maxHeight: 'calc(100vh - 24px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>
+            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                 Modifier le mapping — {editMappingSource.name}
               </h2>
               <button onClick={() => { setEditMappingFeed(null); setEditMappingSource(null); setEditMappingAnalysis(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -2292,21 +2292,21 @@ export default function SourcesPage() {
             </div>
             <div style={{ padding: isCompactViewport ? '16px' : '24px', overflowY: 'auto', overflowX: 'hidden' }}>
               {modalError && (
-                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px 16px', marginBottom: '16px', color: '#dc2626', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px 16px', marginBottom: '16px', color: 'var(--danger)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
                   {modalError}
                 </div>
               )}
               {loadingEditMapping ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Chargement des colonnes…</div>
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)' }}>Chargement des colonnes…</div>
               ) : editMappingAnalysis?.columns ? (
                 <>
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '6px' }}>Flux de sortie cible</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '6px' }}>Flux de sortie cible</label>
                     <select
                       value={editMappingOutputChannel}
                       onChange={(e) => setEditMappingOutputChannel(e.target.value as MappingOutputChannel)}
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                     >
                       {CHANNEL_OPTIONS.map(opt => (
                         <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -2316,23 +2316,23 @@ export default function SourcesPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: isCompactViewport ? '50vh' : '450px', overflowY: 'auto', overflowX: 'hidden', paddingRight: '4px', marginBottom: '20px' }}>
                     {(CHANNEL_OPTIONS.find(c => c.id === editMappingOutputChannel)?.fieldGroups ?? MAPPING_FIELDS_GROUPS).map(({ group, fields }) => (
                       <div key={group}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>{group}</div>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>{group}</div>
                         <div style={{ display: 'grid', gap: '8px' }}>
                           {fields.map(({ key, label, required }) => (
                             <div key={key} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '200px minmax(0, 1fr)', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                              <label style={{ fontSize: '13px', fontWeight: required ? '600' : '500', color: '#374151' }}>
-                                {label} {required && <span style={{ color: '#dc2626' }}>*</span>}
-                                {editMapping[key] && <Check style={{ width: '12px', height: '12px', color: '#22c55e', display: 'inline', marginLeft: '4px' }} />}
+                              <label style={{ fontSize: '13px', fontWeight: required ? '600' : '500', color: 'var(--ink-2)' }}>
+                                {label} {required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                                {editMapping[key] && <Check style={{ width: '12px', height: '12px', color: 'var(--success)', display: 'inline', marginLeft: '4px' }} />}
                               </label>
                               <select
                                 value={editMapping[key] || ''}
                                 onChange={(e) => setEditMapping({ ...editMapping, [key]: e.target.value })}
                                 style={{
                                   padding: '8px 10px',
-                                  border: `1px solid ${editMapping[key] ? '#22c55e' : '#e5e7eb'}`,
+                                  border: `1px solid ${editMapping[key] ? 'var(--success)' : 'var(--line)'}`,
                                   borderRadius: '4px',
                                   fontSize: '13px',
-                                  backgroundColor: editMapping[key] ? '#f0fdf4' : 'white'
+                                  backgroundColor: editMapping[key] ? 'var(--success-bg)' : 'white'
                                 }}
                               >
                                 <option value="">-- Non mappé --</option>
@@ -2352,14 +2352,14 @@ export default function SourcesPage() {
                       const editFieldsForChannel = getMappingFieldsForChannel(editMappingOutputChannel);
                       return unmapped.length > 0 ? (
                         <div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>Colonnes non mappées ({unmapped.length})</div>
-                          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>Colonnes non mappées ({unmapped.length})</div>
+                          <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '8px' }}>
                             Utilisez un champ personnalisé si cette donnée ne correspond pas à un attribut standard.
                           </p>
                           <div style={{ display: 'grid', gap: '8px' }}>
                             {unmapped.map((col: string) => (
                               <div key={col} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '180px minmax(0, 1fr)', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
+                                <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
                                 <select
                                   value={Object.entries(editMapping).find(([, v]) => v === col)?.[0] || ''}
                                   onChange={(e) => {
@@ -2374,7 +2374,7 @@ export default function SourcesPage() {
                                     }
                                     setEditMapping(next);
                                   }}
-                                  style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                  style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                                 >
                                   <option value="">-- Ignorer --</option>
                                   {editFieldsForChannel.map(({ key, label }) => (
@@ -2390,13 +2390,13 @@ export default function SourcesPage() {
                     })()}
                     {editCustomMappings.length > 0 && (
                       <div>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>
                           Champs personnalisés ({editCustomMappings.length})
                         </div>
                         <div style={{ display: 'grid', gap: '8px' }}>
                           {editCustomMappings.map(([target, column]) => (
                             <div key={`${target}-${column}`} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '180px minmax(0, 1fr) auto', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                              <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>
+                              <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>
                                 {column}
                               </span>
                               <input
@@ -2411,7 +2411,7 @@ export default function SourcesPage() {
                                   setEditMapping(next);
                                 }}
                                 placeholder="ex: promotion_internal_label"
-                                style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                               />
                               <button
                                 type="button"
@@ -2420,7 +2420,7 @@ export default function SourcesPage() {
                                   delete next[target];
                                   setEditMapping(next);
                                 }}
-                                style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: '#dc2626', cursor: 'pointer', fontSize: '12px', fontWeight: 600, width: isCompactViewport ? '100%' : 'auto' }}
+                                style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: 'var(--danger)', cursor: 'pointer', fontSize: '12px', fontWeight: 600, width: isCompactViewport ? '100%' : 'auto' }}
                               >
                                 Retirer
                               </button>
@@ -2433,7 +2433,7 @@ export default function SourcesPage() {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', flexDirection: isCompactViewport ? 'column-reverse' : 'row', gap: '12px' }}>
                     <button
                       onClick={() => { setEditMappingFeed(null); setEditMappingSource(null); setEditMappingAnalysis(null); }}
-                      style={{ padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}
+                      style={{ padding: '10px 20px', border: '1px solid var(--line)', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}
                     >
                       Annuler
                     </button>
@@ -2442,7 +2442,7 @@ export default function SourcesPage() {
                       disabled={savingMapping}
                       style={{
                         padding: '10px 20px',
-                        backgroundColor: savingMapping ? '#d1d5db' : '#0a0a0a',
+                        backgroundColor: savingMapping ? 'var(--line-strong)' : '#0a0a0a',
                         color: 'white',
                         border: 'none',
                         borderRadius: '6px',
@@ -2457,7 +2457,7 @@ export default function SourcesPage() {
                   </div>
                 </>
               ) : (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)' }}>
                   Impossible de charger les colonnes pour modifier le mapping. Vérifiez que l&apos;URL du CSV est toujours accessible.
                 </div>
               )}
@@ -2474,15 +2474,15 @@ export default function SourcesPage() {
           <div style={{ backgroundColor: 'white', borderRadius: '8px', maxWidth: '900px', width: '100%', maxHeight: 'calc(100vh - 24px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>
+            <div style={{ padding: isCompactViewport ? '18px' : '24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: isCompactViewport ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                 Ajouter une source secondaire — {addEnrichmentFeed.name}
               </h2>
               <button onClick={() => setShowAddEnrichmentModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X style={{ width: '24px', height: '24px' }} /></button>
             </div>
             <div style={{ padding: isCompactViewport ? '16px' : '24px', overflowY: 'auto', overflowX: 'hidden' }}>
               {modalError && (
-                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px', marginBottom: '16px', color: '#dc2626', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid #fecaca', borderRadius: '6px', padding: '12px', marginBottom: '16px', color: 'var(--danger)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <AlertCircle style={{ width: '16px', height: '16px' }} />{modalError}
                 </div>
               )}
@@ -2493,7 +2493,7 @@ export default function SourcesPage() {
                   value={addEnrichmentName}
                   onChange={(e) => setAddEnrichmentName(e.target.value)}
                   placeholder="Ex: Custom labels marketing, Stocks magasins"
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                  style={{ width: '100%', padding: '10px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                 />
               </div>
               <div style={{ marginBottom: '16px' }}>
@@ -2504,9 +2504,9 @@ export default function SourcesPage() {
                     value={addEnrichmentCsvUrl}
                     onChange={(e) => setAddEnrichmentCsvUrl(e.target.value)}
                     placeholder="URL ou glissez un fichier"
-                    style={{ flex: 1, minWidth: isCompactViewport ? '100%' : '200px', width: isCompactViewport ? '100%' : undefined, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                    style={{ flex: 1, minWidth: isCompactViewport ? '100%' : '200px', width: isCompactViewport ? '100%' : undefined, padding: '10px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                   />
-                  <label style={{ padding: '10px 16px', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', width: isCompactViewport ? '100%' : 'auto', justifyContent: isCompactViewport ? 'center' : 'flex-start' }}>
+                  <label style={{ padding: '10px 16px', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', width: isCompactViewport ? '100%' : 'auto', justifyContent: isCompactViewport ? 'center' : 'flex-start' }}>
                     <Upload style={{ width: '16px', height: '16px' }} />
                     {addEnrichmentCsvFile ? addEnrichmentCsvFile.name : 'Parcourir'}
                     <input
@@ -2518,13 +2518,13 @@ export default function SourcesPage() {
                   </label>
                 </div>
                 {addEnrichmentCsvFile && (
-                  <p style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>Fichier sélectionné : {addEnrichmentCsvFile.name}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--success)', marginTop: '4px' }}>Fichier sélectionné : {addEnrichmentCsvFile.name}</p>
                 )}
               </div>
               <button
                 onClick={handleAnalyzeEnrichmentCsv}
                 disabled={addEnrichmentAnalyzing || (!addEnrichmentCsvUrl.trim() && !addEnrichmentCsvFile)}
-                style={{ padding: '10px 20px', marginBottom: '20px', backgroundColor: addEnrichmentAnalyzing ? '#e5e7eb' : '#0a0a0a', color: 'white', border: 'none', borderRadius: '6px', cursor: addEnrichmentAnalyzing ? 'not-allowed' : 'pointer', fontSize: '14px' }}
+                style={{ padding: '10px 20px', marginBottom: '20px', backgroundColor: addEnrichmentAnalyzing ? 'var(--line)' : '#0a0a0a', color: 'white', border: 'none', borderRadius: '6px', cursor: addEnrichmentAnalyzing ? 'not-allowed' : 'pointer', fontSize: '14px' }}
               >
                 {addEnrichmentAnalyzing ? 'Analyse...' : 'Analyser le fichier'}
               </button>
@@ -2535,7 +2535,7 @@ export default function SourcesPage() {
                     <select
                       value={addEnrichmentJoinColumn}
                       onChange={(e) => setAddEnrichmentJoinColumn(e.target.value)}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                      style={{ width: '100%', padding: '10px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                     >
                       {(addEnrichmentAnalysis.columns ?? []).map((col: string) => (
                         <option key={col} value={col}>{col}</option>
@@ -2547,7 +2547,7 @@ export default function SourcesPage() {
                     <select
                       value={addEnrichmentJoinKey}
                       onChange={(e) => setAddEnrichmentJoinKey(e.target.value)}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px' }}
+                      style={{ width: '100%', padding: '10px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
                     >
                       <option value="originId">ID origine (originId)</option>
                       <option value="sku">SKU</option>
@@ -2559,11 +2559,11 @@ export default function SourcesPage() {
                     <div style={{ display: 'grid', gap: '8px', maxHeight: isCompactViewport ? '35vh' : '250px', overflowY: 'auto', overflowX: 'hidden', paddingRight: '4px' }}>
                       {getMappingFieldsForChannel('all').slice(0, 40).map(({ key, label }) => (
                         <div key={key} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '160px minmax(0, 1fr)', gap: '8px', alignItems: 'center', minWidth: 0 }}>
-                          <span style={{ fontSize: '13px', color: '#374151' }}>{label}</span>
+                          <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>{label}</span>
                           <select
                             value={addEnrichmentMapping[key] || ''}
                             onChange={(e) => setAddEnrichmentMapping({ ...addEnrichmentMapping, [key]: e.target.value })}
-                            style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                            style={{ padding: '8px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                           >
                             <option value="">-- Non mappé --</option>
                             {(addEnrichmentAnalysis.columns ?? []).map((col: string) => (
@@ -2578,16 +2578,16 @@ export default function SourcesPage() {
                       const unmappedColumns = (addEnrichmentAnalysis.columns ?? []).filter((col: string) => !mappedColumns.has(col));
                       return unmappedColumns.length > 0 ? (
                         <div style={{ marginTop: '16px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>
                             Colonnes non mappées ({unmappedColumns.length})
                           </div>
-                          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                          <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '8px' }}>
                             Pratique pour stocker des attributs métiers ou marketplace qui ne sont pas dans la liste standard.
                           </p>
                           <div style={{ display: 'grid', gap: '8px' }}>
                             {unmappedColumns.map((col: string) => (
                               <div key={col} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '160px minmax(0, 1fr)', gap: '8px', alignItems: 'center', minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
+                                <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col}</span>
                                 <select
                                   value={getMappedTargetForColumn(addEnrichmentMapping, col) || ''}
                                   onChange={(e) => {
@@ -2602,7 +2602,7 @@ export default function SourcesPage() {
                                     }
                                     setAddEnrichmentMapping(next);
                                   }}
-                                  style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                  style={{ padding: '8px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                                 >
                                   <option value="">-- Ignorer --</option>
                                   {getMappingFieldsForChannel('all').map(({ key, label }) => (
@@ -2618,13 +2618,13 @@ export default function SourcesPage() {
                     })()}
                     {enrichmentCustomMappings.length > 0 && (
                       <div style={{ marginTop: '16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink-3)', marginBottom: '8px', textTransform: 'uppercase' }}>
                           Champs personnalisés ({enrichmentCustomMappings.length})
                         </div>
                         <div style={{ display: 'grid', gap: '8px' }}>
                           {enrichmentCustomMappings.map(([target, column]) => (
                             <div key={`${target}-${column}`} style={{ display: 'grid', gridTemplateColumns: isCompactViewport ? '1fr' : '160px minmax(0, 1fr) auto', gap: '8px', alignItems: 'center', minWidth: 0 }}>
-                              <span style={{ fontSize: '13px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>{column}</span>
+                              <span style={{ fontSize: '13px', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis' }} title={column}>{column}</span>
                               <input
                                 type="text"
                                 value={target}
@@ -2637,7 +2637,7 @@ export default function SourcesPage() {
                                   setAddEnrichmentMapping(next);
                                 }}
                                 placeholder="ex: store_cluster_label"
-                                style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px', fontSize: '13px' }}
+                                style={{ padding: '8px', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '13px' }}
                               />
                               <button
                                 type="button"
@@ -2646,7 +2646,7 @@ export default function SourcesPage() {
                                   delete next[target];
                                   setAddEnrichmentMapping(next);
                                 }}
-                                style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: '#dc2626', cursor: 'pointer', fontSize: '12px', fontWeight: 600, width: isCompactViewport ? '100%' : 'auto' }}
+                                style={{ padding: '8px 10px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fff5f5', color: 'var(--danger)', cursor: 'pointer', fontSize: '12px', fontWeight: 600, width: isCompactViewport ? '100%' : 'auto' }}
                               >
                                 Retirer
                               </button>
@@ -2655,18 +2655,18 @@ export default function SourcesPage() {
                         </div>
                       </div>
                     )}
-                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '8px' }}>
                       Les valeurs du CSV seront fusionnées avec les produits via la clé de jointure (SKU, ID...)
                     </p>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', flexDirection: isCompactViewport ? 'column-reverse' : 'row', gap: '12px' }}>
-                    <button onClick={() => setShowAddEnrichmentModal(false)} style={{ padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}>
+                    <button onClick={() => setShowAddEnrichmentModal(false)} style={{ padding: '10px 20px', border: '1px solid var(--line)', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer', fontSize: '14px', width: isCompactViewport ? '100%' : 'auto' }}>
                       Annuler
                     </button>
                     <button
                       onClick={handleCreateEnrichmentSource}
                       disabled={addEnrichmentCreating || Object.values(addEnrichmentMapping).filter(Boolean).length === 0}
-                      style={{ padding: '10px 20px', backgroundColor: addEnrichmentCreating ? '#d1d5db' : '#0a0a0a', color: 'white', border: 'none', borderRadius: '6px', cursor: addEnrichmentCreating ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500', width: isCompactViewport ? '100%' : 'auto' }}
+                      style={{ padding: '10px 20px', backgroundColor: addEnrichmentCreating ? 'var(--line-strong)' : '#0a0a0a', color: 'white', border: 'none', borderRadius: '6px', cursor: addEnrichmentCreating ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500', width: isCompactViewport ? '100%' : 'auto' }}
                     >
                       {addEnrichmentCreating ? 'Création...' : 'Créer la source secondaire'}
                     </button>

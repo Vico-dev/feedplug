@@ -7,9 +7,9 @@ import { useOnboarding } from '@/contexts/onboarding-context';
 import { getLocalePrefixFromPathname } from '@/lib/locale-navigation';
 
 const FEEDPLUG_BLACK = '#0a0a0a';
-const FEEDPLUG_BORDER = '#e5e7eb';
-const FEEDPLUG_MUTED = '#6b7280';
-const FEEDPLUG_BG = '#f8fafc';
+const FEEDPLUG_BORDER = 'var(--line)';
+const FEEDPLUG_MUTED = 'var(--ink-3)';
+const FEEDPLUG_BG = 'var(--paper-2)';
 
 interface OnboardingStep {
   id: string;
@@ -115,15 +115,15 @@ export function OnboardingTour() {
             color: FEEDPLUG_MUTED
           }}>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Statistiques de synchronisation en temps réel
             </li>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Activité récente et notifications
             </li>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Accès rapide aux fonctionnalités principales
             </li>
           </ul>
@@ -181,15 +181,15 @@ export function OnboardingTour() {
           </p>
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px 0', fontSize: '14px', color: FEEDPLUG_MUTED }}>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Score qualité du catalogue
             </li>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Mapping des champs par flux
             </li>
             <li style={{ margin: '8px 0', display: 'flex', alignItems: 'center' }}>
-              <Check style={{ width: '16px', height: '16px', color: '#16a34a', marginRight: '8px' }} />
+              <Check style={{ width: '16px', height: '16px', color: 'var(--success)', marginRight: '8px' }} />
               Enrichissement et optimisation
             </li>
           </ul>
@@ -274,7 +274,7 @@ export function OnboardingTour() {
       id: 'completion',
       title: 'Félicitations !',
       description: 'Vous êtes prêt à utiliser FeedPlug',
-      icon: <Check style={{ width: '32px', height: '32px', color: '#16a34a' }} />,
+      icon: <Check style={{ width: '32px', height: '32px', color: 'var(--success)' }} />,
       isModal: true,
       content: (
         <div style={{ textAlign: 'center', padding: '24px 0' }}>

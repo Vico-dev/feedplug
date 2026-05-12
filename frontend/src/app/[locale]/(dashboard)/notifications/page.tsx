@@ -64,19 +64,19 @@ function getNotificationIcon(type: string) {
 function getNotificationColor(type: string) {
   switch (type) {
     case "success":
-      return "#16a34a";
+      return "var(--success)";
     case "error":
-      return "#dc2626";
+      return "var(--danger)";
     case "warning":
-      return "#d97706";
+      return "var(--warning)";
     case "info":
-      return "#0f766e";
+      return "#2A6FE8";
     case "ab_test":
-      return "#7c3aed";
+      return "var(--accent)";
     case "performance":
       return "#0891b2";
     default:
-      return "#6b7280";
+      return "var(--ink-3)";
   }
 }
 
@@ -148,14 +148,14 @@ export default function NotificationsPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <DashboardStatGrid>
-          <DashboardStatCard icon={<Bell size={20} />} label="Total" value={notifications.length} hint="Vue globale de votre centre de notifications" accent="#64748b" />
-          <DashboardStatCard icon={<AlertCircle size={20} />} label="Non lues" value={unreadCount} hint="A traiter en priorite" accent="#dc2626" />
+          <DashboardStatCard icon={<Bell size={20} />} label="Total" value={notifications.length} hint="Vue globale de votre centre de notifications" accent="var(--ink-3)" />
+          <DashboardStatCard icon={<AlertCircle size={20} />} label="Non lues" value={unreadCount} hint="A traiter en priorite" accent="var(--danger)" />
           <DashboardStatCard
             icon={<Zap size={20} />}
             label="Tests A/B"
             value={notifications.filter((item) => item.type === "ab_test").length}
             hint="Alertes liees aux experimentations"
-            accent="#7c3aed"
+            accent="var(--accent)"
           />
           <DashboardStatCard
             icon={<TrendingUp size={20} />}

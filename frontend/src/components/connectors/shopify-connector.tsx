@@ -158,7 +158,7 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
   };
 
   return (
-    <Card style={{ border: '1px solid #e5e7eb', borderRadius: '12px', backgroundColor: 'white' }}>
+    <Card style={{ border: '1px solid var(--line)', borderRadius: '12px', backgroundColor: 'white' }}>
       <CardHeader>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
           <div style={{ 
@@ -167,16 +167,16 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
             justifyContent: 'center', 
             width: '48px', 
             height: '48px', 
-            backgroundColor: '#f0f9ff', 
+            backgroundColor: 'var(--accent-bg)', 
             borderRadius: '12px' 
           }}>
-            <ShoppingCart style={{ width: '24px', height: '24px', color: '#3b82f6' }} />
+            <ShoppingCart style={{ width: '24px', height: '24px', color: 'var(--accent)' }} />
           </div>
           <div>
-            <CardTitle style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>
+            <CardTitle style={{ fontSize: '20px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
               Connecteur Shopify
             </CardTitle>
-            <CardDescription style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+            <CardDescription style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
               Connectez votre boutique Shopify pour synchroniser vos produits
             </CardDescription>
           </div>
@@ -184,19 +184,19 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {connectionStatus === 'connected' && (
-            <Badge style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
+            <Badge style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
               <CheckCircle style={{ width: '12px', height: '12px', marginRight: '4px' }} />
               Connecté
             </Badge>
           )}
           {connectionStatus === 'error' && (
-            <Badge style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
+            <Badge style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
               <AlertCircle style={{ width: '12px', height: '12px', marginRight: '4px' }} />
               Erreur
             </Badge>
           )}
           {connectionStatus === 'disconnected' && (
-            <Badge style={{ backgroundColor: '#f3f4f6', color: '#6b7280', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
+            <Badge style={{ backgroundColor: 'var(--paper-2)', color: 'var(--ink-3)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '500' }}>
               Non connecté
             </Badge>
           )}
@@ -211,7 +211,7 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
                 display: 'block',
                 fontSize: '14px',
                 fontWeight: '500',
-                color: '#374151',
+                color: 'var(--ink-2)',
                 marginBottom: '6px'
               }}>
                 Nom de votre boutique Shopify
@@ -225,27 +225,27 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
                 style={{
                   width: '100%',
                   padding: '12px',
-                  border: error ? '2px solid #ef4444' : '2px solid #e5e7eb',
+                  border: error ? '2px solid var(--danger)' : '2px solid var(--line)',
                   borderRadius: '8px',
                   fontSize: '14px',
                   outline: 'none',
                   transition: 'border-color 0.2s ease'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--line)'}
               />
-              <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '4px 0 0 0' }}>
                 💡 Exemple : vous pouvez saisir ma-boutique, ma-boutique.myshopify.com ou l’URL directe de la boutique
               </p>
             </div>
 
             {error && (
               <div style={{
-                backgroundColor: '#fee2e2',
+                backgroundColor: 'var(--danger-bg)',
                 border: '1px solid #fecaca',
                 borderRadius: '8px',
                 padding: '12px',
-                color: '#dc2626',
+                color: 'var(--danger)',
                 fontSize: '14px'
               }}>
                 {error}
@@ -256,7 +256,7 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
               onClick={handleConnect}
               disabled={isConnecting || !shopName.trim()}
               style={{
-                backgroundColor: '#3b82f6',
+                backgroundColor: 'var(--accent)',
                 color: 'white',
                 border: 'none',
                 padding: '12px 20px',
@@ -279,13 +279,13 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
             </Button>
 
             <div style={{
-              backgroundColor: '#fef3c7',
-              border: '1px solid #fbbf24',
+              backgroundColor: 'var(--warning-bg)',
+              border: '1px solid var(--warning)',
               borderRadius: '8px',
               padding: '12px',
               margin: '16px 0'
             }}>
-              <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
+              <p style={{ fontSize: '14px', color: 'var(--warning)', margin: 0 }}>
                 💡 <strong>Conseil :</strong> Nous utiliserons l&apos;authentification sécurisée Shopify OAuth. 
                 Vous serez redirigé vers Shopify pour autoriser l&apos;accès à vos données.
               </p>
@@ -296,18 +296,18 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
         {connectionStatus === 'connected' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{
-              backgroundColor: '#f0fdf4',
-              border: '1px solid #bbf7d0',
+              backgroundColor: 'var(--success-bg)',
+              border: '1px solid #BBF7D0',
               borderRadius: '8px',
               padding: '16px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <CheckCircle style={{ width: '20px', height: '20px', color: '#22c55e' }} />
-                <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#166534', margin: 0 }}>
+                <CheckCircle style={{ width: '20px', height: '20px', color: 'var(--success)' }} />
+                <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--success)', margin: 0 }}>
                   Boutique connectée avec succès !
                 </h4>
               </div>
-              <p style={{ fontSize: '14px', color: '#166534', margin: 0 }}>
+              <p style={{ fontSize: '14px', color: 'var(--success)', margin: 0 }}>
                 Votre boutique <strong>{shopName}</strong> est maintenant connectée à FeedPlug.
               </p>
             </div>
@@ -321,16 +321,16 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
                     justifyContent: 'center', 
                     width: '32px', 
                     height: '32px', 
-                    backgroundColor: '#f3f4f6', 
+                    backgroundColor: 'var(--paper-2)', 
                     borderRadius: '8px' 
                   }}>
-                    <ShoppingCart style={{ width: '16px', height: '16px', color: '#6b7280' }} />
+                    <ShoppingCart style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />
                   </div>
                   <div>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                    <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>
                       Boutique
                     </p>
-                    <p style={{ fontSize: '14px', fontWeight: '500', color: '#111827', margin: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: '500', color: 'var(--ink)', margin: 0 }}>
                       {resolvedShopData.shop?.name || shopName}
                     </p>
                   </div>
@@ -342,7 +342,7 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
               <Button
                 onClick={handleGetProducts}
                 style={{
-                  backgroundColor: '#10b981',
+                  backgroundColor: 'var(--success)',
                   color: 'white',
                   border: 'none',
                   padding: '10px 16px',
@@ -363,8 +363,8 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
                 disabled={isVerifying}
                 variant="outline"
                 style={{
-                  border: '1px solid #d1d5db',
-                  color: '#374151',
+                  border: '1px solid var(--line-strong)',
+                  color: 'var(--ink-2)',
                   padding: '10px 16px',
                   borderRadius: '8px',
                   fontSize: '14px',
@@ -389,18 +389,18 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
         {connectionStatus === 'error' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{
-              backgroundColor: '#fee2e2',
+              backgroundColor: 'var(--danger-bg)',
               border: '1px solid #fecaca',
               borderRadius: '8px',
               padding: '16px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <AlertCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />
-                <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#dc2626', margin: 0 }}>
+                <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--danger)' }} />
+                <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--danger)', margin: 0 }}>
                   Erreur de connexion
                 </h4>
               </div>
-              <p style={{ fontSize: '14px', color: '#dc2626', margin: 0 }}>
+              <p style={{ fontSize: '14px', color: 'var(--danger)', margin: 0 }}>
                 {error || 'Une erreur est survenue lors de la connexion à Shopify.'}
               </p>
             </div>
@@ -412,7 +412,7 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
                 setShopData(null);
               }}
               style={{
-                backgroundColor: '#3b82f6',
+                backgroundColor: 'var(--accent)',
                 color: 'white',
                 border: 'none',
                 padding: '12px 20px',

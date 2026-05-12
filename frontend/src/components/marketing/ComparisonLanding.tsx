@@ -81,14 +81,14 @@ export default function ComparisonLanding({
   copy: ComparisonLandingCopy;
 }) {
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", color: "#0f172a" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--paper-2)", color: "var(--ink)" }}>
       {createFaqJsonLd(copy.faqs)}
       <MarketingHeader />
       <style
         dangerouslySetInnerHTML={{
           __html: `
             .comparison-shell {
-              font-family: var(--font-geist-sans), sans-serif;
+              font-family: var(--font-sans), sans-serif;
             }
             .comparison-hero-grid {
               display: grid;
@@ -126,13 +126,13 @@ export default function ComparisonLanding({
               padding: 18px 18px 18px 0;
               text-align: left;
               vertical-align: top;
-              border-bottom: 1px solid #e2e8f0;
+              border-bottom: 1px solid var(--line);
             }
             .comparison-table th {
               font-size: 12px;
               text-transform: uppercase;
               letter-spacing: 0.08em;
-              color: #64748b;
+              color: var(--ink-3);
               font-weight: 700;
             }
             .comparison-bullet-list {
@@ -147,7 +147,7 @@ export default function ComparisonLanding({
               align-items: flex-start;
               gap: 10px;
               line-height: 1.65;
-              color: #334155;
+              color: var(--ink-2);
             }
             .comparison-link-card,
             .comparison-proof-card {
@@ -159,7 +159,7 @@ export default function ComparisonLanding({
             .comparison-proof-card:hover {
               transform: translateY(-2px);
               box-shadow: 0 18px 42px rgba(15,23,42,0.08);
-              border-color: #cbd5e1;
+              border-color: var(--line-strong);
             }
             @media (max-width: 980px) {
               .comparison-hero-grid,
@@ -196,7 +196,7 @@ export default function ComparisonLanding({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  color: "#64748b",
+                  color: "var(--ink-3)",
                   fontSize: 14,
                   fontWeight: 600,
                   textDecoration: "none",
@@ -213,9 +213,9 @@ export default function ComparisonLanding({
                   gap: 8,
                   padding: "8px 12px",
                   borderRadius: 999,
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
+                  background: "var(--accent-bg)",
+                  border: "1px solid var(--accent-bg)",
+                  color: "var(--accent-2)",
                   fontSize: 13,
                   fontWeight: 700,
                   marginBottom: 18,
@@ -230,7 +230,7 @@ export default function ComparisonLanding({
                   fontSize: "clamp(2.3rem, 4.8vw, 4.4rem)",
                   lineHeight: 0.98,
                   letterSpacing: "-0.055em",
-                  color: "#0f172a",
+                  color: "var(--ink)",
                   maxWidth: 720,
                 }}
               >
@@ -239,7 +239,7 @@ export default function ComparisonLanding({
               <p
                 style={{
                   margin: "22px 0 0",
-                  color: "#475569",
+                  color: "var(--ink-2)",
                   fontSize: 17,
                   lineHeight: 1.75,
                   maxWidth: 720,
@@ -256,8 +256,8 @@ export default function ComparisonLanding({
                     gap: 10,
                     padding: "14px 18px",
                     borderRadius: 16,
-                    background: "#0f172a",
-                    color: "#f8fafc",
+                    background: "var(--ink)",
+                    color: "var(--paper-2)",
                     textDecoration: "none",
                     fontWeight: 700,
                   }}
@@ -273,9 +273,9 @@ export default function ComparisonLanding({
                     gap: 10,
                     padding: "14px 18px",
                     borderRadius: 16,
-                    border: "1px solid #cbd5e1",
+                    border: "1px solid var(--line-strong)",
                     background: "#ffffff",
-                    color: "#0f172a",
+                    color: "var(--ink)",
                     textDecoration: "none",
                     fontWeight: 700,
                   }}
@@ -291,15 +291,15 @@ export default function ComparisonLanding({
                       key={stat.label}
                       style={{
                         borderRadius: 22,
-                        border: "1px solid #e2e8f0",
-                        background: "#fbfdff",
+                        border: "1px solid var(--line)",
+                        background: "var(--paper)",
                         padding: "18px 18px 16px",
                       }}
                     >
-                      <Icon size={18} style={{ color: "#0f172a", marginBottom: 12 }} />
+                      <Icon size={18} style={{ color: "var(--ink)", marginBottom: 12 }} />
                       <div
                         style={{
-                          color: "#0f172a",
+                          color: "var(--ink)",
                           fontSize: 26,
                           fontWeight: 700,
                           letterSpacing: "-0.045em",
@@ -307,10 +307,10 @@ export default function ComparisonLanding({
                       >
                         {stat.value}
                       </div>
-                      <div style={{ color: "#334155", fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+                      <div style={{ color: "var(--ink-2)", fontSize: 14, fontWeight: 600, marginTop: 4 }}>
                         {stat.label}
                       </div>
-                      <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+                      <div style={{ color: "var(--ink-3)", fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
                         {stat.detail}
                       </div>
                     </div>
@@ -325,7 +325,7 @@ export default function ComparisonLanding({
                 padding: "30px 28px",
                 background:
                   "linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)",
-                color: "#f8fafc",
+                color: "var(--paper-2)",
               }}
             >
               <div
@@ -361,19 +361,19 @@ export default function ComparisonLanding({
 
           <section className="comparison-card" style={{ padding: "32px 28px" }}>
             <h2 style={{ margin: 0, fontSize: 30, letterSpacing: "-0.045em" }}>{copy.fitTitle}</h2>
-            <p style={{ margin: "12px 0 0", color: "#475569", lineHeight: 1.75, maxWidth: 820 }}>
+            <p style={{ margin: "12px 0 0", color: "var(--ink-2)", lineHeight: 1.75, maxWidth: 820 }}>
               {copy.fitIntro}
             </p>
             <div className="comparison-fit-grid" style={{ marginTop: 24 }}>
               {[
-                { title: copy.feedplugTitle, bullets: copy.feedplugBullets, accent: "#dbeafe", iconColor: "#1d4ed8" },
-                { title: copy.otherTitle, bullets: copy.otherBullets, accent: "#ede9fe", iconColor: "#6d28d9" },
+                { title: copy.feedplugTitle, bullets: copy.feedplugBullets, accent: "var(--accent-bg)", iconColor: "var(--accent-2)" },
+                { title: copy.otherTitle, bullets: copy.otherBullets, accent: "var(--accent-bg)", iconColor: "var(--accent-2)" },
               ].map((column) => (
                 <div
                   key={column.title}
                   style={{
                     borderRadius: 24,
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid var(--line)",
                     background: "#ffffff",
                     padding: "24px 22px",
                   }}
@@ -386,7 +386,7 @@ export default function ComparisonLanding({
                       padding: "8px 12px",
                       borderRadius: 999,
                       background: column.accent,
-                      color: "#0f172a",
+                      color: "var(--ink)",
                       fontSize: 13,
                       fontWeight: 700,
                     }}
@@ -409,7 +409,7 @@ export default function ComparisonLanding({
 
           <section className="comparison-card" style={{ padding: "32px 28px" }}>
             <h2 style={{ margin: 0, fontSize: 30, letterSpacing: "-0.045em" }}>{copy.tableTitle}</h2>
-            <p style={{ margin: "12px 0 0", color: "#475569", lineHeight: 1.75, maxWidth: 840 }}>
+            <p style={{ margin: "12px 0 0", color: "var(--ink-2)", lineHeight: 1.75, maxWidth: 840 }}>
               {copy.tableIntro}
             </p>
             <div style={{ overflowX: "auto", marginTop: 24 }}>
@@ -424,9 +424,9 @@ export default function ComparisonLanding({
                 <tbody>
                   {copy.rows.map((row) => (
                     <tr key={row.label}>
-                      <td style={{ minWidth: 160, fontWeight: 700, color: "#0f172a" }}>{row.label}</td>
-                      <td style={{ minWidth: 260, color: "#334155", lineHeight: 1.7 }}>{row.feedplug}</td>
-                      <td style={{ minWidth: 260, color: "#334155", lineHeight: 1.7 }}>{row.other}</td>
+                      <td style={{ minWidth: 160, fontWeight: 700, color: "var(--ink)" }}>{row.label}</td>
+                      <td style={{ minWidth: 260, color: "var(--ink-2)", lineHeight: 1.7 }}>{row.feedplug}</td>
+                      <td style={{ minWidth: 260, color: "var(--ink-2)", lineHeight: 1.7 }}>{row.other}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -446,7 +446,7 @@ export default function ComparisonLanding({
                   style={{ padding: "24px 22px" }}
                 >
                   <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.03em" }}>{card.title}</h3>
-                  <p style={{ margin: "12px 0 0", color: "#475569", lineHeight: 1.7 }}>{card.body}</p>
+                  <p style={{ margin: "12px 0 0", color: "var(--ink-2)", lineHeight: 1.7 }}>{card.body}</p>
                 </article>
               ))}
             </div>
@@ -454,7 +454,7 @@ export default function ComparisonLanding({
 
           <section className="comparison-card" style={{ padding: "32px 28px" }}>
             <h2 style={{ margin: 0, fontSize: 30, letterSpacing: "-0.045em" }}>{copy.faqTitle}</h2>
-            <p style={{ margin: "12px 0 0", color: "#475569", lineHeight: 1.75, maxWidth: 780 }}>
+            <p style={{ margin: "12px 0 0", color: "var(--ink-2)", lineHeight: 1.75, maxWidth: 780 }}>
               {copy.faqIntro}
             </p>
             <div style={{ display: "grid", gap: 18, marginTop: 24 }}>
@@ -463,11 +463,11 @@ export default function ComparisonLanding({
                   key={item.question}
                   style={{
                     paddingTop: index === 0 ? 0 : 18,
-                    borderTop: index === 0 ? "none" : "1px solid #e2e8f0",
+                    borderTop: index === 0 ? "none" : "1px solid var(--line)",
                   }}
                 >
                   <h3 style={{ margin: 0, fontSize: 18, letterSpacing: "-0.02em" }}>{item.question}</h3>
-                  <p style={{ margin: "10px 0 0", color: "#475569", lineHeight: 1.75 }}>{item.answer}</p>
+                  <p style={{ margin: "10px 0 0", color: "var(--ink-2)", lineHeight: 1.75 }}>{item.answer}</p>
                 </article>
               ))}
             </div>
@@ -494,7 +494,7 @@ export default function ComparisonLanding({
                     <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.03em" }}>{item.label}</h3>
                     <ArrowRight size={16} />
                   </div>
-                  <p style={{ margin: "12px 0 0", color: "#475569", lineHeight: 1.7 }}>{item.body}</p>
+                  <p style={{ margin: "12px 0 0", color: "var(--ink-2)", lineHeight: 1.7 }}>{item.body}</p>
                 </Link>
               ))}
             </div>
@@ -506,7 +506,7 @@ export default function ComparisonLanding({
               padding: "34px 30px",
               background:
                 "linear-gradient(135deg, rgba(15,23,42,1) 0%, rgba(30,41,59,1) 100%)",
-              color: "#f8fafc",
+              color: "var(--paper-2)",
             }}
           >
             <h2 style={{ margin: 0, fontSize: 30, letterSpacing: "-0.045em" }}>{copy.ctaTitle}</h2>
@@ -522,8 +522,8 @@ export default function ComparisonLanding({
                 marginTop: 22,
                 padding: "14px 18px",
                 borderRadius: 16,
-                background: "#f8fafc",
-                color: "#0f172a",
+                background: "var(--paper-2)",
+                color: "var(--ink)",
                 textDecoration: "none",
                 fontWeight: 700,
               }}

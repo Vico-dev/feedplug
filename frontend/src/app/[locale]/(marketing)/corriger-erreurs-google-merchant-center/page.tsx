@@ -566,17 +566,17 @@ export default async function MerchantCenterErrorsPage({
   const proofCopy = getProofCopy(locale);
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", color: "#111827" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", color: "var(--ink)" }}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .gmc-errors-shell { font-family: var(--font-geist-sans), sans-serif; }
+            .gmc-errors-shell { font-family: var(--font-sans), sans-serif; }
             .gmc-errors-fade { animation: gmcErrorsFadeUp .72s ease-out forwards; }
             .gmc-errors-delay-1 { animation-delay: .08s; opacity: 0; }
             .gmc-errors-delay-2 { animation-delay: .16s; opacity: 0; }
             .gmc-errors-delay-3 { animation-delay: .24s; opacity: 0; }
             .gmc-errors-card { transition: transform .2s ease, box-shadow .25s ease, border-color .2s ease; }
-            .gmc-errors-card:hover { transform: translateY(-3px); box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08); border-color: #cbd5e1; }
+            .gmc-errors-card:hover { transform: translateY(-3px); box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08); border-color: var(--line-strong); }
             .gmc-errors-visual-shell {
               position: relative;
               overflow: hidden;
@@ -641,7 +641,7 @@ export default async function MerchantCenterErrorsPage({
             position: "relative",
             padding: "120px 48px 88px",
             background:
-              "radial-gradient(circle at top right, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(16,185,129,0.12), transparent 24%), #111827",
+              "radial-gradient(circle at top right, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(16,185,129,0.12), transparent 24%), var(--ink)",
             overflow: "hidden",
           }}
         >
@@ -682,7 +682,7 @@ export default async function MerchantCenterErrorsPage({
               <div className="gmc-errors-fade gmc-errors-delay-3" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                 {copy.trust.map((item) => (
                   <span key={item} style={trustBadgeStyle}>
-                    <CheckCircle2 style={{ width: 14, height: 14, color: "#34d399" }} />
+                    <CheckCircle2 style={{ width: 14, height: 14, color: "var(--success)" }} />
                     {item}
                   </span>
                 ))}
@@ -701,7 +701,7 @@ export default async function MerchantCenterErrorsPage({
             <div className="gmc-errors-grid-4" style={grid4Style}>
               {copy.pains.map((item) => (
                 <div key={item} className="gmc-errors-card" style={whiteCardStyle}>
-                  <AlertCircle style={{ width: 18, height: 18, color: "#2563eb", marginBottom: 14 }} />
+                  <AlertCircle style={{ width: 18, height: 18, color: "var(--accent)", marginBottom: 14 }} />
                   <p style={cardParagraphStyle}>{item}</p>
                 </div>
               ))}
@@ -719,7 +719,7 @@ export default async function MerchantCenterErrorsPage({
                 return (
                   <div key={step.title} className="gmc-errors-card" style={stepCardStyle}>
                     <div style={stepIconWrapStyle}>
-                      <Icon style={{ width: 20, height: 20, color: "#1d4ed8" }} />
+                      <Icon style={{ width: 20, height: 20, color: "var(--accent-2)" }} />
                     </div>
                     <h3 style={stepTitleStyle}>{step.title}</h3>
                     <p style={cardParagraphMutedStyle}>{step.body}</p>
@@ -734,13 +734,13 @@ export default async function MerchantCenterErrorsPage({
           <div className="gmc-errors-two-col" style={twoColStyle}>
             <div className="gmc-errors-card" style={benefitCardStyle}>
               <div style={benefitIconStyle}>
-                <Sparkles style={{ width: 22, height: 22, color: "#111827" }} />
+                <Sparkles style={{ width: 22, height: 22, color: "var(--ink)" }} />
               </div>
               <h2 style={twoColTitleStyle}>{copy.benefitsTitle}</h2>
               <div style={{ display: "grid", gap: 14 }}>
                 {copy.benefits.map((item) => (
                   <div key={item} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <CheckCircle2 style={{ width: 18, height: 18, color: "#16a34a", flexShrink: 0, marginTop: 3 }} />
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)", flexShrink: 0, marginTop: 3 }} />
                     <p style={cardParagraphStyle}>{item}</p>
                   </div>
                 ))}
@@ -769,7 +769,7 @@ export default async function MerchantCenterErrorsPage({
             <div className="gmc-errors-two-col" style={twoColStyle}>
               <div className="gmc-errors-card" style={benefitCardStyle}>
                 <div style={benefitIconStyle}>
-                  <AlertCircle style={{ width: 22, height: 22, color: "#2563eb" }} />
+                  <AlertCircle style={{ width: 22, height: 22, color: "var(--accent)" }} />
                 </div>
                 <h3 style={twoColTitleStyle}>{proofCopy.detectTitle}</h3>
                 <p style={{ ...cardParagraphMutedStyle, marginBottom: 18 }}>{proofCopy.detectIntro}</p>
@@ -784,28 +784,28 @@ export default async function MerchantCenterErrorsPage({
 
               <div style={{ display: "grid", gap: 16 }}>
                 <div className="gmc-errors-card" style={whiteCardStyle}>
-                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#dc2626", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--danger)", marginBottom: 12 }}>
                     {proofCopy.beforeTitle}
                   </div>
                   <div style={{ display: "grid", gap: 10 }}>
                     {proofCopy.beforeItems.map((item) => (
                       <div key={item} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <AlertCircle style={{ width: 16, height: 16, color: "#dc2626", flexShrink: 0, marginTop: 4 }} />
+                        <AlertCircle style={{ width: 16, height: 16, color: "var(--danger)", flexShrink: 0, marginTop: 4 }} />
                         <p style={cardParagraphStyle}>{item}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="gmc-errors-card" style={{ ...darkCardStyle, backgroundColor: "#0f172a" }}>
+                <div className="gmc-errors-card" style={{ ...darkCardStyle, backgroundColor: "var(--ink)" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5eead4", marginBottom: 12 }}>
                     {proofCopy.afterTitle}
                   </div>
                   <div style={{ display: "grid", gap: 10 }}>
                     {proofCopy.afterItems.map((item) => (
                       <div key={item} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <CheckCircle2 style={{ width: 16, height: 16, color: "#34d399", flexShrink: 0, marginTop: 4 }} />
-                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "#e2e8f0" }}>{item}</p>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: "var(--success)", flexShrink: 0, marginTop: 4 }} />
+                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--line)" }}>{item}</p>
                       </div>
                     ))}
                   </div>
@@ -817,9 +817,9 @@ export default async function MerchantCenterErrorsPage({
               {proofCopy.gains.map((item) => (
                 <div key={item} className="gmc-errors-card" style={whiteCardStyle}>
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <CheckCircle2 style={{ width: 18, height: 18, color: "#16a34a", flexShrink: 0, marginTop: 4 }} />
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)", flexShrink: 0, marginTop: 4 }} />
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>
                         {proofCopy.gainsTitle}
                       </div>
                       <p style={cardParagraphStyle}>{item}</p>
@@ -859,7 +859,7 @@ export default async function MerchantCenterErrorsPage({
             <div style={{ display: "grid", gap: 16 }}>
               {faqCopy.items.map((item) => (
                 <div key={item.question} className="gmc-errors-card" style={whiteCardStyle}>
-                  <h3 style={{ margin: "0 0 10px", fontSize: 18, lineHeight: 1.45, fontWeight: 650, color: "#0f172a" }}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 18, lineHeight: 1.45, fontWeight: 650, color: "var(--ink)" }}>
                     {item.question}
                   </h3>
                   <p style={cardParagraphMutedStyle}>{item.answer}</p>
@@ -918,13 +918,13 @@ function MerchantCenterShowcase({ copy }: { copy: ScreenCopy }) {
       <div className="gmc-errors-gridline" />
       <div style={{ position: "relative", zIndex: 1, padding: 26 }}>
         <div style={visualEyebrowStyle}>
-          <Sparkles style={{ width: 14, height: 14, color: "#bfdbfe" }} />
+          <Sparkles style={{ width: 14, height: 14, color: "var(--accent-bg)" }} />
           <span style={visualEyebrowTextStyle}>{copy.eyebrow}</span>
         </div>
 
         <div style={{ display: "grid", gap: 14 }}>
           <VisualStage
-            icon={<Database style={{ width: 18, height: 18, color: "#bfdbfe" }} />}
+            icon={<Database style={{ width: 18, height: 18, color: "var(--accent-bg)" }} />}
             title={copy.stageSource}
             meta={copy.stageSourceMeta}
           />
@@ -935,7 +935,7 @@ function MerchantCenterShowcase({ copy }: { copy: ScreenCopy }) {
             active
           />
           <VisualStage
-            icon={<RefreshCw style={{ width: 18, height: 18, color: "#bfdbfe" }} />}
+            icon={<RefreshCw style={{ width: 18, height: 18, color: "var(--accent-bg)" }} />}
             title={copy.stageExport}
             meta={copy.stageExportMeta}
           />
@@ -1029,23 +1029,23 @@ const sectionWrapStyle = { maxWidth: 1080, margin: "0 auto" } satisfies React.CS
 const sectionWhiteStyle = { padding: "88px 48px", backgroundColor: "#ffffff" } satisfies React.CSSProperties;
 const sectionAltStyle = {
   padding: "88px 48px",
-  backgroundColor: "#f8fafc",
-  borderTop: "1px solid #e5e7eb",
-  borderBottom: "1px solid #e5e7eb",
+  backgroundColor: "var(--paper-2)",
+  borderTop: "1px solid var(--line)",
+  borderBottom: "1px solid var(--line)",
 } satisfies React.CSSProperties;
 const sectionTitleStyle = {
   fontSize: "clamp(28px, 4vw, 38px)",
   fontWeight: 600,
   letterSpacing: "-0.03em",
   margin: "0 0 34px",
-  color: "#111827",
+  color: "var(--ink)",
 } satisfies React.CSSProperties;
 const sectionIntroStyle = {
   maxWidth: 760,
   margin: "0 0 34px",
   fontSize: 17,
   lineHeight: 1.72,
-  color: "#64748b",
+  color: "var(--ink-3)",
 } satisfies React.CSSProperties;
 const grid4Style = {
   display: "grid",
@@ -1060,17 +1060,17 @@ const grid3Style = {
 const whiteCardStyle = {
   padding: 24,
   borderRadius: 14,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--line)",
   backgroundColor: "#ffffff",
 } satisfies React.CSSProperties;
 const stepCardStyle = {
   padding: 26,
   borderRadius: 16,
   backgroundColor: "#ffffff",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--line)",
 } satisfies React.CSSProperties;
-const cardParagraphStyle = { margin: 0, fontSize: 15, lineHeight: 1.72, color: "#475569" } satisfies React.CSSProperties;
-const cardParagraphMutedStyle = { margin: 0, fontSize: 15, lineHeight: 1.72, color: "#64748b" } satisfies React.CSSProperties;
+const cardParagraphStyle = { margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-2)" } satisfies React.CSSProperties;
+const cardParagraphMutedStyle = { margin: 0, fontSize: 15, lineHeight: 1.72, color: "var(--ink-3)" } satisfies React.CSSProperties;
 const stepIconWrapStyle = {
   width: 42,
   height: 42,
@@ -1086,7 +1086,7 @@ const stepTitleStyle = {
   fontSize: 18,
   lineHeight: 1.38,
   fontWeight: 650,
-  color: "#0f172a",
+  color: "var(--ink)",
 } satisfies React.CSSProperties;
 const twoColStyle = {
   maxWidth: 1080,
@@ -1095,12 +1095,12 @@ const twoColStyle = {
   gridTemplateColumns: "minmax(0, 1fr) minmax(0, 0.95fr)",
   gap: 28,
 } satisfies React.CSSProperties;
-const benefitCardStyle = { padding: 30, borderRadius: 18, backgroundColor: "#ffffff", border: "1px solid #e5e7eb" } satisfies React.CSSProperties;
+const benefitCardStyle = { padding: 30, borderRadius: 18, backgroundColor: "#ffffff", border: "1px solid var(--line)" } satisfies React.CSSProperties;
 const benefitIconStyle = {
   width: 46,
   height: 46,
   borderRadius: 14,
-  backgroundColor: "#f3f4f6",
+  backgroundColor: "var(--paper-2)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1111,11 +1111,11 @@ const twoColTitleStyle = {
   fontSize: "clamp(24px, 3vw, 32px)",
   fontWeight: 600,
   letterSpacing: "-0.03em",
-  color: "#111827",
+  color: "var(--ink)",
 } satisfies React.CSSProperties;
-const darkCardStyle = { padding: 30, borderRadius: 18, backgroundColor: "#111827", color: "#ffffff", border: "1px solid #0f172a" } satisfies React.CSSProperties;
+const darkCardStyle = { padding: 30, borderRadius: 18, backgroundColor: "var(--ink)", color: "#ffffff", border: "1px solid var(--ink)" } satisfies React.CSSProperties;
 const darkTitleStyle = { margin: "0 0 12px", fontSize: "clamp(24px, 3vw, 32px)", fontWeight: 600, letterSpacing: "-0.03em" } satisfies React.CSSProperties;
-const darkIntroStyle = { margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "#cbd5e1" } satisfies React.CSSProperties;
+const darkIntroStyle = { margin: "0 0 18px", fontSize: 15, lineHeight: 1.72, color: "var(--line-strong)" } satisfies React.CSSProperties;
 const darkListStyle = { margin: 0, paddingLeft: 18, display: "grid", gap: 10 } satisfies React.CSSProperties;
 const darkListItemStyle = { fontSize: 15, lineHeight: 1.72, color: "#ffffff" } satisfies React.CSSProperties;
 const linkCardStyle = {
@@ -1123,13 +1123,13 @@ const linkCardStyle = {
   gap: 10,
   padding: 24,
   borderRadius: 16,
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--line)",
   backgroundColor: "#ffffff",
   textDecoration: "none",
 } satisfies React.CSSProperties;
-const linkCardLabelStyle = { fontSize: 14, fontWeight: 700, color: "#111827" } satisfies React.CSSProperties;
-const linkCardTextStyle = { fontSize: 15, lineHeight: 1.72, color: "#64748b" } satisfies React.CSSProperties;
-const ctaDarkSectionStyle = { padding: "104px 48px", backgroundColor: "#111827", borderTop: "1px solid #0f172a" } satisfies React.CSSProperties;
+const linkCardLabelStyle = { fontSize: 14, fontWeight: 700, color: "var(--ink)" } satisfies React.CSSProperties;
+const linkCardTextStyle = { fontSize: 15, lineHeight: 1.72, color: "var(--ink-3)" } satisfies React.CSSProperties;
+const ctaDarkSectionStyle = { padding: "104px 48px", backgroundColor: "var(--ink)", borderTop: "1px solid var(--ink)" } satisfies React.CSSProperties;
 const ctaWrapStyle = { maxWidth: 760, margin: "0 auto", textAlign: "center" } satisfies React.CSSProperties;
 const ctaTitleStyle = {
   margin: "0 0 14px",
@@ -1140,12 +1140,12 @@ const ctaTitleStyle = {
   color: "#ffffff",
 } satisfies React.CSSProperties;
 const ctaBodyStyle = { margin: "0 0 30px", fontSize: 17, lineHeight: 1.72, color: "rgba(255,255,255,0.58)" } satisfies React.CSSProperties;
-const footerStyle = { padding: "56px 48px", backgroundColor: "#ffffff", borderTop: "1px solid #f3f4f6" } satisfies React.CSSProperties;
+const footerStyle = { padding: "56px 48px", backgroundColor: "#ffffff", borderTop: "1px solid var(--paper-2)" } satisfies React.CSSProperties;
 const footerWrapStyle = { maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 24 } satisfies React.CSSProperties;
-const footerBrandStyle = { fontSize: 15, fontWeight: 600, color: "#111827", marginBottom: 10 } satisfies React.CSSProperties;
-const footerBodyStyle = { margin: 0, fontSize: 14, lineHeight: 1.65, color: "#6b7280" } satisfies React.CSSProperties;
+const footerBrandStyle = { fontSize: 15, fontWeight: 600, color: "var(--ink)", marginBottom: 10 } satisfies React.CSSProperties;
+const footerBodyStyle = { margin: 0, fontSize: 14, lineHeight: 1.65, color: "var(--ink-3)" } satisfies React.CSSProperties;
 const footerLinksWrapStyle = { display: "flex", gap: 24, flexWrap: "wrap" } satisfies React.CSSProperties;
-const footerLinkStyle = { color: "#6b7280", textDecoration: "none", fontSize: 14 } satisfies React.CSSProperties;
+const footerLinkStyle = { color: "var(--ink-3)", textDecoration: "none", fontSize: 14 } satisfies React.CSSProperties;
 const primaryHeroCtaStyle = {
   display: "inline-flex",
   alignItems: "center",
@@ -1153,7 +1153,7 @@ const primaryHeroCtaStyle = {
   padding: "15px 24px",
   borderRadius: 10,
   backgroundColor: "#ffffff",
-  color: "#111827",
+  color: "var(--ink)",
   textDecoration: "none",
   fontSize: 15,
   fontWeight: 600,
@@ -1178,7 +1178,7 @@ const primaryDarkCtaStyle = {
   padding: "15px 24px",
   borderRadius: 10,
   backgroundColor: "#ffffff",
-  color: "#111827",
+  color: "var(--ink)",
   textDecoration: "none",
   fontSize: 15,
   fontWeight: 600,
@@ -1292,6 +1292,6 @@ const visualIssueItemStyle = {
   border: "1px solid rgba(148,163,184,0.12)",
 } satisfies React.CSSProperties;
 const visualDotStyle = { width: 8, height: 8, borderRadius: 999, backgroundColor: "#2dd4bf" } satisfies React.CSSProperties;
-const visualIssueTextStyle = { fontSize: 14, lineHeight: 1.55, color: "#f8fafc" } satisfies React.CSSProperties;
+const visualIssueTextStyle = { fontSize: 14, lineHeight: 1.55, color: "var(--paper-2)" } satisfies React.CSSProperties;
 const visualNoteTitleStyle = { fontSize: 14, fontWeight: 650, color: "#ffffff", marginBottom: 6 } satisfies React.CSSProperties;
 const visualNoteBodyStyle = { fontSize: 14, lineHeight: 1.65, color: "rgba(226,232,240,0.64)" } satisfies React.CSSProperties;

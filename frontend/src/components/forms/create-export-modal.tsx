@@ -243,16 +243,16 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
         {/* Header */}
         <div style={{
           padding: '24px',
-          borderBottom: '1px solid #e5e7eb',
+          borderBottom: '1px solid var(--line)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
           <div>
-            <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#111827', margin: 0 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
               Créer un flux de sortie
             </h2>
-            <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--ink-3)', marginTop: '4px' }}>
               Sélectionnez le canal vers lequel exporter vos produits
             </p>
           </div>
@@ -263,8 +263,8 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
               height: '32px',
               borderRadius: '4px',
               border: 'none',
-              backgroundColor: '#f3f4f6',
-              color: '#6b7280',
+              backgroundColor: 'var(--paper-2)',
+              color: 'var(--ink-3)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -285,7 +285,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
               transform: 'translateY(-50%)',
               width: '20px',
               height: '20px',
-              color: '#9ca3af'
+              color: 'var(--ink-4)'
             }} />
             <input
               type="text"
@@ -295,13 +295,13 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
               style={{
                 width: '100%',
                 padding: '12px 12px 12px 44px',
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 borderRadius: '8px',
                 fontSize: '14px',
                 outline: 'none'
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = '#2563eb'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--line)'}
             />
           </div>
         </div>
@@ -317,12 +317,12 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
               <h3 style={{
                 fontSize: '13px',
                 fontWeight: '600',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
                 marginBottom: '12px',
                 paddingBottom: '6px',
-                borderBottom: '1px solid #e5e7eb'
+                borderBottom: '1px solid var(--line)'
               }}>
                 {category.label}
               </h3>
@@ -340,12 +340,12 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                       key={platform.id}
                       onClick={() => platform.available && setSelectedPlatform(platform.id)}
                       style={{
-                        border: `2px solid ${isSelected ? platform.color : '#e5e7eb'}`,
+                        border: `2px solid ${isSelected ? platform.color : 'var(--line)'}`,
                         borderRadius: '8px',
                         padding: '16px',
                         cursor: platform.available ? 'pointer' : 'not-allowed',
                         opacity: platform.available ? 1 : 0.6,
-                        backgroundColor: platform.available ? (isSelected ? platform.bgColor : 'white') : '#f9fafb',
+                        backgroundColor: platform.available ? (isSelected ? platform.bgColor : 'white') : 'var(--paper-2)',
                         transition: 'all 0.2s ease',
                         position: 'relative'
                       }}
@@ -357,7 +357,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                       }}
                       onMouseLeave={(e) => {
                         if (platform.available) {
-                          e.currentTarget.style.borderColor = isSelected ? platform.color : '#e5e7eb';
+                          e.currentTarget.style.borderColor = isSelected ? platform.color : 'var(--line)';
                           e.currentTarget.style.boxShadow = 'none';
                         }
                       }}
@@ -367,7 +367,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                           position: 'absolute',
                           top: '10px',
                           right: '10px',
-                          backgroundColor: '#fbbf24',
+                          backgroundColor: 'var(--warning)',
                           color: '#78350f',
                           fontSize: '10px',
                           fontWeight: '600',
@@ -417,7 +417,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                           <h4 style={{
                             fontSize: '14px',
                             fontWeight: '600',
-                            color: platform.available ? '#111827' : '#9ca3af',
+                            color: platform.available ? 'var(--ink)' : 'var(--ink-4)',
                             margin: 0,
                             marginBottom: '2px'
                           }}>
@@ -427,7 +427,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                       </div>
                       <p style={{
                         fontSize: '12px',
-                        color: platform.available ? '#6b7280' : '#9ca3af',
+                        color: platform.available ? 'var(--ink-3)' : 'var(--ink-4)',
                         margin: '0 0 8px 0',
                         lineHeight: 1.4
                       }}>
@@ -444,11 +444,11 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                               width: '4px',
                               height: '4px',
                               borderRadius: '50%',
-                              backgroundColor: platform.available ? platform.color : '#d1d5db'
+                              backgroundColor: platform.available ? platform.color : 'var(--line-strong)'
                             }} />
                             <span style={{
                               fontSize: '11px',
-                              color: platform.available ? '#6b7280' : '#9ca3af'
+                              color: platform.available ? 'var(--ink-3)' : 'var(--ink-4)'
                             }}>
                               {feature}
                             </span>
@@ -466,7 +466,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
             <div style={{
               textAlign: 'center',
               padding: '40px',
-              color: '#9ca3af'
+              color: 'var(--ink-4)'
             }}>
               Aucun canal trouvé
             </div>
@@ -476,11 +476,11 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
         {/* Footer */}
         <div style={{
           padding: '24px',
-          borderTop: '1px solid #e5e7eb',
+          borderTop: '1px solid var(--line)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#f9fafb'
+          backgroundColor: 'var(--paper-2)'
         }}>
           <div>
             {selectedPlatform && isExportReady && (
@@ -489,9 +489,9 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: '#22c55e'
+                  backgroundColor: 'var(--success)'
                 }} />
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                <span style={{ fontSize: '14px', color: 'var(--ink-3)' }}>
                   Export disponible depuis la page Flux (bouton CSV sur chaque flux)
                 </span>
               </div>
@@ -502,9 +502,9 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: '#fbbf24'
+                  backgroundColor: 'var(--warning)'
                 }} />
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                <span style={{ fontSize: '14px', color: 'var(--ink-3)' }}>
                   Ce canal sera disponible dans une prochaine version
                 </span>
               </div>
@@ -516,11 +516,11 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
               onClick={onClose}
               style={{
                 padding: '10px 20px',
-                border: '1px solid #d1d5db',
+                border: '1px solid var(--line-strong)',
                 borderRadius: '6px',
                 fontSize: '14px',
                 fontWeight: '500',
-                color: '#374151',
+                color: 'var(--ink-2)',
                 backgroundColor: 'white',
                 cursor: 'pointer'
               }}
@@ -536,7 +536,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                 fontSize: '14px',
                 fontWeight: '500',
                 color: 'white',
-                backgroundColor: selectedPlatform && isExportReady ? '#0a0a0a' : '#d1d5db',
+                backgroundColor: selectedPlatform && isExportReady ? '#0a0a0a' : 'var(--line-strong)',
                 cursor: selectedPlatform && isExportReady ? 'pointer' : 'not-allowed',
                 opacity: selectedPlatform && isExportReady ? 1 : 0.6
               }}

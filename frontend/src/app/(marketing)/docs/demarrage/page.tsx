@@ -50,13 +50,13 @@ export default function DocsDemarragePage() {
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <CheckCircle size={28} style={{ color: "#16a34a" }} />
+        <CheckCircle size={28} style={{ color: "var(--success)" }} />
         <h1 style={{ fontSize: "2rem", fontWeight: 600, margin: 0 }}>
           Démarrer avec FeedPlug
         </h1>
       </div>
 
-      <p style={{ color: "#6b7280", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
+      <p style={{ color: "var(--ink-3)", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
         Ce guide vous accompagne étape par étape pour être opérationnel en quelques minutes : de la création du compte à l&apos;export de votre premier flux vers Google Shopping.
       </p>
 
@@ -68,7 +68,7 @@ export default function DocsDemarragePage() {
               key={num}
               style={{
                 padding: 20,
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
                 borderRadius: 8,
                 backgroundColor: "#fafafa",
               }}
@@ -95,7 +95,7 @@ export default function DocsDemarragePage() {
                   <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
                     <Icon size={20} style={{ color: "#0a0a0a" }} /> {title}
                   </h3>
-                  <p style={{ margin: 0, color: "#4a4a4a", fontSize: 15, lineHeight: 1.6 }}>{body}</p>
+                  <p style={{ margin: 0, color: "var(--ink-2)", fontSize: 15, lineHeight: 1.6 }}>{body}</p>
                   {doc && (
                     <p style={{ marginTop: 12, fontSize: 14 }}>
                       <Link href={doc} style={{ color: "#0a0a0a", textDecoration: "underline" }}>
@@ -110,11 +110,11 @@ export default function DocsDemarragePage() {
         </div>
       </section>
 
-      <p style={{ marginBottom: 32, color: "#6b7280", fontSize: 14, lineHeight: 1.6 }}>
+      <p style={{ marginBottom: 32, color: "var(--ink-3)", fontSize: 14, lineHeight: 1.6 }}>
         Lors de votre première connexion, un parcours guidé dans l&apos;application peut également vous accompagner pour connecter une source, lancer une synchro et découvrir l&apos;optimisation IA et les exports.
       </p>
 
-      <p style={{ fontSize: 14, color: "#6b7280" }}>
+      <p style={{ fontSize: 14, color: "var(--ink-3)" }}>
         <Link href="/docs" style={{ color: "#0a0a0a", textDecoration: "underline" }}>← Retour à la documentation</Link>
       </p>
     </>

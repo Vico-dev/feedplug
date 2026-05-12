@@ -22,7 +22,8 @@ export function PageLayout({
         padding: "var(--page-padding-y) var(--page-padding-x)",
         maxWidth: "var(--page-max-width)",
         margin: "0 auto",
-        fontFamily: "Inter, system-ui, sans-serif",
+        fontFamily: "var(--font-sans)",
+        color: "var(--ink-2)",
         width: "100%",
         ...style,
       }}
@@ -62,12 +63,12 @@ export function PageHeader({
           <Icon
             size={20}
             style={{
-              color: "var(--app-accent)",
+              color: "var(--accent)",
               flexShrink: 0,
               marginTop: 6,
               padding: 10,
-              backgroundColor: "var(--app-accent-soft)",
-              borderRadius: 12,
+              backgroundColor: "var(--accent-bg)",
+              borderRadius: "var(--r-lg)",
               width: 40,
               height: 40,
             }}
@@ -76,9 +77,10 @@ export function PageHeader({
         <div>
           <h1
             style={{
+              fontFamily: "var(--font-display)",
               fontSize: "var(--page-title-size)",
               fontWeight: "var(--page-title-weight)",
-              color: "var(--page-title-color)",
+              color: "var(--ink)",
               margin: 0,
               letterSpacing: "-0.03em",
               lineHeight: 1.05,
@@ -91,9 +93,9 @@ export function PageHeader({
             <p
               style={{
                 fontSize: "var(--page-subtitle-size)",
-                color: "var(--page-subtitle-color)",
+                color: "var(--ink-3)",
                 margin: 0,
-                lineHeight: 1.6,
+                lineHeight: 1.55,
                 maxWidth: 720,
               }}
             >

@@ -250,8 +250,8 @@ export default function AdminAIKeysPage() {
           onClick={handleCleanCache}
           style={{
             padding: '8px 16px',
-            backgroundColor: '#f3f4f6',
-            border: '1px solid #e5e7eb',
+            backgroundColor: 'var(--paper-2)',
+            border: '1px solid var(--line)',
             borderRadius: '2px',
             fontSize: '14px',
             cursor: 'pointer',
@@ -269,7 +269,7 @@ export default function AdminAIKeysPage() {
 
       {error && (
         <div style={{
-          backgroundColor: '#fef2f2',
+          backgroundColor: 'var(--danger-bg)',
           border: '1px solid #fecaca',
           borderRadius: '2px',
           padding: '16px',
@@ -278,8 +278,8 @@ export default function AdminAIKeysPage() {
           alignItems: 'center',
           gap: '8px'
         }}>
-          <AlertCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />
-          <p style={{ color: '#dc2626', margin: 0, fontSize: '14px' }}>{error}</p>
+          <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--danger)' }} />
+          <p style={{ color: 'var(--danger)', margin: 0, fontSize: '14px' }}>{error}</p>
         </div>
       )}
 
@@ -288,13 +288,13 @@ export default function AdminAIKeysPage() {
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #2563eb',
+            border: '4px solid var(--line)',
+            borderTop: '4px solid var(--accent)',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 16px'
           }} />
-          <p style={{ color: '#6b7280', fontSize: '14px' }}>Chargement...</p>
+          <p style={{ color: 'var(--ink-3)', fontSize: '14px' }}>Chargement...</p>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: '24px' }}>
@@ -302,7 +302,7 @@ export default function AdminAIKeysPage() {
           <div style={{ width: '300px', flexShrink: 0 }}>
             <div style={{
               backgroundColor: 'white',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               padding: '16px'
             }}>
@@ -321,7 +321,7 @@ export default function AdminAIKeysPage() {
                     style={{
                       padding: '12px',
                       borderRadius: '2px',
-                      border: selectedProvider === provider.id ? '1px solid #0a0a0a' : '1px solid #e5e7eb',
+                      border: selectedProvider === provider.id ? '1px solid #0a0a0a' : '1px solid var(--line)',
                       backgroundColor: selectedProvider === provider.id ? '#fafafa' : 'white',
                       textAlign: 'left',
                       cursor: 'pointer',
@@ -331,7 +331,7 @@ export default function AdminAIKeysPage() {
                     <div style={{ fontSize: '14px', fontWeight: '500', color: '#0a0a0a', marginBottom: '4px' }}>
                       {provider.displayName}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                       {provider.providerKeys.length} clé{provider.providerKeys.length > 1 ? 's' : ''}
                     </div>
                   </button>
@@ -345,7 +345,7 @@ export default function AdminAIKeysPage() {
             <div style={{ flex: 1 }}>
               <div style={{
                 backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 borderRadius: '2px',
                 padding: '24px'
               }}>
@@ -358,7 +358,7 @@ export default function AdminAIKeysPage() {
                       marginBottom: '8px',
                       margin: 0
                     }}>{currentProvider.displayName}</h2>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                    <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                       Modèle: {currentProvider.defaultModel} • 
                       Coût: ${currentProvider.costPerToken.toFixed(8)}/token input, 
                       ${currentProvider.costPerOutputToken.toFixed(8)}/token output
@@ -390,8 +390,8 @@ export default function AdminAIKeysPage() {
                 {/* Statistiques */}
                 {stats && (
                   <div style={{
-                    backgroundColor: '#f9fafb',
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: 'var(--paper-2)',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     padding: '16px',
                     marginBottom: '24px'
@@ -401,30 +401,30 @@ export default function AdminAIKeysPage() {
                         Statistiques (30 derniers jours)
                       </h3>
                       {loadingStats[selectedProvider!] && (
-                        <RefreshCw style={{ width: '16px', height: '16px', color: '#6b7280', animation: 'spin 1s linear infinite' }} />
+                        <RefreshCw style={{ width: '16px', height: '16px', color: 'var(--ink-3)', animation: 'spin 1s linear infinite' }} />
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Requêtes</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '4px' }}>Requêtes</div>
                         <div style={{ fontSize: '20px', fontWeight: '500', color: '#0a0a0a' }}>
                           {stats.totals.totalRequests.toLocaleString()}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Tokens input</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '4px' }}>Tokens input</div>
                         <div style={{ fontSize: '20px', fontWeight: '500', color: '#0a0a0a' }}>
                           {stats.totals.totalInputTokens.toLocaleString()}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Tokens output</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '4px' }}>Tokens output</div>
                         <div style={{ fontSize: '20px', fontWeight: '500', color: '#0a0a0a' }}>
                           {stats.totals.totalOutputTokens.toLocaleString()}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Coût total</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '4px' }}>Coût total</div>
                         <div style={{ fontSize: '20px', fontWeight: '500', color: '#0a0a0a' }}>
                           ${stats.totals.totalCost.toFixed(4)}
                         </div>
@@ -442,9 +442,9 @@ export default function AdminAIKeysPage() {
                     <div style={{
                       padding: '48px',
                       textAlign: 'center',
-                      border: '1px dashed #e5e7eb',
+                      border: '1px dashed var(--line)',
                       borderRadius: '2px',
-                      color: '#6b7280'
+                      color: 'var(--ink-3)'
                     }}>
                       <Key style={{ width: '48px', height: '48px', margin: '0 auto 16px', opacity: 0.5 }} />
                       <p style={{ margin: 0, fontSize: '14px' }}>Aucune clé API configurée</p>
@@ -456,7 +456,7 @@ export default function AdminAIKeysPage() {
                         <div
                           key={key.id}
                           style={{
-                            border: '1px solid #e5e7eb',
+                            border: '1px solid var(--line)',
                             borderRadius: '2px',
                             padding: '16px',
                             display: 'flex',
@@ -472,23 +472,23 @@ export default function AdminAIKeysPage() {
                               {key.isDefault && (
                                 <span style={{
                                   padding: '2px 8px',
-                                  backgroundColor: '#f3f4f6',
+                                  backgroundColor: 'var(--paper-2)',
                                   borderRadius: '2px',
                                   fontSize: '11px',
-                                  color: '#6b7280'
+                                  color: 'var(--ink-3)'
                                 }}>Par défaut</span>
                               )}
                               {key.isActive ? (
-                                <CheckCircle2 style={{ width: '16px', height: '16px', color: '#10b981' }} />
+                                <CheckCircle2 style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
                               ) : (
-                                <AlertCircle style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+                                <AlertCircle style={{ width: '16px', height: '16px', color: 'var(--danger)' }} />
                               )}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                               Limites: {key.dailyLimit ? `${key.dailyLimit}/jour` : 'Illimité/jour'} • 
                               {key.monthlyLimit ? ` ${key.monthlyLimit}/mois` : ' Illimité/mois'}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '4px' }}>
                               Créée le {new Date(key.createdAt).toLocaleDateString('fr-FR')}
                             </div>
                           </div>
@@ -497,12 +497,12 @@ export default function AdminAIKeysPage() {
                               onClick={() => handleToggleActive(key)}
                               style={{
                                 padding: '6px 12px',
-                                backgroundColor: key.isActive ? '#f3f4f6' : '#0a0a0a',
+                                backgroundColor: key.isActive ? 'var(--paper-2)' : '#0a0a0a',
                                 border: 'none',
                                 borderRadius: '2px',
                                 fontSize: '12px',
                                 cursor: 'pointer',
-                                color: key.isActive ? '#6b7280' : '#ffffff'
+                                color: key.isActive ? 'var(--ink-3)' : '#ffffff'
                               }}
                             >
                               {key.isActive ? 'Désactiver' : 'Activer'}
@@ -512,7 +512,7 @@ export default function AdminAIKeysPage() {
                               style={{
                                 padding: '6px 12px',
                                 backgroundColor: '#ffffff',
-                                border: '1px solid #e5e7eb',
+                                border: '1px solid var(--line)',
                                 borderRadius: '2px',
                                 fontSize: '12px',
                                 cursor: 'pointer',
@@ -530,11 +530,11 @@ export default function AdminAIKeysPage() {
                               style={{
                                 padding: '6px 12px',
                                 backgroundColor: '#ffffff',
-                                border: '1px solid #e5e7eb',
+                                border: '1px solid var(--line)',
                                 borderRadius: '2px',
                                 fontSize: '12px',
                                 cursor: 'pointer',
-                                color: '#dc2626',
+                                color: 'var(--danger)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '4px'
@@ -592,7 +592,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -610,7 +610,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -628,7 +628,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -646,7 +646,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -673,7 +673,7 @@ export default function AdminAIKeysPage() {
                 style={{
                   padding: '8px 16px',
                   backgroundColor: '#ffffff',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   cursor: 'pointer',
@@ -738,7 +738,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -756,7 +756,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -774,7 +774,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -792,7 +792,7 @@ export default function AdminAIKeysPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--line)',
                     borderRadius: '2px',
                     fontSize: '14px'
                   }}
@@ -820,7 +820,7 @@ export default function AdminAIKeysPage() {
                 style={{
                   padding: '8px 16px',
                   backgroundColor: '#ffffff',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   cursor: 'pointer',
