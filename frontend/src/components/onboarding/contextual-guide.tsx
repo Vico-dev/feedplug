@@ -41,14 +41,14 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
       maxWidth: '400px',
       width: '100%',
       backgroundColor: 'white',
-      border: '1px solid #e5e7eb',
+      border: '1px solid var(--line)',
       borderRadius: '12px',
       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
       animation: 'slideInRight 0.3s ease-out'
     }}>
       <div style={{
         padding: '20px',
-        borderBottom: '1px solid #e5e7eb'
+        borderBottom: '1px solid var(--line)'
       }}>
         <div style={{
           display: 'flex',
@@ -64,7 +64,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
             <div style={{
               width: '24px',
               height: '24px',
-              backgroundColor: '#3b82f6',
+              backgroundColor: 'var(--accent)',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -78,7 +78,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
             <h3 style={{
               fontSize: '16px',
               fontWeight: '600',
-              color: '#1f2937',
+              color: 'var(--ink-2)',
               margin: 0
             }}>
               {title}
@@ -91,7 +91,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
               height: '24px',
               border: 'none',
               backgroundColor: 'transparent',
-              color: '#9ca3af',
+              color: 'var(--ink-4)',
               cursor: 'pointer',
               borderRadius: '4px',
               display: 'flex',
@@ -99,12 +99,12 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
               justifyContent: 'center'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#f3f4f6';
-              e.currentTarget.style.color = '#6b7280';
+              e.currentTarget.style.backgroundColor = 'var(--paper-2)';
+              e.currentTarget.style.color = 'var(--ink-3)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#9ca3af';
+              e.currentTarget.style.color = 'var(--ink-4)';
             }}
           >
             <X style={{ width: '16px', height: '16px' }} />
@@ -112,7 +112,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
         </div>
         <p style={{
           fontSize: '14px',
-          color: '#6b7280',
+          color: 'var(--ink-3)',
           margin: '0 0 16px 0',
           lineHeight: '1.5'
         }}>
@@ -128,7 +128,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
 
       <div style={{
         padding: '16px 20px',
-        borderTop: '1px solid #e5e7eb',
+        borderTop: '1px solid var(--line)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -139,19 +139,19 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
             padding: '8px 16px',
             border: 'none',
             backgroundColor: 'transparent',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             cursor: 'pointer',
             borderRadius: '6px',
             fontSize: '14px',
             fontWeight: '500'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#f3f4f6';
-            e.currentTarget.style.color = '#374151';
+            e.currentTarget.style.backgroundColor = 'var(--paper-2)';
+            e.currentTarget.style.color = 'var(--ink-2)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#6b7280';
+            e.currentTarget.style.color = 'var(--ink-3)';
           }}
         >
           Passer
@@ -162,7 +162,7 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
           style={{
             padding: '10px 20px',
             border: 'none',
-            backgroundColor: '#3b82f6',
+            backgroundColor: 'var(--accent)',
             color: 'white',
             cursor: 'pointer',
             borderRadius: '6px',
@@ -173,10 +173,10 @@ export function ContextualGuide({ step, title, description, content, onNext, onS
             gap: '8px'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#2563eb';
+            e.currentTarget.style.backgroundColor = 'var(--accent)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#3b82f6';
+            e.currentTarget.style.backgroundColor = 'var(--accent)';
           }}
         >
           Suivant
@@ -212,7 +212,7 @@ export function SourcesGuide() {
       content={
         <div>
           <div style={{
-            backgroundColor: '#f0f9ff',
+            backgroundColor: 'var(--accent-bg)',
             border: '1px solid #bae6fd',
             borderRadius: '8px',
             padding: '16px',
@@ -220,7 +220,7 @@ export function SourcesGuide() {
           }}>
             <p style={{
               fontSize: '14px',
-              color: '#0369a1',
+              color: 'var(--accent-2)',
               margin: '0 0 8px 0',
               fontWeight: '500'
             }}>
@@ -228,7 +228,7 @@ export function SourcesGuide() {
             </p>
             <p style={{
               fontSize: '14px',
-              color: '#0369a1',
+              color: 'var(--accent-2)',
               margin: 0,
               lineHeight: '1.5'
             }}>
@@ -240,9 +240,9 @@ export function SourcesGuide() {
             alignItems: 'center',
             gap: '8px',
             fontSize: '14px',
-            color: '#6b7280'
+            color: 'var(--ink-3)'
           }}>
-            <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a' }} />
+            <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
             <span>Une fois connectée, vos produits seront automatiquement synchronisés</span>
           </div>
         </div>
@@ -265,15 +265,15 @@ export function FluxGuide() {
       content={
         <div>
           <div style={{
-            backgroundColor: '#fef3c7',
-            border: '1px solid #fbbf24',
+            backgroundColor: 'var(--warning-bg)',
+            border: '1px solid var(--warning)',
             borderRadius: '8px',
             padding: '16px',
             marginBottom: '16px'
           }}>
             <p style={{
               fontSize: '14px',
-              color: '#92400e',
+              color: 'var(--warning)',
               margin: '0 0 8px 0',
               fontWeight: '500'
             }}>
@@ -281,7 +281,7 @@ export function FluxGuide() {
             </p>
             <p style={{
               fontSize: '14px',
-              color: '#92400e',
+              color: 'var(--warning)',
               margin: 0,
               lineHeight: '1.5'
             }}>
@@ -293,9 +293,9 @@ export function FluxGuide() {
             alignItems: 'center',
             gap: '8px',
             fontSize: '14px',
-            color: '#6b7280'
+            color: 'var(--ink-3)'
           }}>
-            <ArrowRight style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
+            <ArrowRight style={{ width: '16px', height: '16px', color: 'var(--accent)' }} />
             <span>Cliquez sur &quot;Nouveau flux&quot; pour commencer</span>
           </div>
         </div>
@@ -318,15 +318,15 @@ export function IAGuide() {
       content={
         <div>
           <div style={{
-            backgroundColor: '#f0fdf4',
-            border: '1px solid #bbf7d0',
+            backgroundColor: 'var(--success-bg)',
+            border: '1px solid #BBF7D0',
             borderRadius: '8px',
             padding: '16px',
             marginBottom: '16px'
           }}>
             <p style={{
               fontSize: '14px',
-              color: '#166534',
+              color: 'var(--success)',
               margin: '0 0 8px 0',
               fontWeight: '500'
             }}>
@@ -334,7 +334,7 @@ export function IAGuide() {
             </p>
             <p style={{
               fontSize: '14px',
-              color: '#166534',
+              color: 'var(--success)',
               margin: 0,
               lineHeight: '1.5'
             }}>
@@ -346,9 +346,9 @@ export function IAGuide() {
             alignItems: 'center',
             gap: '8px',
             fontSize: '14px',
-            color: '#6b7280'
+            color: 'var(--ink-3)'
           }}>
-            <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a' }} />
+            <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
             <span>Les optimisations sont appliquées automatiquement</span>
           </div>
         </div>
@@ -371,7 +371,7 @@ export function DashboardGuide() {
       content={
         <div>
           <div style={{
-            backgroundColor: '#f0f9ff',
+            backgroundColor: 'var(--accent-bg)',
             border: '1px solid #bae6fd',
             borderRadius: '8px',
             padding: '16px',
@@ -379,7 +379,7 @@ export function DashboardGuide() {
           }}>
             <p style={{
               fontSize: '14px',
-              color: '#0369a1',
+              color: 'var(--accent-2)',
               margin: '0 0 8px 0',
               fontWeight: '500'
             }}>
@@ -387,7 +387,7 @@ export function DashboardGuide() {
             </p>
             <p style={{
               fontSize: '14px',
-              color: '#0369a1',
+              color: 'var(--accent-2)',
               margin: 0,
               lineHeight: '1.5'
             }}>
@@ -399,9 +399,9 @@ export function DashboardGuide() {
             alignItems: 'center',
             gap: '8px',
             fontSize: '14px',
-            color: '#6b7280'
+            color: 'var(--ink-3)'
           }}>
-            <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a' }} />
+            <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
             <span>Vos données sont mises à jour en temps réel</span>
           </div>
         </div>

@@ -65,7 +65,7 @@ export default function DocsGlossairePage() {
         </h1>
       </div>
 
-      <p style={{ color: "#6b7280", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
+      <p style={{ color: "var(--ink-3)", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
         Définitions des termes utilisés dans FeedPlug et dans les exigences Google Shopping / Google Merchant Center. Utile pour les nouveaux utilisateurs et pour comprendre le <Link href="/docs/score" style={{ color: "#0a0a0a", textDecoration: "underline" }}>score</Link> et l&apos;<Link href="/docs/export" style={{ color: "#0a0a0a", textDecoration: "underline" }}>export</Link>.
       </p>
 
@@ -76,17 +76,17 @@ export default function DocsGlossairePage() {
               key={term}
               style={{
                 padding: "16px 0",
-                borderBottom: "1px solid #e5e7eb",
+                borderBottom: "1px solid var(--line)",
               }}
             >
               <strong style={{ fontSize: "1rem", color: "#0a0a0a" }}>{term}</strong>
-              <p style={{ margin: "8px 0 0", color: "#4a4a4a", fontSize: 15, lineHeight: 1.6 }}>{def}</p>
+              <p style={{ margin: "8px 0 0", color: "var(--ink-2)", fontSize: 15, lineHeight: 1.6 }}>{def}</p>
             </li>
           ))}
         </ul>
       </section>
 
-      <p style={{ fontSize: 14, color: "#6b7280" }}>
+      <p style={{ fontSize: 14, color: "var(--ink-3)" }}>
         <Link href="/docs" style={{ color: "#0a0a0a", textDecoration: "underline" }}>← Retour à la documentation</Link>
       </p>
     </>

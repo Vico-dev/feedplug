@@ -50,7 +50,7 @@ export default function LegalPageShell({
         style={{
           minHeight: "100vh",
           background:
-            "radial-gradient(circle at top left, rgba(148,163,184,0.10), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #ffffff 28%)",
+            "radial-gradient(circle at top left, rgba(148,163,184,0.10), transparent 28%), linear-gradient(180deg, var(--paper-2) 0%, #ffffff 28%)",
           padding: "128px 24px 96px",
         }}
       >
@@ -77,9 +77,9 @@ export default function LegalPageShell({
                 gap: 8,
                 padding: "8px 12px",
                 borderRadius: 999,
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
+                background: "var(--paper-2)",
+                border: "1px solid var(--line)",
+                color: "var(--ink-2)",
                 fontSize: 13,
                 fontWeight: 600,
                 marginBottom: 20,
@@ -93,7 +93,7 @@ export default function LegalPageShell({
                 fontSize: "clamp(2rem, 4vw, 3.1rem)",
                 lineHeight: 1.02,
                 letterSpacing: "-0.05em",
-                color: "#0f172a",
+                color: "var(--ink)",
               }}
             >
               {title}
@@ -101,7 +101,7 @@ export default function LegalPageShell({
             <p
               style={{
                 margin: "20px 0 0",
-                color: "#475569",
+                color: "var(--ink-2)",
                 fontSize: 17,
                 lineHeight: 1.75,
                 maxWidth: 720,
@@ -126,9 +126,9 @@ export default function LegalPageShell({
                     gap: 12,
                     padding: "15px 16px",
                     borderRadius: 18,
-                    background: "#fbfdff",
-                    border: "1px solid #e2e8f0",
-                    color: "#334155",
+                    background: "var(--paper)",
+                    border: "1px solid var(--line)",
+                    color: "var(--ink-2)",
                     lineHeight: 1.65,
                   }}
                 >
@@ -137,7 +137,7 @@ export default function LegalPageShell({
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      background: "#111827",
+                      background: "var(--ink)",
                       marginTop: 10,
                       flexShrink: 0,
                     }}
@@ -169,7 +169,7 @@ export default function LegalPageShell({
                 padding: 24,
               }}
             >
-              <div style={{ color: "#0f172a", fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
+              <div style={{ color: "var(--ink)", fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
                 Liens utiles
               </div>
               <div style={{ display: "grid", gap: 10 }}>
@@ -179,11 +179,11 @@ export default function LegalPageShell({
                     href={link.href}
                     style={{
                       textDecoration: "none",
-                      color: "#334155",
+                      color: "var(--ink-2)",
                       padding: "12px 14px",
                       borderRadius: 16,
-                      border: "1px solid #e2e8f0",
-                      background: "#fbfdff",
+                      border: "1px solid var(--line)",
+                      background: "var(--paper)",
                       fontSize: 14,
                       fontWeight: 600,
                     }}
@@ -197,8 +197,8 @@ export default function LegalPageShell({
             <section
               style={{
                 borderRadius: 24,
-                background: "#0f172a",
-                color: "#f8fafc",
+                background: "var(--ink)",
+                color: "var(--paper-2)",
                 padding: 24,
                 boxShadow: "0 18px 50px rgba(15,23,42,0.16)",
               }}

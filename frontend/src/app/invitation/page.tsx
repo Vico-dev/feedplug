@@ -26,7 +26,7 @@ function InvitationForm() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f9fafb",
+          backgroundColor: "var(--paper-2)",
         }}
       >
         <div
@@ -36,17 +36,17 @@ function InvitationForm() {
             padding: "40px",
             backgroundColor: "white",
             borderRadius: "12px",
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--line)",
             textAlign: "center",
           }}
         >
           <AlertCircle
-            style={{ width: "48px", height: "48px", color: "#dc2626", margin: "0 auto 16px" }}
+            style={{ width: "48px", height: "48px", color: "var(--danger)", margin: "0 auto 16px" }}
           />
-          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "#111827", margin: "0 0 8px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "var(--ink)", margin: "0 0 8px" }}>
             Lien invalide
           </h1>
-          <p style={{ fontSize: "14px", color: "#6b7280", margin: "0 0 24px" }}>
+          <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 24px" }}>
             Ce lien d&apos;invitation est invalide ou a expiré. Demandez une nouvelle invitation à
             votre équipe.
           </p>
@@ -54,7 +54,7 @@ function InvitationForm() {
             href="/login"
             style={{
               fontSize: "14px",
-              color: "#0ea5e9",
+              color: "var(--accent)",
               textDecoration: "none",
               fontWeight: "500",
             }}
@@ -74,7 +74,7 @@ function InvitationForm() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f9fafb",
+          backgroundColor: "var(--paper-2)",
         }}
       >
         <div
@@ -84,17 +84,17 @@ function InvitationForm() {
             padding: "40px",
             backgroundColor: "white",
             borderRadius: "12px",
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--line)",
             textAlign: "center",
           }}
         >
           <CheckCircle
-            style={{ width: "48px", height: "48px", color: "#16a34a", margin: "0 auto 16px" }}
+            style={{ width: "48px", height: "48px", color: "var(--success)", margin: "0 auto 16px" }}
           />
-          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "#111827", margin: "0 0 8px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "var(--ink)", margin: "0 0 8px" }}>
             Compte activé
           </h1>
-          <p style={{ fontSize: "14px", color: "#6b7280", margin: "0 0 24px" }}>
+          <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 24px" }}>
             {autoLoggedIn
               ? "Votre mot de passe a été défini. Vous êtes connecté et pouvez accéder au tableau de bord."
               : "Votre mot de passe a été défini. Connectez-vous pour accéder au tableau de bord."}
@@ -105,7 +105,7 @@ function InvitationForm() {
               style={{
                 display: "inline-block",
                 padding: "12px 24px",
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 color: "white",
                 borderRadius: "8px",
                 textDecoration: "none",
@@ -121,7 +121,7 @@ function InvitationForm() {
               style={{
                 display: "inline-block",
                 padding: "12px 24px",
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 color: "white",
                 borderRadius: "8px",
                 textDecoration: "none",
@@ -181,7 +181,7 @@ function InvitationForm() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#f9fafb",
+        backgroundColor: "var(--paper-2)",
       }}
     >
       <div
@@ -191,15 +191,15 @@ function InvitationForm() {
           padding: "40px",
           backgroundColor: "white",
           borderRadius: "12px",
-          border: "1px solid #e5e7eb",
+          border: "1px solid var(--line)",
         }}
       >
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
-          <Mail style={{ width: "40px", height: "40px", color: "#3b82f6", margin: "0 auto 12px" }} />
-          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "#111827", margin: "0 0 8px" }}>
+          <Mail style={{ width: "40px", height: "40px", color: "var(--accent)", margin: "0 auto 12px" }} />
+          <h1 style={{ fontSize: "22px", fontWeight: "600", color: "var(--ink)", margin: "0 0 8px" }}>
             Rejoindre l&apos;équipe FeedPlug
           </h1>
-          <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
+          <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: 0 }}>
             Définissez votre mot de passe pour activer votre compte (8+ caractères, 1 majuscule, 1
             chiffre).
           </p>
@@ -212,7 +212,7 @@ function InvitationForm() {
                 display: "block",
                 fontSize: "13px",
                 fontWeight: "500",
-                color: "#374151",
+                color: "var(--ink-2)",
                 marginBottom: "6px",
               }}
             >
@@ -227,7 +227,7 @@ function InvitationForm() {
                   transform: "translateY(-50%)",
                   width: "18px",
                   height: "18px",
-                  color: "#9ca3af",
+                  color: "var(--ink-4)",
                 }}
               />
               <input
@@ -239,7 +239,7 @@ function InvitationForm() {
                 style={{
                   width: "100%",
                   padding: "12px 12px 12px 40px",
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--line-strong)",
                   borderRadius: "8px",
                   fontSize: "14px",
                   outline: "none",
@@ -254,7 +254,7 @@ function InvitationForm() {
                 display: "block",
                 fontSize: "13px",
                 fontWeight: "500",
-                color: "#374151",
+                color: "var(--ink-2)",
                 marginBottom: "6px",
               }}
             >
@@ -268,7 +268,7 @@ function InvitationForm() {
               style={{
                 width: "100%",
                 padding: "12px",
-                border: "1px solid #d1d5db",
+                border: "1px solid var(--line-strong)",
                 borderRadius: "8px",
                 fontSize: "14px",
                 outline: "none",
@@ -278,7 +278,7 @@ function InvitationForm() {
           </div>
 
           {error && (
-            <p style={{ fontSize: "13px", color: "#dc2626", margin: "0 0 12px" }}>{error}</p>
+            <p style={{ fontSize: "13px", color: "var(--danger)", margin: "0 0 12px" }}>{error}</p>
           )}
 
           <button
@@ -292,7 +292,7 @@ function InvitationForm() {
               fontSize: "14px",
               fontWeight: "600",
               color: "white",
-              backgroundColor: isLoading ? "#d1d5db" : "#111827",
+              backgroundColor: isLoading ? "var(--line-strong)" : "var(--ink)",
               cursor: isLoading ? "not-allowed" : "pointer",
             }}
           >
@@ -300,8 +300,8 @@ function InvitationForm() {
           </button>
         </form>
 
-        <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "16px", textAlign: "center" }}>
-          <Link href="/login" style={{ color: "#6b7280", textDecoration: "none" }}>
+        <p style={{ fontSize: "12px", color: "var(--ink-4)", marginTop: "16px", textAlign: "center" }}>
+          <Link href="/login" style={{ color: "var(--ink-3)", textDecoration: "none" }}>
             Retour à la connexion
           </Link>
         </p>
@@ -320,7 +320,7 @@ export default function InvitationPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#f9fafb",
+            backgroundColor: "var(--paper-2)",
           }}
         >
           Chargement…

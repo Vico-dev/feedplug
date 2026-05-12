@@ -40,8 +40,8 @@ function ShopifySuccessContent() {
   }, [router, searchParams]);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-      <div style={{ background: 'white', padding: 24, borderRadius: 12, boxShadow: '0 10px 30px rgba(17,24,39,0.08)', color: '#111827' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-2)' }}>
+      <div style={{ background: 'white', padding: 24, borderRadius: 12, boxShadow: '0 10px 30px rgba(17,24,39,0.08)', color: 'var(--ink)' }}>
         <p style={{ margin: 0, fontSize: 14 }}>Redirection vers vos sources…</p>
       </div>
     </div>
@@ -51,8 +51,8 @@ function ShopifySuccessContent() {
 export default function ShopifySuccessPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-        <div style={{ background: 'white', padding: 24, borderRadius: 12, color: '#111827' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-2)' }}>
+        <div style={{ background: 'white', padding: 24, borderRadius: 12, color: 'var(--ink)' }}>
           <p style={{ margin: 0, fontSize: 14 }}>Chargement…</p>
         </div>
       </div>

@@ -36,12 +36,12 @@ function ResetPasswordForm() {
         ]}
       >
         <div style={{ maxWidth: '400px', width: '100%', margin: '0 auto', padding: '12px 0', textAlign: 'center' }}>
-          <AlertCircle style={{ width: '48px', height: '48px', color: '#dc2626', margin: '0 auto 16px' }} />
-          <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#111827', margin: '0 0 8px' }}>Lien invalide</h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>
+          <AlertCircle style={{ width: '48px', height: '48px', color: 'var(--danger)', margin: '0 auto 16px' }} />
+          <h1 style={{ fontSize: '22px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px' }}>Lien invalide</h1>
+          <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '0 0 24px' }}>
             Ce lien de réinitialisation est invalide ou a expiré.
           </p>
-          <Link href="/forgot-password" style={{ fontSize: '14px', color: '#0ea5e9', textDecoration: 'none', fontWeight: '500' }}>
+          <Link href="/forgot-password" style={{ fontSize: '14px', color: 'var(--accent)', textDecoration: 'none', fontWeight: '500' }}>
             Demander un nouveau lien
           </Link>
         </div>
@@ -62,12 +62,12 @@ function ResetPasswordForm() {
         ]}
       >
         <div style={{ maxWidth: '400px', width: '100%', margin: '0 auto', padding: '12px 0', textAlign: 'center' }}>
-          <CheckCircle style={{ width: '48px', height: '48px', color: '#16a34a', margin: '0 auto 16px' }} />
-          <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#111827', margin: '0 0 8px' }}>Mot de passe modifié</h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>
+          <CheckCircle style={{ width: '48px', height: '48px', color: 'var(--success)', margin: '0 auto 16px' }} />
+          <h1 style={{ fontSize: '22px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px' }}>Mot de passe modifié</h1>
+          <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '0 0 24px' }}>
             Votre mot de passe a été réinitialisé avec succès.
           </p>
-          <Link href="/login" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: '#111827', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>
+          <Link href="/login" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--ink)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>
             Se connecter
           </Link>
         </div>
@@ -113,32 +113,32 @@ function ResetPasswordForm() {
       ]}
     >
       <div style={{ maxWidth: '400px', width: '100%', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#111827', margin: '0 0 8px' }}>Nouveau mot de passe</h1>
-        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px' }}>Nouveau mot de passe</h1>
+        <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '0 0 24px' }}>
           Choisissez un nouveau mot de passe (8+ caractères, 1 majuscule, 1 chiffre).
         </p>
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nouveau mot de passe</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>Nouveau mot de passe</label>
             <div style={{ position: 'relative' }}>
-              <Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
+              <Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: 'var(--ink-4)' }} />
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
-                style={{ width: '100%', padding: '12px 12px 12px 40px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '12px 12px 12px 40px', border: '1px solid var(--line-strong)', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Confirmer le mot de passe</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>Confirmer le mot de passe</label>
             <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
-              style={{ width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '12px', border: '1px solid var(--line-strong)', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
 
-          {error && <p style={{ fontSize: '13px', color: '#dc2626', margin: '0 0 12px' }}>{error}</p>}
+          {error && <p style={{ fontSize: '13px', color: 'var(--danger)', margin: '0 0 12px' }}>{error}</p>}
 
           <button type="submit" disabled={isLoading || !password || !confirmPassword}
-            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', color: 'white', backgroundColor: isLoading ? '#d1d5db' : '#111827', cursor: isLoading ? 'not-allowed' : 'pointer' }}
+            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', color: 'white', backgroundColor: isLoading ? 'var(--line-strong)' : 'var(--ink)', cursor: isLoading ? 'not-allowed' : 'pointer' }}
           >
             {isLoading ? 'Modification...' : 'Modifier le mot de passe'}
           </button>

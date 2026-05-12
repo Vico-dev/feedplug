@@ -28,7 +28,7 @@ function getFonctionnaliteHref(hash: string, locale: string): string {
 
 const navLinkLight = {
   textDecoration: "none",
-  color: "#4a4a4a",
+  color: "var(--ink-2)",
   fontSize: 14,
   fontWeight: 400,
   letterSpacing: "0.01em",
@@ -124,7 +124,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
         }
         .marketing-nav-dropdown > div {
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid var(--line);
           border-radius: 8px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           padding: 8px 0;
@@ -135,16 +135,16 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           gap: 8px;
           padding: 10px 16px;
           font-size: 14px;
-          color: #4a4a4a;
+          color: var(--ink-2);
           text-decoration: none;
           transition: background 0.15s;
         }
         .marketing-nav-dropdown-item:hover {
-          background: #f9fafb;
+          background: var(--paper-2);
           color: #0a0a0a;
         }
         .marketing-nav-dropdown-item.disabled {
-          color: #9ca3af;
+          color: var(--ink-4);
           cursor: not-allowed;
           pointer-events: none;
         }
@@ -157,7 +157,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           border: none;
           font-size: 14px;
           font-weight: 400;
-          color: #4a4a4a;
+          color: var(--ink-2);
           cursor: pointer;
           transition: color 0.2s;
         }
@@ -176,7 +176,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
             border-radius: 10px;
             -webkit-tap-highlight-color: transparent;
           }
-          .marketing-nav-mobile-toggle:active { background: #f3f4f6; }
+          .marketing-nav-mobile-toggle:active { background: var(--paper-2); }
         }
         @media (min-width: 769px) {
           .marketing-nav-mobile-toggle { display: none !important; }
@@ -199,7 +199,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           justify-content: space-between;
           height: 56px;
           padding: 0 16px 0 20px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid var(--line);
           background: #fff;
         }
         .marketing-nav-overlay-close {
@@ -215,7 +215,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           border-radius: 10px;
           -webkit-tap-highlight-color: transparent;
         }
-        .marketing-nav-overlay-close:active { background: #f3f4f6; }
+        .marketing-nav-overlay-close:active { background: var(--paper-2); }
         .marketing-nav-overlay-body {
           flex: 1;
           overflow-y: auto;
@@ -230,7 +230,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           font-weight: 600;
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: #9ca3af;
+          color: var(--ink-4);
           margin-bottom: 12px;
           padding: 0 4px;
         }
@@ -247,15 +247,15 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           -webkit-tap-highlight-color: transparent;
           transition: background 0.15s;
         }
-        .marketing-nav-overlay-link:active { background: #f3f4f6; }
+        .marketing-nav-overlay-link:active { background: var(--paper-2); }
         .marketing-nav-overlay-link-sub {
           font-size: 15px;
           font-weight: 400;
-          color: #4a4a4a;
+          color: var(--ink-2);
           padding-left: 20px;
           min-height: 48px;
         }
-        .marketing-nav-overlay-link-sub:active { background: #f9fafb; color: #0a0a0a; }
+        .marketing-nav-overlay-link-sub:active { background: var(--paper-2); color: #0a0a0a; }
         .marketing-nav-overlay-cta {
           display: flex;
           align-items: center;
@@ -290,14 +290,14 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
           text-align: left;
           -webkit-tap-highlight-color: transparent;
         }
-        .marketing-nav-overlay-trigger:active { background: #f3f4f6; }
+        .marketing-nav-overlay-trigger:active { background: var(--paper-2); }
         .marketing-nav-overlay-trigger svg {
           transition: transform 0.2s ease;
         }
         .marketing-nav-overlay-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
         .marketing-nav-overlay-sublist {
           padding: 4px 0 8px 8px;
-          border-left: 2px solid #e5e7eb;
+          border-left: 2px solid var(--line);
           margin-left: 16px;
           margin-bottom: 8px;
         }
@@ -364,7 +364,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
                         {label}
                       </Link>
                     ) : (
-                      <div key={item.id} className="marketing-nav-overlay-link marketing-nav-overlay-link-sub" style={{ color: "#9ca3af", cursor: "default" }}>
+                      <div key={item.id} className="marketing-nav-overlay-link marketing-nav-overlay-link-sub" style={{ color: "var(--ink-4)", cursor: "default" }}>
                         <Lock size={14} style={{ marginRight: 8, flexShrink: 0 }} /> {label} <span style={{ fontSize: 12 }}>{t("comingSoon")}</span>
                       </div>
                     );
@@ -449,7 +449,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
                   <div key={item.id} className="marketing-nav-dropdown-item disabled">
                     <Lock style={{ width: 14, height: 14, flexShrink: 0 }} />
                     {label}
-                    <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>{t("comingSoon")}</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-4)", marginLeft: "auto" }}>{t("comingSoon")}</span>
                   </div>
                 );
               })}

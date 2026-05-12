@@ -209,7 +209,7 @@ function OnboardingPageContent() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f8fafc",
+          backgroundColor: "var(--paper-2)",
         }}
       >
         <div style={{ textAlign: "center" }}>
@@ -217,14 +217,14 @@ function OnboardingPageContent() {
             style={{
               width: "40px",
               height: "40px",
-              border: "4px solid #e5e7eb",
-              borderTop: "4px solid #2563eb",
+              border: "4px solid var(--line)",
+              borderTop: "4px solid var(--accent)",
               borderRadius: "50%",
               animation: "spin 1s linear infinite",
               margin: "0 auto 16px",
             }}
           />
-          <p style={{ color: "#6b7280", fontSize: "14px" }}>Chargement...</p>
+          <p style={{ color: "var(--ink-3)", fontSize: "14px" }}>Chargement...</p>
         </div>
       </div>
     );
@@ -236,27 +236,27 @@ function OnboardingPageContent() {
     const inputStyle = {
       width: "100%" as const,
       padding: "10px 12px",
-      border: "1px solid #e5e7eb",
+      border: "1px solid var(--line)",
       borderRadius: "6px",
       fontSize: "14px",
       color: "#0a0a0a",
       backgroundColor: "#ffffff",
     };
-    const labelStyle = { display: "block" as const, fontSize: "14px", fontWeight: "500" as const, color: "#374151", marginBottom: "6px" };
+    const labelStyle = { display: "block" as const, fontSize: "14px", fontWeight: "500" as const, color: "var(--ink-2)", marginBottom: "6px" };
 
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f8fafc", padding: "24px" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--paper-2)", padding: "24px" }}>
         <div style={{ maxWidth: "480px", width: "100%" }}>
           <h1 style={{ fontSize: "24px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
             Informations entreprise
           </h1>
-          <p style={{ fontSize: "15px", color: "#6b7280", marginBottom: "24px" }}>
+          <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px" }}>
             Ces informations nous permettent de personnaliser votre essai et de vous contacter si besoin.
           </p>
 
           <form onSubmit={handleSubmitCompanyInfo} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             {submitError && (
-              <div style={{ padding: "12px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#dc2626", fontSize: "14px" }}>
+              <div style={{ padding: "12px", backgroundColor: "var(--danger-bg)", border: "1px solid #fecaca", borderRadius: "6px", color: "var(--danger)", fontSize: "14px" }}>
                 {submitError}
               </div>
             )}
@@ -264,7 +264,7 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Building2 style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                Nom de l&apos;entreprise <span style={{ color: "#dc2626" }}>*</span>
+                Nom de l&apos;entreprise <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 type="text"
@@ -279,7 +279,7 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Phone style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                Téléphone (avec indicatif pays) <span style={{ color: "#dc2626" }}>*</span>
+                Téléphone (avec indicatif pays) <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <select
@@ -309,13 +309,13 @@ function OnboardingPageContent() {
                   style={{ ...inputStyle, flex: 1, minWidth: "140px" }}
                 />
               </div>
-              <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Sans le 0 initial pour la France (ex. 6 12 34 56 78)</p>
+              <p style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "4px" }}>Sans le 0 initial pour la France (ex. 6 12 34 56 78)</p>
             </div>
 
             <div>
               <label style={labelStyle}>
                 <Mail style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                Email de facturation <span style={{ color: "#dc2626" }}>*</span>
+                Email de facturation <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 type="email"
@@ -330,7 +330,7 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Receipt style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                N° de TVA intracommunautaire <span style={{ color: "#dc2626" }}>*</span>
+                N° de TVA intracommunautaire <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 type="text"
@@ -345,7 +345,7 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Hash style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                SIREN <span style={{ color: "#dc2626" }}>*</span>
+                SIREN <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 type="text"
@@ -355,13 +355,13 @@ function OnboardingPageContent() {
                 style={inputStyle}
                 required
               />
-              <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Numéro SIREN à 9 chiffres.</p>
+              <p style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "4px" }}>Numéro SIREN à 9 chiffres.</p>
             </div>
 
-            <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "16px", marginTop: "8px" }}>
-              <p style={{ fontSize: "13px", fontWeight: "500", color: "#374151", marginBottom: "12px" }}>
+            <div style={{ borderTop: "1px solid var(--line)", paddingTop: "16px", marginTop: "8px" }}>
+              <p style={{ fontSize: "13px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "12px" }}>
                 <MapPin style={{ width: "14px", height: "14px", display: "inline-block", verticalAlign: "middle", marginRight: "4px" }} />
-                Adresse de facturation <span style={{ color: "#dc2626" }}>*</span>
+                Adresse de facturation <span style={{ color: "var(--danger)" }}>*</span>
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Adresse ligne 1 *" style={inputStyle} required />
@@ -380,7 +380,7 @@ function OnboardingPageContent() {
               style={{
                 width: "100%",
                 padding: "14px 24px",
-                backgroundColor: submitting ? "#94a3b8" : "#0a0a0a",
+                backgroundColor: submitting ? "var(--ink-4)" : "#0a0a0a",
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "8px",
@@ -418,7 +418,7 @@ function OnboardingPageContent() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#f8fafc",
+        backgroundColor: "var(--paper-2)",
         padding: "24px",
       }}
     >
@@ -426,16 +426,16 @@ function OnboardingPageContent() {
         <div
           style={{
             padding: "12px 16px",
-            backgroundColor: "#f0fdf4",
-            border: "1px solid #bbf7d0",
+            backgroundColor: "var(--success-bg)",
+            border: "1px solid #BBF7D0",
             borderRadius: "8px",
             marginBottom: "24px",
           }}
         >
-          <p style={{ margin: 0, fontSize: "14px", color: "#166534", fontWeight: "500" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "var(--success)", fontWeight: "500" }}>
             ✓ 30 jours d&apos;essai gratuit — Sans carte bancaire
           </p>
-          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#15803d", opacity: 0.9 }}>
+          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--success)", opacity: 0.9 }}>
             Testez toutes les fonctionnalités sans engagement
           </p>
         </div>
@@ -443,14 +443,14 @@ function OnboardingPageContent() {
         <h1 style={{ fontSize: "28px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
           Bienvenue{user?.firstName ? ` ${user.firstName}` : ""} !
         </h1>
-        <p style={{ fontSize: "16px", color: "#6b7280", marginBottom: "8px", lineHeight: 1.6 }}>
+        <p style={{ fontSize: "16px", color: "var(--ink-3)", marginBottom: "8px", lineHeight: 1.6 }}>
           FeedPlug centralise, optimise et distribue vos fiches produit sur tous vos canaux.
         </p>
-        <p style={{ fontSize: "14px", color: "#9ca3af", marginBottom: "24px" }}>
+        <p style={{ fontSize: "14px", color: "var(--ink-4)", marginBottom: "24px" }}>
           Découvrez les fonctionnalités en 2 minutes ou allez directement au tableau de bord.
         </p>
 
-        <div style={{ marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "#374151" }}>
+        <div style={{ marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "var(--ink-2)" }}>
           Ce que vous pouvez faire avec FeedPlug
         </div>
         <div
@@ -469,7 +469,7 @@ function OnboardingPageContent() {
                 alignItems: "flex-start",
                 gap: "12px",
                 padding: "14px",
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
                 borderRadius: "10px",
                 backgroundColor: "#ffffff",
               }}
@@ -479,8 +479,8 @@ function OnboardingPageContent() {
                   width: "36px",
                   height: "36px",
                   borderRadius: "8px",
-                  backgroundColor: "#eff6ff",
-                  color: "#2563eb",
+                  backgroundColor: "var(--accent-bg)",
+                  color: "var(--accent)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -491,7 +491,7 @@ function OnboardingPageContent() {
               </div>
               <div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0a0a0a" }}>{label}</div>
-                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>{desc}</div>
+                <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "2px" }}>{desc}</div>
               </div>
             </div>
           ))}
@@ -504,7 +504,7 @@ function OnboardingPageContent() {
             style={{
               width: "100%",
               padding: "14px 24px",
-              backgroundColor: "#2563eb",
+              backgroundColor: "var(--accent)",
               color: "#ffffff",
               border: "none",
               borderRadius: "8px",
@@ -527,8 +527,8 @@ function OnboardingPageContent() {
               width: "100%",
               padding: "12px 24px",
               backgroundColor: "transparent",
-              color: "#6b7280",
-              border: "1px solid #e5e7eb",
+              color: "var(--ink-3)",
+              border: "1px solid var(--line)",
               borderRadius: "8px",
               fontSize: "15px",
               fontWeight: "500",
@@ -545,7 +545,7 @@ function OnboardingPageContent() {
 
 export default function OnboardingPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100vh", backgroundColor: "#f8fafc" }} />}>
+    <Suspense fallback={<div style={{ minHeight: "100vh", backgroundColor: "var(--paper-2)" }} />}>
       <OnboardingPageContent />
     </Suspense>
   );

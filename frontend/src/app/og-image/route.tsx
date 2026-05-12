@@ -36,7 +36,7 @@ export async function GET() {
           style={{
             display: "flex",
             fontSize: 28,
-            color: "#94a3b8",
+            color: "#B0B0B0",
             maxWidth: 800,
             textAlign: "center",
             lineHeight: 1.4,

@@ -32,8 +32,8 @@ export function WelcomeBanner({ onStartOnboarding, onDismiss }: WelcomeBannerPro
           width: "44px",
           height: "44px",
           borderRadius: "10px",
-          backgroundColor: "#eff6ff",
-          color: "#2563eb",
+          backgroundColor: "var(--accent-bg)",
+          color: "var(--accent)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -46,7 +46,7 @@ export function WelcomeBanner({ onStartOnboarding, onDismiss }: WelcomeBannerPro
         <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0a0a0a" }}>
           Nouveau sur FeedPlug ?
         </p>
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6b7280" }}>
+        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--ink-3)" }}>
           Découvrez les fonctionnalités en 2 minutes avec la visite guidée.
         </p>
       </div>
@@ -56,7 +56,7 @@ export function WelcomeBanner({ onStartOnboarding, onDismiss }: WelcomeBannerPro
           onClick={onStartOnboarding}
           style={{
             padding: "10px 16px",
-            backgroundColor: "#2563eb",
+            backgroundColor: "var(--accent)",
             color: "#fff",
             border: "none",
             borderRadius: "8px",
@@ -77,7 +77,7 @@ export function WelcomeBanner({ onStartOnboarding, onDismiss }: WelcomeBannerPro
             backgroundColor: "transparent",
             border: "none",
             borderRadius: "6px",
-            color: "#9ca3af",
+            color: "var(--ink-4)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",

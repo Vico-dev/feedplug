@@ -58,7 +58,7 @@ export default function DistributionAssistantsIAPage() {
               fontWeight: 500,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#6b7280",
+              color: "var(--ink-3)",
             }}
           >
             {t("hero.badge")}
@@ -79,7 +79,7 @@ export default function DistributionAssistantsIAPage() {
           style={{
             fontSize: 20,
             lineHeight: 1.65,
-            color: "#4a4a4a",
+            color: "var(--ink-2)",
             marginBottom: 48,
           }}
         >
@@ -110,7 +110,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#fafafa",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -127,7 +127,7 @@ export default function DistributionAssistantsIAPage() {
           <p
             style={{
               fontSize: 18,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               lineHeight: 1.7,
               margin: 0,
             }}
@@ -142,7 +142,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#ffffff",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -159,7 +159,7 @@ export default function DistributionAssistantsIAPage() {
           <p
             style={{
               fontSize: 18,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               marginBottom: 48,
               lineHeight: 1.6,
               maxWidth: 700,
@@ -181,7 +181,7 @@ export default function DistributionAssistantsIAPage() {
                   key={p.name}
                   style={{
                     padding: 28,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     borderRadius: 2,
                     backgroundColor: "#fafafa",
                   }}
@@ -199,8 +199,8 @@ export default function DistributionAssistantsIAPage() {
                       style={{
                         fontSize: 12,
                         fontWeight: 500,
-                        color: "#16a34a",
-                        backgroundColor: "#dcfce7",
+                        color: "var(--success)",
+                        backgroundColor: "var(--success-bg)",
                         padding: "4px 10px",
                         borderRadius: 2,
                       }}
@@ -220,7 +220,7 @@ export default function DistributionAssistantsIAPage() {
                   <p
                     style={{
                       fontSize: 15,
-                      color: "#6b7280",
+                      color: "var(--ink-3)",
                       lineHeight: 1.6,
                       margin: 0,
                     }}
@@ -239,7 +239,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#fafafa",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -256,7 +256,7 @@ export default function DistributionAssistantsIAPage() {
           <p
             style={{
               fontSize: 18,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               marginBottom: 32,
               lineHeight: 1.6,
             }}
@@ -279,7 +279,7 @@ export default function DistributionAssistantsIAPage() {
                   style={{
                     width: 20,
                     height: 20,
-                    color: "#16a34a",
+                    color: "var(--success)",
                     flexShrink: 0,
                     marginTop: 2,
                   }}
@@ -298,7 +298,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#ffffff",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -324,7 +324,7 @@ export default function DistributionAssistantsIAPage() {
           <p
             style={{
               fontSize: 18,
-              color: "#4a4a4a",
+              color: "var(--ink-2)",
               marginBottom: 48,
               lineHeight: 1.6,
               maxWidth: 700,
@@ -340,8 +340,8 @@ export default function DistributionAssistantsIAPage() {
                 alignItems: "center",
                 gap: 10,
                 padding: "12px 18px",
-                border: "1px solid #dbeafe",
-                backgroundColor: "#eff6ff",
+                border: "1px solid var(--accent-bg)",
+                backgroundColor: "var(--accent-bg)",
                 color: "#0a0a0a",
                 textDecoration: "none",
                 fontSize: 14,
@@ -366,7 +366,7 @@ export default function DistributionAssistantsIAPage() {
                   key={i}
                   style={{
                     padding: 28,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     borderRadius: 2,
                     backgroundColor: "#fafafa",
                   }}
@@ -391,7 +391,7 @@ export default function DistributionAssistantsIAPage() {
                   <p
                     style={{
                       fontSize: 15,
-                      color: "#6b7280",
+                      color: "var(--ink-3)",
                       lineHeight: 1.6,
                       margin: 0,
                     }}
@@ -410,7 +410,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#fafafa",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -431,7 +431,7 @@ export default function DistributionAssistantsIAPage() {
                   style={{
                     paddingBottom: 24,
                     borderBottom:
-                      i < arr.length - 1 ? "1px solid #e5e7eb" : "none",
+                      i < arr.length - 1 ? "1px solid var(--line)" : "none",
                   }}
                 >
                   <h3
@@ -448,7 +448,7 @@ export default function DistributionAssistantsIAPage() {
                     style={{
                       margin: 0,
                       fontSize: 15,
-                      color: "#4a4a4a",
+                      color: "var(--ink-2)",
                       lineHeight: 1.6,
                     }}
                   >
@@ -467,7 +467,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "80px 48px",
           backgroundColor: "#0a0a0a",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div
@@ -490,7 +490,7 @@ export default function DistributionAssistantsIAPage() {
           <p
             style={{
               fontSize: 18,
-              color: "#d1d5db",
+              color: "var(--line-strong)",
               marginBottom: 32,
               lineHeight: 1.6,
             }}
@@ -523,7 +523,7 @@ export default function DistributionAssistantsIAPage() {
         style={{
           padding: "48px 48px",
           backgroundColor: "#fafafa",
-          borderTop: "1px solid #e5e7eb",
+          borderTop: "1px solid var(--line)",
         }}
       >
         <div
@@ -551,32 +551,32 @@ export default function DistributionAssistantsIAPage() {
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
             <Link
               href="/optimiser-flux-google-shopping"
-              style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}
+              style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}
             >
               Google Shopping
             </Link>
             <Link
               href="/optimiser-flux-amazon"
-              style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}
+              style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}
             >
               Amazon
             </Link>
             <Link
               href="/distribution-assistants-ia"
-              style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}
+              style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}
             >
               Assistants IA
             </Link>
             <Link
               href="/feed-produit-chatgpt"
-              style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}
+              style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}
             >
               Feed ChatGPT
             </Link>
-            <Link href="/" style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}>
+            <Link href="/" style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}>
               {t("nav.home")}
             </Link>
-            <Link href="/docs" style={{ color: "#6b7280", fontSize: 14, textDecoration: "none" }}>
+            <Link href="/docs" style={{ color: "var(--ink-3)", fontSize: 14, textDecoration: "none" }}>
               {t("nav.docs")}
             </Link>
           </div>

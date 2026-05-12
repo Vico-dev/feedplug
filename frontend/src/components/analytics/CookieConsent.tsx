@@ -84,7 +84,7 @@ export default function CookieConsent({
         maxWidth: "480px",
         zIndex: 9999,
         backgroundColor: "#ffffff",
-        border: "1px solid #e5e7eb",
+        border: "1px solid var(--line)",
         borderRadius: "12px",
         padding: "24px",
         boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
@@ -93,11 +93,11 @@ export default function CookieConsent({
         <p style={{
           fontSize: "14px",
           lineHeight: "1.6",
-          color: "#374151",
+          color: "var(--ink-2)",
           margin: "0 0 16px 0",
         }}>
           {t("body")}{" "}
-          <Link href="/legal/cookies" style={{ color: "#111827", textDecoration: "underline" }}>
+          <Link href="/legal/cookies" style={{ color: "var(--ink)", textDecoration: "underline" }}>
             {t("learnMore")}
           </Link>
         </p>
@@ -106,9 +106,9 @@ export default function CookieConsent({
             padding: "10px 20px",
             fontSize: "14px",
             fontWeight: "500",
-            color: "#6b7280",
+            color: "var(--ink-3)",
             backgroundColor: "transparent",
-            border: "1px solid #d1d5db",
+            border: "1px solid var(--line-strong)",
             borderRadius: "6px",
             cursor: "pointer",
             fontFamily: "inherit",
@@ -121,7 +121,7 @@ export default function CookieConsent({
             fontSize: "14px",
             fontWeight: "500",
             color: "#ffffff",
-            backgroundColor: "#111827",
+            backgroundColor: "var(--ink)",
             border: "none",
             borderRadius: "6px",
             cursor: "pointer",

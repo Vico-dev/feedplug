@@ -240,10 +240,10 @@ const PLATFORMS = [
 ];
 
 const STATUS_CONFIG: Record<ABTestStatus, { label: string; color: string; bg: string }> = {
-  DRAFT: { label: 'Brouillon', color: '#6b7280', bg: '#f3f4f6' },
-  RUNNING: { label: 'En cours', color: '#2563eb', bg: '#dbeafe' },
+  DRAFT: { label: 'Brouillon', color: 'var(--ink-3)', bg: 'var(--paper-2)' },
+  RUNNING: { label: 'En cours', color: 'var(--accent)', bg: 'var(--accent-bg)' },
   COMPLETED: { label: 'Terminé', color: '#16a34a', bg: '#dcfce7' },
-  CANCELLED: { label: 'Annulé', color: '#dc2626', bg: '#fee2e2' },
+  CANCELLED: { label: 'Annulé', color: 'var(--danger)', bg: '#fee2e2' },
 };
 
 function formatConditionSentence(rule: Rule) {
@@ -662,7 +662,7 @@ export default function OptimiserPage() {
           >
             <item.icon size={18} />
             {item.label}
-            <span style={{ padding: '2px 8px', borderRadius: 999, backgroundColor: tab === item.key ? 'var(--app-accent-soft)' : '#f3f4f6', fontSize: 12, color: tab === item.key ? 'var(--app-accent)' : 'var(--app-text-muted)' }}>
+            <span style={{ padding: '2px 8px', borderRadius: 999, backgroundColor: tab === item.key ? 'var(--app-accent-soft)' : 'var(--paper-2)', fontSize: 12, color: tab === item.key ? 'var(--app-accent)' : 'var(--app-text-muted)' }}>
               {item.count}
             </span>
           </button>
@@ -706,7 +706,7 @@ export default function OptimiserPage() {
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--app-text-muted)' }}>{template.description}</p>
                   </div>
                   {template.example && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', padding: 12, backgroundColor: '#f8faf9', borderRadius: 10, fontSize: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', padding: 12, backgroundColor: 'var(--paper-2)', borderRadius: 10, fontSize: 12 }}>
                       <div style={{ color: 'var(--app-text-muted)' }}><div style={{ fontSize: 10, marginBottom: 2 }}>AVANT</div><div style={{ fontWeight: 500 }}>{template.example.before}</div></div>
                       <div style={{ color: 'var(--app-accent)' }}>→</div>
                       <div style={{ color: 'var(--app-text-muted)' }}><div style={{ fontSize: 10, marginBottom: 2 }}>APRÈS</div><div style={{ fontWeight: 500, color: 'var(--app-accent)' }}>{template.example.after}</div></div>
@@ -751,7 +751,7 @@ export default function OptimiserPage() {
       {tab === 'ab-tests' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Hero */}
-          <div style={{ background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
+          <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
               <Target size={14} /> Expérimentation
             </div>
@@ -775,7 +775,7 @@ export default function OptimiserPage() {
             </PageCard>
             <PageCard style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}><Play size={17} /></div>
+                <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}><Play size={17} /></div>
                 <span style={{ fontSize: 13, color: 'var(--app-text-muted)' }}>En cours</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 600 }}>{abTests.filter(t => t.status === 'RUNNING').length}</div>
@@ -860,7 +860,7 @@ export default function OptimiserPage() {
             </DialogHeader>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
               {previewMatches.slice(0, 5).map(item => (
-                <div key={item.itemId} style={{ padding: 16, backgroundColor: '#f8faf9', borderRadius: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div key={item.itemId} style={{ padding: 16, backgroundColor: 'var(--paper-2)', borderRadius: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--app-text-muted)', marginBottom: 4 }}>Avant</div><div style={{ fontSize: 13 }}>{item.before?.title || '—'}</div></div>
                   <div style={{ backgroundColor: 'var(--app-accent-soft)', padding: 12, borderRadius: 8 }}><div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--app-accent)', marginBottom: 4 }}>Après</div><div style={{ fontSize: 13, fontWeight: 500 }}>{item.after?.title || '—'}</div></div>
                 </div>
@@ -1185,9 +1185,9 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
   const getSuggestionIcon = (type: IASuggestion['type']) => {
     const icons: Record<string, { icon: typeof Type; color: string; bg: string }> = {
-      title: { icon: Type, color: '#7c3aed', bg: '#f3e8ff' },
+      title: { icon: Type, color: 'var(--accent)', bg: '#f3e8ff' },
       description: { icon: LayoutList, color: '#f59e0b', bg: '#fef3c7' },
-      category: { icon: Filter, color: '#2563eb', bg: '#dbeafe' },
+      category: { icon: Filter, color: 'var(--accent)', bg: 'var(--accent-bg)' },
       image: { icon: ImageIcon, color: '#ec4899', bg: '#fce7f3' },
       price: { icon: BarChart3, color: '#16a34a', bg: '#dcfce7' },
     };
@@ -1195,14 +1195,14 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
   };
 
   const getImpactBadge = (impact: IASuggestion['impact']) => {
-    const config = { high: { label: 'Impact fort', color: '#dc2626', bg: '#fee2e2' }, medium: { label: 'Impact moyen', color: '#f59e0b', bg: '#fef3c7' }, low: { label: 'Impact faible', color: '#6b7280', bg: '#f3f4f6' } };
+    const config = { high: { label: 'Impact fort', color: 'var(--danger)', bg: '#fee2e2' }, medium: { label: 'Impact moyen', color: '#f59e0b', bg: '#fef3c7' }, low: { label: 'Impact faible', color: 'var(--ink-3)', bg: 'var(--paper-2)' } };
     return config[impact];
   };
 
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
+        <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
             <Bot size={14} /> Intelligence artificielle
           </div>
@@ -1212,7 +1212,7 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
           {[1, 2, 3].map(i => (
             <PageCard key={i} style={{ padding: 24 }}>
               <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Loader2 size={32} className="animate-spin" style={{ color: '#7c3aed' }} />
+                <Loader2 size={32} className="animate-spin" style={{ color: 'var(--accent)' }} />
               </div>
             </PageCard>
           ))}
@@ -1223,7 +1223,7 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
+      <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
           <Bot size={14} /> Intelligence artificielle
         </div>
@@ -1248,7 +1248,7 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
       {suggestions.length === 0 ? (
         <PageCard className="text-center py-12">
-          <Bot size={48} style={{ color: '#7c3aed', margin: '0 auto 16px' }} />
+          <Bot size={48} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
           <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600 }}>Aucune suggestion</h3>
           <p style={{ margin: 0, color: 'var(--app-text-muted)' }}>Votre catalogue est bien optimisé !</p>
         </PageCard>
@@ -1272,7 +1272,7 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
                   {suggestion.description}
                 </p>
                 {suggestion.example && (
-                  <div style={{ backgroundColor: '#f8faf9', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                  <div style={{ backgroundColor: 'var(--paper-2)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', fontSize: 12 }}>
                       <div style={{ color: 'var(--app-text-muted)' }}>
                         <div style={{ fontSize: 10, marginBottom: 2 }}>AVANT</div>

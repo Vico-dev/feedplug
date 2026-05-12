@@ -1,19 +1,38 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { getLocale } from "next-intl/server";
 import { Suspense } from "react";
 import "./globals.css";
 import { AuthProviderWrapper } from "./auth-provider-wrapper";
 import { ShopifyEmbeddedBridge } from "@/components/shopify/shopify-embedded-bridge";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fontDisplay = Bricolage_Grotesque({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const fontSans = Hanken_Grotesk({
+  variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const fontSerif = Instrument_Serif({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+const fontMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -44,8 +63,8 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning className="light">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        style={{ backgroundColor: '#ffffff', color: '#0a0a0a' }}
+        suppressHydrationWarning
+        className={`${fontDisplay.variable} ${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}
       >
         <AuthProviderWrapper>
           <Suspense fallback={null}>

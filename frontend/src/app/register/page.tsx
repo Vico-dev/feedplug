@@ -201,7 +201,7 @@ function RegisterPageContent() {
           }}>Créer un compte</h1>
           <p style={{
             fontSize: '16px',
-            color: '#6b7280'
+            color: 'var(--ink-3)'
           }}>
             30 jours d&apos;essai gratuit, sans carte bancaire
           </p>
@@ -220,9 +220,9 @@ function RegisterPageContent() {
               margin: '24px 0',
               gap: '16px'
             }}>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
-              <span style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>ou</span>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
+              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--line)' }} />
+              <span style={{ fontSize: '14px', color: 'var(--ink-4)', fontWeight: '500' }}>ou</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--line)' }} />
             </div>
           </>
         )}
@@ -249,10 +249,10 @@ function RegisterPageContent() {
           {error && (
             <div style={{
               padding: '12px',
-              backgroundColor: '#fef2f2',
+              backgroundColor: 'var(--danger-bg)',
               border: '1px solid #fecaca',
               borderRadius: '2px',
-              color: '#dc2626',
+              color: 'var(--danger)',
               fontSize: '14px'
             }}>
               <div>{error}</div>
@@ -260,11 +260,11 @@ function RegisterPageContent() {
                 <div style={{ marginTop: '8px', fontSize: '13px', color: '#7f1d1d', lineHeight: 1.5 }}>
                   Ce compte existe déjà en email/mot de passe.
                   {' '}
-                  <Link href={loginHref} style={{ color: '#991b1b', textDecoration: 'underline', fontWeight: 600 }}>
+                  <Link href={loginHref} style={{ color: 'var(--danger)', textDecoration: 'underline', fontWeight: 600 }}>
                     Connecte-toi ici
                   </Link>
                   {' '}ou{' '}
-                  <Link href={forgotPasswordHref} style={{ color: '#991b1b', textDecoration: 'underline', fontWeight: 600 }}>
+                  <Link href={forgotPasswordHref} style={{ color: 'var(--danger)', textDecoration: 'underline', fontWeight: 600 }}>
                     réinitialise ton mot de passe
                   </Link>
                   .
@@ -291,7 +291,7 @@ function RegisterPageContent() {
                 transform: 'translateY(-50%)',
                 width: '18px',
                 height: '18px',
-                color: '#9ca3af'
+                color: 'var(--ink-4)'
               }} />
               <input
                 id="register-name"
@@ -303,7 +303,7 @@ function RegisterPageContent() {
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 40px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   color: '#0a0a0a',
@@ -332,7 +332,7 @@ function RegisterPageContent() {
                 transform: 'translateY(-50%)',
                 width: '18px',
                 height: '18px',
-                color: '#9ca3af'
+                color: 'var(--ink-4)'
               }} />
               <input
                 id="register-email"
@@ -344,7 +344,7 @@ function RegisterPageContent() {
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 40px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   color: '#0a0a0a',
@@ -363,7 +363,7 @@ function RegisterPageContent() {
               color: '#0a0a0a',
               marginBottom: '8px'
             }}>
-              Entreprise <span style={{ color: '#9ca3af', fontWeight: '400' }}>(optionnel)</span>
+              Entreprise <span style={{ color: 'var(--ink-4)', fontWeight: '400' }}>(optionnel)</span>
             </label>
             <input
               id="register-company"
@@ -374,7 +374,7 @@ function RegisterPageContent() {
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 borderRadius: '2px',
                 fontSize: '14px',
                 color: '#0a0a0a',
@@ -402,7 +402,7 @@ function RegisterPageContent() {
                 transform: 'translateY(-50%)',
                 width: '18px',
                 height: '18px',
-                color: '#9ca3af'
+                color: 'var(--ink-4)'
               }} />
               <input
                 id="register-password"
@@ -415,7 +415,7 @@ function RegisterPageContent() {
                 style={{
                   width: '100%',
                   padding: '10px 40px 10px 40px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   color: '#0a0a0a',
@@ -438,13 +438,13 @@ function RegisterPageContent() {
                 }}
               >
                 {showPassword ? (
-                  <EyeOff style={{ width: '18px', height: '18px', color: '#9ca3af' }} />
+                  <EyeOff style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
                 ) : (
-                  <Eye style={{ width: '18px', height: '18px', color: '#9ca3af' }} />
+                  <Eye style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
                 )}
               </button>
             </div>
-            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', marginBottom: 0 }}>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '4px', marginBottom: 0 }}>
               Au moins {MIN_PASSWORD_LENGTH} caractères, une majuscule et un chiffre
             </p>
           </div>
@@ -467,7 +467,7 @@ function RegisterPageContent() {
                 transform: 'translateY(-50%)',
                 width: '18px',
                 height: '18px',
-                color: '#9ca3af'
+                color: 'var(--ink-4)'
               }} />
               <input
                 id="register-confirm-password"
@@ -480,7 +480,7 @@ function RegisterPageContent() {
                 style={{
                   width: '100%',
                   padding: '10px 40px 10px 40px',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   borderRadius: '2px',
                   fontSize: '14px',
                   color: '#0a0a0a',
@@ -503,9 +503,9 @@ function RegisterPageContent() {
                 }}
               >
                 {showConfirmPassword ? (
-                  <EyeOff style={{ width: '18px', height: '18px', color: '#9ca3af' }} />
+                  <EyeOff style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
                 ) : (
-                  <Eye style={{ width: '18px', height: '18px', color: '#9ca3af' }} />
+                  <Eye style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
                 )}
               </button>
             </div>
@@ -523,7 +523,7 @@ function RegisterPageContent() {
                 Vérification anti-spam
               </label>
               <div style={{
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--line)',
                 borderRadius: '8px',
                 padding: '12px',
                 backgroundColor: '#fafafa'
@@ -539,7 +539,7 @@ function RegisterPageContent() {
             style={{
               width: '100%',
               padding: '14px',
-              backgroundColor: isLoading || (captchaEnabled && !captchaToken) ? '#94a3b8' : '#0f172a',
+              backgroundColor: isLoading || (captchaEnabled && !captchaToken) ? 'var(--ink-4)' : 'var(--ink)',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',
@@ -562,15 +562,15 @@ function RegisterPageContent() {
           textAlign: 'center',
           marginTop: '24px',
           fontSize: '14px',
-          color: '#64748b'
+          color: 'var(--ink-3)'
         }}>
           Déjà un compte ?{' '}
-          <Link href={loginHref} style={{ color: '#0f172a', textDecoration: 'none', fontWeight: '600' }}>
+          <Link href={loginHref} style={{ color: 'var(--ink)', textDecoration: 'none', fontWeight: '600' }}>
             Se connecter
           </Link>
         </p>
-        <p style={{ textAlign: 'center', marginTop: '12px', fontSize: '13px', color: '#94a3b8' }}>
-          <Link href="/tarifs" style={{ color: '#64748b', textDecoration: 'underline' }}>Voir les tarifs</Link>
+        <p style={{ textAlign: 'center', marginTop: '12px', fontSize: '13px', color: 'var(--ink-4)' }}>
+          <Link href="/tarifs" style={{ color: 'var(--ink-3)', textDecoration: 'underline' }}>Voir les tarifs</Link>
         </p>
       </div>
     </AuthPageShell>

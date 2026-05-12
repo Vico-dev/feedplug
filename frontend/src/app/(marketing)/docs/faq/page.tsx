@@ -14,7 +14,7 @@ export default function DocsFaqPage() {
         </h1>
       </div>
 
-      <p style={{ color: "#6b7280", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
+      <p style={{ color: "var(--ink-3)", fontSize: "1.05rem", marginBottom: 32, lineHeight: 1.6 }}>
         Réponses aux questions fréquentes et pistes pour résoudre les problèmes courants. Si votre situation n&apos;est pas couverte, contactez le support via la page <Link href="/demo" style={{ color: "#0a0a0a", textDecoration: "underline" }}>Contact</Link>.
       </p>
 
@@ -23,16 +23,16 @@ export default function DocsFaqPage() {
           <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: 16 }}>{category}</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {items.map(({ q, a }) => (
-              <div key={q} style={{ padding: "16px 0", borderBottom: "1px solid #e5e7eb" }}>
+              <div key={q} style={{ padding: "16px 0", borderBottom: "1px solid var(--line)" }}>
                 <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8, color: "#0a0a0a" }}>{q}</h3>
-                <p style={{ margin: 0, color: "#4a4a4a", fontSize: 15, lineHeight: 1.6 }}>{a}</p>
+                <p style={{ margin: 0, color: "var(--ink-2)", fontSize: 15, lineHeight: 1.6 }}>{a}</p>
               </div>
             ))}
           </div>
         </section>
       ))}
 
-      <p style={{ fontSize: 14, color: "#6b7280" }}>
+      <p style={{ fontSize: 14, color: "var(--ink-3)" }}>
         <Link href="/docs" style={{ color: "#0a0a0a", textDecoration: "underline" }}>← Retour à la documentation</Link>
       </p>
     </>

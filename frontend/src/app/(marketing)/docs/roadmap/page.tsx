@@ -46,7 +46,7 @@ export default function RoadmapPage() {
       <h1 style={{ fontSize: "2rem", fontWeight: 600, marginBottom: 8 }}>
         Roadmap FeedPlug
       </h1>
-      <p style={{ color: "#6b7280", fontSize: "1.05rem", marginBottom: 48 }}>
+      <p style={{ color: "var(--ink-3)", fontSize: "1.05rem", marginBottom: 48 }}>
         Les évolutions prévues pour vous aider à mieux vendre et piloter vos campagnes. Les délais sont indicatifs.
       </p>
 
@@ -54,7 +54,7 @@ export default function RoadmapPage() {
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: 16 }}>
           Déjà disponible
         </h2>
-        <p style={{ color: "#4a4a4a", marginBottom: 16, lineHeight: 1.6 }}>
+        <p style={{ color: "var(--ink-2)", marginBottom: 16, lineHeight: 1.6 }}>
           Import depuis Shopify ou depuis des fichiers d&apos;export, enrichissement IA avec des templates par secteur (mode, beauté, tech, food, home), score qualité 0–100, export vers Google Merchant Center, tests A/B par segment, tableau de bord avec évolution du score, rôles et facturation, parcours de démarrage guidé, et emails de suivi (mise à jour terminée, export prêt, alerte en cas d&apos;erreur).
         </p>
       </section>
@@ -63,7 +63,7 @@ export default function RoadmapPage() {
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: 8 }}>
           Prochaines étapes — Pilotage et canaux
         </h2>
-        <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ color: "var(--ink-3)", fontSize: 14, marginBottom: 20, lineHeight: 1.5 }}>
           Objectif : vous donner plus de visibilité sur l&apos;impact de vos optimisations et élargir vos canaux. Cible : mars 2026.
         </p>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -80,7 +80,7 @@ export default function RoadmapPage() {
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: 8 }}>
           À plus long terme — Intelligence et canaux
         </h2>
-        <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ color: "var(--ink-3)", fontSize: 14, marginBottom: 20, lineHeight: 1.5 }}>
           Objectif : anticiper les performances et vous différencier de la concurrence. Cible : mai 2026 et au-delà.
         </p>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -104,20 +104,20 @@ export default function RoadmapPage() {
             gap: 16,
           }}
         >
-          <div style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Fondations</div>
+          <div style={{ padding: 16, border: "1px solid var(--line)", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 4 }}>Fondations</div>
             <div style={{ fontWeight: 600 }}>En place</div>
-            <div style={{ fontSize: 13, color: "#4a4a4a" }}>Fév. 2026</div>
+            <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Fév. 2026</div>
           </div>
-          <div style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Pilotage & canaux</div>
+          <div style={{ padding: 16, border: "1px solid var(--line)", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 4 }}>Pilotage & canaux</div>
             <div style={{ fontWeight: 600 }}>À venir</div>
-            <div style={{ fontSize: 13, color: "#4a4a4a" }}>Cible mars 2026</div>
+            <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Cible mars 2026</div>
           </div>
-          <div style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Intelligence & canaux</div>
+          <div style={{ padding: 16, border: "1px solid var(--line)", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 4 }}>Intelligence & canaux</div>
             <div style={{ fontWeight: 600 }}>À venir</div>
-            <div style={{ fontSize: 13, color: "#4a4a4a" }}>Cible mai 2026</div>
+            <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Cible mai 2026</div>
           </div>
         </div>
       </section>
@@ -126,7 +126,7 @@ export default function RoadmapPage() {
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: 16 }}>
           Proposer une idée
         </h2>
-        <p style={{ color: "#4a4a4a", fontSize: 15, marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ color: "var(--ink-2)", fontSize: 15, marginBottom: 20, lineHeight: 1.5 }}>
           Une fonctionnalité vous manque ? Dites-nous ce qui vous aiderait au quotidien.
         </p>
         {status === "success" ? (
@@ -134,9 +134,9 @@ export default function RoadmapPage() {
             style={{
               padding: 20,
               borderRadius: 8,
-              backgroundColor: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              color: "#166534",
+              backgroundColor: "var(--success-bg)",
+              border: "1px solid #BBF7D0",
+              color: "var(--success)",
               fontSize: 15,
             }}
           >
@@ -145,8 +145,8 @@ export default function RoadmapPage() {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
             <div>
-              <label htmlFor="feature-email" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "#374151" }}>
-                Email <span style={{ color: "#dc2626" }}>*</span>
+              <label htmlFor="feature-email" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "var(--ink-2)" }}>
+                Email <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 id="feature-email"
@@ -158,7 +158,7 @@ export default function RoadmapPage() {
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--line-strong)",
                   borderRadius: 6,
                   fontSize: 15,
                   boxSizing: "border-box",
@@ -166,7 +166,7 @@ export default function RoadmapPage() {
               />
             </div>
             <div>
-              <label htmlFor="feature-name" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "#374151" }}>
+              <label htmlFor="feature-name" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "var(--ink-2)" }}>
                 Nom (optionnel)
               </label>
               <input
@@ -178,7 +178,7 @@ export default function RoadmapPage() {
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--line-strong)",
                   borderRadius: 6,
                   fontSize: 15,
                   boxSizing: "border-box",
@@ -186,8 +186,8 @@ export default function RoadmapPage() {
               />
             </div>
             <div>
-              <label htmlFor="feature-idea" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "#374151" }}>
-                Votre idée <span style={{ color: "#dc2626" }}>*</span>
+              <label htmlFor="feature-idea" style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 6, color: "var(--ink-2)" }}>
+                Votre idée <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <textarea
                 id="feature-idea"
@@ -200,7 +200,7 @@ export default function RoadmapPage() {
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--line-strong)",
                   borderRadius: 6,
                   fontSize: 15,
                   resize: "vertical",
@@ -209,7 +209,7 @@ export default function RoadmapPage() {
               />
             </div>
             {status === "error" && message && (
-              <div style={{ fontSize: 14, color: "#dc2626" }}>{message}</div>
+              <div style={{ fontSize: 14, color: "var(--danger)" }}>{message}</div>
             )}
             <button
               type="submit"
@@ -237,7 +237,7 @@ export default function RoadmapPage() {
         )}
       </section>
 
-      <p style={{ fontSize: 14, color: "#6b7280" }}>
+      <p style={{ fontSize: 14, color: "var(--ink-3)" }}>
         <Link href="/docs" style={{ color: "#0a0a0a", textDecoration: "underline" }}>
           Retour à la documentation
         </Link>
@@ -260,13 +260,13 @@ function RoadmapItem({
         alignItems: "flex-start",
         gap: 12,
         marginBottom: 12,
-        color: done ? "#6b7280" : "#0a0a0a",
+        color: done ? "var(--ink-3)" : "#0a0a0a",
       }}
     >
       {done ? (
-        <Check size={18} style={{ flexShrink: 0, color: "#16a34a" }} />
+        <Check size={18} style={{ flexShrink: 0, color: "var(--success)" }} />
       ) : (
-        <Circle size={18} style={{ flexShrink: 0, color: "#9ca3af" }} strokeWidth={2} />
+        <Circle size={18} style={{ flexShrink: 0, color: "var(--ink-4)" }} strokeWidth={2} />
       )}
       <span>{title}</span>
     </li>

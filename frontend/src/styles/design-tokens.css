@@ -1,24 +1,113 @@
 /**
- * Design tokens FeedPlug – dashboard
- * Socle visuel unique pour réduire la dispersion des styles page par page.
+ * FeedPlug — design tokens (Tesla mineral, v2)
+ * Clinical, technical, premium-by-restraint.
+ * Off-white surface · near-black ink · steel blue accent.
+ *
+ * Source-of-truth: motion lancement FP / colors_and_type.css
+ * Legacy aliases (--app-*, --btn-*, --badge-*, etc.) remap onto v2
+ * so existing pages inherit the new look without page-by-page rewrites.
  */
 :root {
-  --app-bg: #ffffff;
-  --app-panel: #ffffff;
-  --app-panel-strong: #ffffff;
-  --app-border: rgba(15, 23, 42, 0.09);
-  --app-border-strong: rgba(15, 23, 42, 0.14);
-  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --app-shadow-md: 0 14px 34px rgba(15, 23, 42, 0.06);
-  --app-shadow-lg: 0 22px 60px rgba(15, 23, 42, 0.08);
-  --app-text: #132218;
-  --app-text-muted: #5f6f65;
-  --app-text-soft: #7d8c82;
-  --app-accent: #0f766e;
-  --app-accent-strong: #115e59;
-  --app-accent-soft: #e0f2ee;
-  --app-danger: #dc2626;
-  --app-danger-soft: #fef2f2;
+  /* ----- Surfaces ------------------------------------------- */
+  --paper:        #FAFAFA;
+  --paper-2:      #F2F2F2;
+  --paper-3:      #EAEAEA;
+  --surface:      #FFFFFF;
+
+  /* ----- Ink (warm-blacks) --------------------------------- */
+  --ink:          #0A0A0A;
+  --ink-2:        #2A2A2A;
+  --ink-3:        #6F6F6F;
+  --ink-4:        #B0B0B0;
+  --line:         #E5E5E5;
+  --line-strong:  #CFCFCF;
+
+  /* ----- Accent — steel blue ------------------------------- */
+  --accent:       #2A6FE8;
+  --accent-2:     #1F58C0;
+  --accent-bg:    #E8EFFB;
+
+  /* ----- CTA semantic -------------------------------------- */
+  --cta-bg:       var(--ink);
+  --cta-fg:       var(--paper);
+  --cta-bg-alt:   var(--accent);
+  --cta-fg-alt:   #FFFFFF;
+
+  /* ----- Semantic states ----------------------------------- */
+  --success:      #15803D;   --success-bg: #ECFDF3;
+  --warning:      #B45309;   --warning-bg: #FEF6E7;
+  --danger:       #B42318;   --danger-bg:  #FEF1F1;
+  --info:         var(--accent);
+
+  /* ----- Type families ------------------------------------- */
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-serif:   "Instrument Serif", "Times New Roman", Georgia, serif;
+  --font-sans:    "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ----- Type scale ---------------------------------------- */
+  --fs-12:  0.75rem;   --fs-13:  0.8125rem;
+  --fs-14:  0.875rem;  --fs-15:  0.9375rem;
+  --fs-16:  1rem;      --fs-18:  1.125rem;
+  --fs-20:  1.25rem;   --fs-24:  1.5rem;
+  --fs-30:  1.875rem;  --fs-36:  2.25rem;
+  --fs-44:  2.75rem;   --fs-56:  3.5rem;
+  --fs-72:  4.5rem;    --fs-96:  6rem;
+  --fs-112: 7rem;
+
+  /* ----- Spacing ------------------------------------------- */
+  --s-1:  4px;   --s-2:  8px;   --s-3:  12px;  --s-4:  16px;
+  --s-5:  20px;  --s-6:  24px;  --s-8:  32px;  --s-10: 40px;
+  --s-12: 48px;  --s-16: 64px;  --s-20: 80px;  --s-24: 96px;
+  --s-32: 128px;
+
+  /* ----- Radii — restrained -------------------------------- */
+  --r-sm:   4px;
+  --r-md:   6px;
+  --r-lg:   10px;
+  --r-xl:   14px;
+  --r-2xl:  20px;
+  --r-pill: 999px;
+
+  /* ----- Shadows — neutral --------------------------------- */
+  --sh-xs: 0 1px 1px rgba(0,0,0,.04);
+  --sh-sm: 0 1px 2px rgba(0,0,0,.05), 0 1px 1px rgba(0,0,0,.04);
+  --sh-md: 0 6px 16px rgba(0,0,0,.06), 0 2px 4px rgba(0,0,0,.04);
+  --sh-lg: 0 16px 36px rgba(0,0,0,.08), 0 4px 8px rgba(0,0,0,.04);
+  --sh-xl: 0 28px 60px rgba(0,0,0,.10), 0 8px 16px rgba(0,0,0,.05);
+
+  /* ----- Motion -------------------------------------------- */
+  --ease:        cubic-bezier(.22,.61,.36,1);
+  --ease-io:     cubic-bezier(.65,0,.35,1);
+  --ease-spring: cubic-bezier(.34,1.32,.64,1);
+  --d-fast:  140ms;
+  --d-base:  220ms;
+  --d-slow:  420ms;
+
+  /* =========================================================
+     LEGACY ALIASES — remap older names onto v2 tokens.
+     New code should reference the v2 names above. Keep these
+     in place so existing pages immediately inherit the new
+     look without page-by-page rewrites.
+     ========================================================= */
+
+  /* App shell */
+  --app-bg:             var(--paper);
+  --app-panel:          var(--surface);
+  --app-panel-strong:   var(--surface);
+  --app-border:         var(--line);
+  --app-border-strong:  var(--line-strong);
+  --app-shadow-sm:      var(--sh-sm);
+  --app-shadow-md:      var(--sh-md);
+  --app-shadow-lg:      var(--sh-lg);
+  --app-text:           var(--ink);
+  --app-text-muted:     var(--ink-3);
+  --app-text-soft:      var(--ink-4);
+  --app-accent:         var(--accent);
+  --app-accent-strong:  var(--accent-2);
+  --app-accent-soft:    var(--accent-bg);
+  --app-danger:         var(--danger);
+  --app-danger-soft:    var(--danger-bg);
 
   /* Page container */
   --page-padding-x: 40px;
@@ -28,80 +117,127 @@
 
   /* Page header */
   --page-title-size: 30px;
-  --page-title-weight: 600;
-  --page-title-color: var(--app-text);
+  --page-title-weight: 700;
+  --page-title-color: var(--ink);
   --page-subtitle-size: 15px;
-  --page-subtitle-color: var(--app-text-muted);
+  --page-subtitle-color: var(--ink-3);
   --page-header-margin-bottom: 28px;
 
   /* Cards */
-  --card-border: 1px solid var(--app-border);
-  --card-radius: 18px;
+  --card-border:  1px solid var(--line);
+  --card-radius:  var(--r-xl);
   --card-padding: 24px;
-  --card-bg: var(--app-panel);
-  --card-shadow: var(--app-shadow-sm);
+  --card-bg:      var(--surface);
+  --card-shadow:  var(--sh-sm);
 
   /* Buttons */
-  --btn-height: 42px;
-  --btn-padding-x: 16px;
-  --btn-primary-bg: var(--app-text);
-  --btn-primary-bg-hover: #1e3124;
-  --btn-primary-color: #fff;
-  --btn-primary-radius: 12px;
-  --btn-secondary-border: 1px solid var(--app-border);
-  --btn-secondary-bg: #ffffff;
-  --btn-secondary-bg-hover: #fafafa;
-  --btn-secondary-color: var(--app-text);
-  --btn-secondary-radius: 12px;
+  --btn-height:             42px;
+  --btn-padding-x:          16px;
+  --btn-primary-bg:         var(--ink);
+  --btn-primary-bg-hover:   #1a1a1a;
+  --btn-primary-color:      var(--paper);
+  --btn-primary-radius:     var(--r-lg);
+  --btn-secondary-border:   1px solid var(--line);
+  --btn-secondary-bg:       var(--surface);
+  --btn-secondary-bg-hover: var(--paper-2);
+  --btn-secondary-color:    var(--ink);
+  --btn-secondary-radius:   var(--r-lg);
 
   /* Alerts */
-  --alert-error-bg: var(--app-danger-soft);
-  --alert-error-border: #fecaca;
-  --alert-error-color: #b91c1c;
-  --alert-success-bg: #f0fdf4;
-  --alert-success-border: #bbf7d0;
-  --alert-success-color: #15803d;
-  --alert-warning-bg: #fffbeb;
-  --alert-warning-border: #fde68a;
-  --alert-warning-color: #b45309;
+  --alert-error-bg:      var(--danger-bg);
+  --alert-error-border:  #FECACA;
+  --alert-error-color:   var(--danger);
+  --alert-success-bg:    var(--success-bg);
+  --alert-success-border:#BBF7D0;
+  --alert-success-color: var(--success);
+  --alert-warning-bg:    var(--warning-bg);
+  --alert-warning-border:#FDE68A;
+  --alert-warning-color: var(--warning);
 
   /* Loading */
-  --spinner-size: 40px;
-  --spinner-color: var(--app-accent);
-  --spinner-track: #dbe4dd;
+  --spinner-size:  40px;
+  --spinner-color: var(--accent);
+  --spinner-track: var(--paper-2);
 
   /* Empty state */
-  --empty-state-padding: 48px;
-  --empty-state-icon-color: #9aa9a0;
-  --empty-state-text: var(--app-text-muted);
-  --empty-state-title: var(--app-text);
+  --empty-state-padding:    48px;
+  --empty-state-icon-color: var(--ink-4);
+  --empty-state-text:       var(--ink-3);
+  --empty-state-title:      var(--ink);
 
   /* Tables */
-  --table-border: 1px solid var(--app-border);
-  --table-header-bg: #f7f7f7;
-  --table-header-fw: 600;
-  --table-cell-padding: 13px 16px;
-  --table-radius: 16px;
+  --table-border:        1px solid var(--line);
+  --table-header-bg:     var(--paper-2);
+  --table-header-fw:     600;
+  --table-cell-padding:  13px 16px;
+  --table-radius:        var(--r-xl);
 
   /* Section spacing */
-  --section-gap: 28px;
-  --section-title-size: 18px;
-  --section-title-fw: 600;
-  --section-title-color: var(--app-text);
+  --section-gap:         28px;
+  --section-title-size:  18px;
+  --section-title-fw:    600;
+  --section-title-color: var(--ink);
 
   /* Status badges */
-  --badge-success-bg: #dcfce7;
-  --badge-success-color: #15803d;
-  --badge-error-bg: #fee2e2;
-  --badge-error-color: #b91c1c;
-  --badge-warning-bg: #fef3c7;
-  --badge-warning-color: #b45309;
-  --badge-neutral-bg: #f3f4f6;
-  --badge-neutral-color: #5f6f65;
-  --badge-radius: 999px;
-  --badge-padding: 4px 10px;
-  --badge-font-size: 12px;
-  --badge-fw: 600;
+  --badge-success-bg:    var(--success-bg);
+  --badge-success-color: var(--success);
+  --badge-error-bg:      var(--danger-bg);
+  --badge-error-color:   var(--danger);
+  --badge-warning-bg:    var(--warning-bg);
+  --badge-warning-color: var(--warning);
+  --badge-neutral-bg:    var(--paper-2);
+  --badge-neutral-color: var(--ink-3);
+  --badge-radius:        var(--r-pill);
+  --badge-padding:       4px 10px;
+  --badge-font-size:     12px;
+  --badge-fw:            600;
+
+  /* Misc legacy duration / easing names */
+  --ease-out:    var(--ease);
+  --ease-in-out: var(--ease-io);
+  --dur-fast:    var(--d-fast);
+  --dur-base:    var(--d-base);
+  --dur-slow:    var(--d-slow);
+
+  --radius-sm:   var(--r-sm);
+  --radius-md:   var(--r-md);
+  --radius-lg:   var(--r-lg);
+  --radius-xl:   var(--r-xl);
+  --radius-2xl:  var(--r-2xl);
+  --radius-pill: var(--r-pill);
+
+  /* Foreground/background semantic aliases used in some pages */
+  --bg-page:     var(--paper);
+  --bg-surface:  var(--surface);
+  --fg-1:        var(--ink);
+  --fg-2:        var(--ink-2);
+  --fg-3:        var(--ink-3);
+  --fg-4:        var(--ink-4);
+  --border-1:    var(--line);
+  --border-2:    var(--line-strong);
+
+  /* v1 brand-name aliases (forest/lime/mist) → Tesla mineral */
+  --forest-900:  var(--ink);
+  --forest-800:  var(--ink-2);
+  --forest-700:  var(--ink-2);
+  --forest-600:  var(--ink-3);
+  --lime-400:    var(--accent);
+  --lime-500:    var(--accent-2);
+  --mist-100:    var(--paper);
+  --mist-200:    var(--paper-2);
+  --mist-300:    var(--paper-3);
+  --ink-100:     var(--paper-2);
+  --ink-200:     var(--line);
+  --ink-300:     var(--line-strong);
+  --ink-400:     var(--ink-4);
+  --ink-500:     var(--ink-3);
+
+  --shadow-xs:   var(--sh-xs);
+  --shadow-sm:   var(--sh-sm);
+  --shadow-md:   var(--sh-md);
+  --shadow-lg:   var(--sh-lg);
+  --shadow-xl:   var(--sh-xl);
+  --shadow-2xl:  var(--sh-xl);
 }
 
 @media (max-width: 1024px) {

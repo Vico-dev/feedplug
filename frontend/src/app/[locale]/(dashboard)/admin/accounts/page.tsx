@@ -242,7 +242,7 @@ export default function AdminAccountsPage() {
               transform: "translateY(-50%)",
               width: "18px",
               height: "18px",
-              color: "#9ca3af",
+              color: "var(--ink-4)",
             }}
           />
           <input
@@ -253,7 +253,7 @@ export default function AdminAccountsPage() {
             style={{
               width: "100%",
               padding: "10px 12px 10px 40px",
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--line)",
               borderRadius: "2px",
               fontSize: "14px",
               outline: "none",
@@ -286,8 +286,8 @@ export default function AdminAccountsPage() {
             style={{
               padding: "10px 16px",
               backgroundColor: "transparent",
-              color: "#6b7280",
-              border: "1px solid #e5e7eb",
+              color: "var(--ink-3)",
+              border: "1px solid var(--line)",
               borderRadius: "2px",
               fontSize: "14px",
               cursor: "pointer",
@@ -307,17 +307,17 @@ export default function AdminAccountsPage() {
           style={{
             padding: "8px 14px",
             fontSize: "13px",
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--line)",
             borderRadius: "4px",
             background: "#fff",
             cursor: migrationLoading ? "not-allowed" : "pointer",
-            color: "#374151",
+            color: "var(--ink-2)",
           }}
         >
           {migrationLoading ? "Application…" : "Activer le Pack IA (appliquer la migration en base)"}
         </button>
         {migrationMessage && (
-          <span style={{ fontSize: "13px", color: migrationMessage.startsWith("Erreur") ? "#dc2626" : "#16a34a" }}>
+          <span style={{ fontSize: "13px", color: migrationMessage.startsWith("Erreur") ? "var(--danger)" : "var(--success)" }}>
             {migrationMessage}
           </span>
         )}
@@ -327,7 +327,7 @@ export default function AdminAccountsPage() {
       <div
         style={{
           backgroundColor: "#ffffff",
-          border: "1px solid #e5e7eb",
+          border: "1px solid var(--line)",
           borderRadius: "2px",
           overflow: "hidden",
           boxShadow: "none",
@@ -338,7 +338,7 @@ export default function AdminAccountsPage() {
             style={{
               padding: "48px",
               textAlign: "center",
-              color: "#6b7280",
+              color: "var(--ink-3)",
             }}
           >
             <Building2
@@ -358,8 +358,8 @@ export default function AdminAccountsPage() {
                 <thead>
                   <tr
                     style={{
-                      backgroundColor: "#f9fafb",
-                      borderBottom: "1px solid #e5e7eb",
+                      backgroundColor: "var(--paper-2)",
+                      borderBottom: "1px solid var(--line)",
                     }}
                   >
                     <th
@@ -368,7 +368,7 @@ export default function AdminAccountsPage() {
                         textAlign: "left",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -380,7 +380,7 @@ export default function AdminAccountsPage() {
                         textAlign: "left",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -392,7 +392,7 @@ export default function AdminAccountsPage() {
                         textAlign: "center",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -404,7 +404,7 @@ export default function AdminAccountsPage() {
                         textAlign: "center",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -416,7 +416,7 @@ export default function AdminAccountsPage() {
                         textAlign: "center",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -428,7 +428,7 @@ export default function AdminAccountsPage() {
                         textAlign: "left",
                         fontSize: "12px",
                         fontWeight: "600",
-                        color: "#6b7280",
+                        color: "var(--ink-3)",
                         textTransform: "uppercase",
                       }}
                     >
@@ -440,7 +440,7 @@ export default function AdminAccountsPage() {
                   {accounts.map((account) => (
                     <tr
                       key={account.id}
-                      style={{ borderBottom: "1px solid #f3f4f6" }}
+                      style={{ borderBottom: "1px solid var(--paper-2)" }}
                     >
                       <td style={{ padding: "16px" }}>
                         <div>
@@ -456,7 +456,7 @@ export default function AdminAccountsPage() {
                           <div
                             style={{
                               fontSize: "12px",
-                              color: "#6b7280",
+                              color: "var(--ink-3)",
                               display: "flex",
                               alignItems: "center",
                               gap: "6px",
@@ -472,7 +472,7 @@ export default function AdminAccountsPage() {
                           <div
                             style={{
                               fontSize: "11px",
-                              color: "#9ca3af",
+                              color: "var(--ink-4)",
                               marginTop: "4px",
                               fontFamily: "monospace",
                             }}
@@ -490,8 +490,8 @@ export default function AdminAccountsPage() {
                               fontSize: "12px",
                               fontWeight: "500",
                               backgroundColor: "#fafafa",
-                              color: "#4a4a4a",
-                              border: "1px solid #e5e7eb",
+                              color: "var(--ink-2)",
+                              border: "1px solid var(--line)",
                             }}
                           >
                             {planLabels[account.plan] || account.plan}
@@ -502,7 +502,7 @@ export default function AdminAccountsPage() {
                             title="Changer le plan"
                             style={{
                               padding: "4px 8px",
-                              border: "1px solid #e5e7eb",
+                              border: "1px solid var(--line)",
                               borderRadius: "2px",
                               background: "#fff",
                               cursor: "pointer",
@@ -510,7 +510,7 @@ export default function AdminAccountsPage() {
                               alignItems: "center",
                               gap: "4px",
                               fontSize: "12px",
-                              color: "#6b7280",
+                              color: "var(--ink-3)",
                             }}
                           >
                             <Pencil size={14} />
@@ -518,7 +518,7 @@ export default function AdminAccountsPage() {
                           </button>
                         </div>
                         {account.trialEndsAt && (
-                          <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                          <div style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: "4px" }}>
                             Essai jusqu&apos;au {new Date(account.trialEndsAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                           </div>
                         )}
@@ -530,11 +530,11 @@ export default function AdminAccountsPage() {
                             alignItems: "center",
                             gap: "6px",
                             padding: "4px 10px",
-                            backgroundColor: "#f0fdf4",
+                            backgroundColor: "var(--success-bg)",
                             borderRadius: "2px",
                           }}
                         >
-                          <Users size={14} style={{ color: "#16a34a" }} />
+                          <Users size={14} style={{ color: "var(--success)" }} />
                           <span style={{ fontWeight: "500" }}>
                             {account.usersCount}
                           </span>
@@ -547,11 +547,11 @@ export default function AdminAccountsPage() {
                             alignItems: "center",
                             gap: "6px",
                             padding: "4px 10px",
-                            backgroundColor: "#eff6ff",
+                            backgroundColor: "var(--accent-bg)",
                             borderRadius: "2px",
                           }}
                         >
-                          <Database size={14} style={{ color: "#2563eb" }} />
+                          <Database size={14} style={{ color: "var(--accent)" }} />
                           <span style={{ fontWeight: "500" }}>
                             {account.sourcesCount}
                           </span>
@@ -568,13 +568,13 @@ export default function AdminAccountsPage() {
                             borderRadius: "2px",
                           }}
                         >
-                          <FileText size={14} style={{ color: "#7c3aed" }} />
+                          <FileText size={14} style={{ color: "var(--accent)" }} />
                           <span style={{ fontWeight: "500" }}>
                             {account.feedsCount}
                           </span>
                         </div>
                       </td>
-                      <td style={{ padding: "16px", color: "#6b7280", fontSize: "14px" }}>
+                      <td style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>
                         <div
                           style={{
                             display: "flex",
@@ -607,11 +607,11 @@ export default function AdminAccountsPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "16px",
-                  borderTop: "1px solid #e5e7eb",
+                  borderTop: "1px solid var(--line)",
                   backgroundColor: "#fafafa",
                 }}
               >
-                <span style={{ fontSize: "14px", color: "#6b7280" }}>
+                <span style={{ fontSize: "14px", color: "var(--ink-3)" }}>
                   Page {page} sur {totalPages} • {total} compte
                   {total !== 1 ? "s" : ""}
                 </span>
@@ -621,7 +621,7 @@ export default function AdminAccountsPage() {
                     disabled={page <= 1}
                     style={{
                       padding: "8px 12px",
-                      border: "1px solid #e5e7eb",
+                      border: "1px solid var(--line)",
                       borderRadius: "2px",
                       backgroundColor: "#ffffff",
                       cursor: page <= 1 ? "not-allowed" : "pointer",
@@ -635,7 +635,7 @@ export default function AdminAccountsPage() {
                     disabled={page >= totalPages}
                     style={{
                       padding: "8px 12px",
-                      border: "1px solid #e5e7eb",
+                      border: "1px solid var(--line)",
                       borderRadius: "2px",
                       backgroundColor: "#ffffff",
                       cursor: page >= totalPages ? "not-allowed" : "pointer",
@@ -688,7 +688,7 @@ export default function AdminAccountsPage() {
                   background: "none",
                   cursor: "pointer",
                   padding: "4px",
-                  color: "#6b7280",
+                  color: "var(--ink-3)",
                 }}
               >
                 <X size={20} />
@@ -704,7 +704,7 @@ export default function AdminAccountsPage() {
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--line)",
                   borderRadius: "4px",
                   fontSize: "14px",
                 }}
@@ -738,7 +738,7 @@ export default function AdminAccountsPage() {
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--line)",
                   borderRadius: "4px",
                   fontSize: "14px",
                 }}
@@ -750,7 +750,7 @@ export default function AdminAccountsPage() {
               </select>
             </div>
             {saveError && (
-              <p style={{ color: "#dc2626", fontSize: "14px", marginBottom: "12px" }}>{saveError}</p>
+              <p style={{ color: "var(--danger)", fontSize: "14px", marginBottom: "12px" }}>{saveError}</p>
             )}
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button
@@ -758,7 +758,7 @@ export default function AdminAccountsPage() {
                 onClick={closePlanModal}
                 style={{
                   padding: "8px 16px",
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--line)",
                   borderRadius: "4px",
                   background: "#fff",
                   cursor: "pointer",
@@ -775,7 +775,7 @@ export default function AdminAccountsPage() {
                   padding: "8px 16px",
                   border: "none",
                   borderRadius: "4px",
-                  background: saving ? "#9ca3af" : "#0a0a0a",
+                  background: saving ? "var(--ink-4)" : "#0a0a0a",
                   color: "#fff",
                   cursor: saving ? "not-allowed" : "pointer",
                   fontSize: "14px",

@@ -85,14 +85,14 @@ function LoginPageContent() {
   const inputStyles = {
     width: '100%',
     padding: '10px 12px 10px 40px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--line)',
     borderRadius: '2px',
     fontSize: '14px',
     outline: 'none',
     transition: 'all 0.2s ease',
     backgroundColor: '#ffffff',
     boxSizing: 'border-box' as const,
-    fontFamily: 'Inter, system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   };
 
   const inputFocusStyles = {
@@ -107,7 +107,7 @@ function LoginPageContent() {
     transform: 'translateY(-50%)',
     width: '18px',
     height: '18px',
-    color: '#9ca3af',
+    color: 'var(--ink-4)',
     pointerEvents: 'none' as const,
   };
 
@@ -136,7 +136,7 @@ function LoginPageContent() {
           </h1>
           <p style={{
             fontSize: '16px',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             margin: 0
           }}>
             Connectez-vous à votre compte FeedPlug
@@ -146,7 +146,7 @@ function LoginPageContent() {
         {/* Error Message */}
         {error && (
           <div style={{
-            backgroundColor: '#fef2f2',
+            backgroundColor: 'var(--danger-bg)',
             border: '1px solid #fecaca',
             borderRadius: '2px',
             padding: '16px',
@@ -154,7 +154,7 @@ function LoginPageContent() {
           }}>
             <p style={{
               fontSize: '14px',
-              color: '#dc2626',
+              color: 'var(--danger)',
               margin: 0,
             }}>
               {error}
@@ -163,7 +163,7 @@ function LoginPageContent() {
               <div style={{ marginTop: '10px', fontSize: '13px', color: '#7f1d1d', lineHeight: 1.5 }}>
                 Connecte-toi avec ton mot de passe pour accéder à ce compte.
                 {' '}
-                <Link href={forgotPasswordHref} style={{ color: '#991b1b', textDecoration: 'underline', fontWeight: 600 }}>
+                <Link href={forgotPasswordHref} style={{ color: 'var(--danger)', textDecoration: 'underline', fontWeight: 600 }}>
                   Mot de passe oublié ?
                 </Link>
               </div>
@@ -184,9 +184,9 @@ function LoginPageContent() {
               margin: '24px 0',
               gap: '16px',
             }}>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
-              <span style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>ou</span>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
+              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--line)' }} />
+              <span style={{ fontSize: '14px', color: 'var(--ink-4)', fontWeight: '500' }}>ou</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--line)' }} />
             </div>
           </>
         )}
@@ -216,7 +216,7 @@ function LoginPageContent() {
                 style={inputStyles}
                 onFocus={(e) => Object.assign(e.target.style, inputFocusStyles)}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.borderColor = 'var(--line)';
                   e.target.style.boxShadow = 'none';
                 }}
                 placeholder="votre@email.com"
@@ -247,7 +247,7 @@ function LoginPageContent() {
                 style={inputStyles}
                 onFocus={(e) => Object.assign(e.target.style, inputFocusStyles)}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.borderColor = 'var(--line)';
                   e.target.style.boxShadow = 'none';
                 }}
                 placeholder="••••••••"
@@ -263,13 +263,13 @@ function LoginPageContent() {
                   backgroundColor: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#9ca3af',
+                  color: 'var(--ink-4)',
                   padding: '4px',
                   borderRadius: '2px',
                   transition: 'color 0.2s ease',
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#6b7280'}
-                onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ink-3)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ink-4)'}
               >
                 {showPassword ? (
                   <EyeOff style={{ width: '18px', height: '18px' }} />
@@ -282,7 +282,7 @@ function LoginPageContent() {
 
           {/* Forgot password link */}
           <div style={{ textAlign: 'right', marginBottom: '16px' }}>
-            <Link href={forgotPasswordHref} style={{ fontSize: '13px', color: '#6b7280', textDecoration: 'none' }}>
+            <Link href={forgotPasswordHref} style={{ fontSize: '13px', color: 'var(--ink-3)', textDecoration: 'none' }}>
               Mot de passe oublié ?
             </Link>
           </div>
@@ -294,8 +294,8 @@ function LoginPageContent() {
             style={{
               width: '100%',
               padding: '10px 16px',
-              backgroundColor: isLoading ? '#f3f4f6' : '#0a0a0a',
-              color: isLoading ? '#6b7280' : '#ffffff',
+              backgroundColor: isLoading ? 'var(--paper-2)' : '#0a0a0a',
+              color: isLoading ? 'var(--ink-3)' : '#ffffff',
               border: 'none',
               borderRadius: '2px',
               fontSize: '14px',
@@ -334,11 +334,11 @@ function LoginPageContent() {
           textAlign: 'center',
           marginTop: '32px',
           paddingTop: '24px',
-          borderTop: '1px solid #e5e7eb',
+          borderTop: '1px solid var(--line)',
         }}>
           <p style={{
             fontSize: '14px',
-            color: '#6b7280',
+            color: 'var(--ink-3)',
             margin: 0,
           }}>
             Pas encore de compte ?{' '}

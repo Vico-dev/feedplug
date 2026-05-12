@@ -12,12 +12,12 @@ export default function AuthPageHeader() {
       style={{
         position: "sticky",
         top: 0,
-        backgroundColor: "rgba(255,255,255,0.9)",
+        backgroundColor: "rgba(250,250,250,0.85)",
         backdropFilter: "blur(18px)",
         WebkitBackdropFilter: "blur(18px)",
-        borderBottom: "1px solid rgba(226,232,240,0.9)",
+        borderBottom: "1px solid var(--line)",
         zIndex: 1000,
-        boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+        boxShadow: "var(--sh-xs)",
         padding: "16px 0",
       }}
     >
@@ -46,29 +46,45 @@ export default function AuthPageHeader() {
             style={{
               width: 36,
               height: 36,
-              borderRadius: 12,
+              borderRadius: "var(--r-md)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#111827",
-              color: "#ffffff",
-              fontSize: 14,
+              backgroundColor: "var(--ink)",
+              color: "var(--paper)",
+              fontFamily: "var(--font-display)",
+              fontSize: 13,
               fontWeight: 700,
-              letterSpacing: "-0.04em",
-              boxShadow: "0 8px 20px rgba(15,23,42,0.14)",
+              letterSpacing: "-0.02em",
+              boxShadow: "var(--sh-sm)",
             }}
           >
             FP
           </span>
           <span
             style={{
+              display: "inline-flex",
+              alignItems: "baseline",
+              gap: 6,
+              fontFamily: "var(--font-display)",
               fontSize: 17,
-              fontWeight: 650,
-              color: "#111827",
-              letterSpacing: "-0.03em",
+              fontWeight: 700,
+              color: "var(--ink)",
+              letterSpacing: "-0.025em",
             }}
           >
             FeedPlug
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                backgroundColor: "var(--accent)",
+                transform: "translateY(-2px)",
+                display: "inline-block",
+              }}
+            />
           </span>
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
@@ -76,7 +92,7 @@ export default function AuthPageHeader() {
             href="/tarifs"
             style={{
               fontSize: "14px",
-              color: "#475569",
+              color: "var(--ink-2)",
               textDecoration: "none",
               fontWeight: 500,
             }}
@@ -87,7 +103,7 @@ export default function AuthPageHeader() {
             href="/docs"
             style={{
               fontSize: "14px",
-              color: "#475569",
+              color: "var(--ink-2)",
               textDecoration: "none",
               fontWeight: 500,
             }}
@@ -99,9 +115,9 @@ export default function AuthPageHeader() {
             style={{
               fontSize: "14px",
               fontWeight: 600,
-              color: "#0f172a",
+              color: "var(--ink)",
               textDecoration: "none",
-              borderBottom: "1px solid #cbd5e1",
+              borderBottom: "1px solid var(--line-strong)",
               paddingBottom: 2,
             }}
           >

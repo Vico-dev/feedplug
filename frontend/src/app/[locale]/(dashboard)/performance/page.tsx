@@ -249,21 +249,21 @@ export default function PerformancePage() {
             label="Revenus attribues"
             value={formatCurrency(totals.revenue)}
             hint="Valeur remontee par les plateformes connectees"
-            accent="#16a34a"
+            accent="var(--success)"
           />
           <DashboardStatCard
             icon={<BarChart3 size={20} />}
             label="ROAS moyen"
             value={globalRoas > 0 ? `${globalRoas.toFixed(2)}x` : "—"}
             hint={totals.cost > 0 ? `${formatCurrency(totals.cost)} investis` : "Aucune depense synchronisee"}
-            accent="#0f766e"
+            accent="#2A6FE8"
           />
           <DashboardStatCard
             icon={<Package size={20} />}
             label="Produits suivis"
             value={byChannel.reduce((sum, row) => sum + row.productCount, 0)}
             hint="Produits relies a des donnees de performance"
-            accent="#2563eb"
+            accent="var(--accent)"
           />
         </DashboardStatGrid>
 

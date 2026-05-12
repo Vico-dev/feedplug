@@ -116,10 +116,10 @@ function formatInvoiceStatus(status: string | null | undefined) {
 
 function StatusBadge({ status }: { status: string | null }) {
   const statusConfig: Record<string, { bg: string; color: string; icon: React.ReactNode; label: string }> = {
-    active: { bg: "#dcfce7", color: "#166534", icon: <CheckCircle size={16} />, label: "Abonnement actif" },
-    pending: { bg: "#fef9c3", color: "#854d0e", icon: <Clock size={16} />, label: "En attente" },
-    payment_failed: { bg: "#fee2e2", color: "#991b1b", icon: <XCircle size={16} />, label: "À régulariser" },
-    trial: { bg: "#dbeafe", color: "#1e40af", icon: <ShieldCheck size={16} />, label: "Essai actif" },
+    active: { bg: "var(--success-bg)", color: "var(--success)", icon: <CheckCircle size={16} />, label: "Abonnement actif" },
+    pending: { bg: "var(--warning-bg)", color: "#854d0e", icon: <Clock size={16} />, label: "En attente" },
+    payment_failed: { bg: "var(--danger-bg)", color: "var(--danger)", icon: <XCircle size={16} />, label: "À régulariser" },
+    trial: { bg: "var(--accent-bg)", color: "var(--accent-2)", icon: <ShieldCheck size={16} />, label: "Essai actif" },
   };
   
   const config = statusConfig[status || ""] || statusConfig.pending;
@@ -215,10 +215,10 @@ export default function FacturationPage() {
       {/* Status Banner */}
       <div style={{
         background: billingStatus === "active" 
-          ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+          ? "linear-gradient(135deg, var(--success) 0%, var(--success) 100%)"
           : billingStatus === "payment_failed"
-            ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+            ? "linear-gradient(135deg, var(--danger) 0%, var(--danger) 100%)"
+            : "linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%)",
         borderRadius: 16,
         padding: "24px 28px",
         color: "white",
@@ -263,7 +263,7 @@ export default function FacturationPage() {
                   borderRadius: 10,
                   border: "none",
                   backgroundColor: "white",
-                  color: billingStatus === "active" ? "#059669" : billingStatus === "payment_failed" ? "#dc2626" : "#2563eb",
+                  color: billingStatus === "active" ? "var(--success)" : billingStatus === "payment_failed" ? "var(--danger)" : "var(--accent)",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: portalLoading ? "wait" : "pointer",
@@ -283,7 +283,7 @@ export default function FacturationPage() {
                   borderRadius: 10,
                   border: "none",
                   backgroundColor: "white",
-                  color: "#2563eb",
+                  color: "var(--accent)",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -308,14 +308,14 @@ export default function FacturationPage() {
           icon={<CreditCard size={18} />}
           label="Plan"
           value={account?.plan || "—"}
-          color="#3b82f6"
+          color="var(--accent)"
         />
         <StatCard
           icon={<Receipt size={18} />}
           label="Prochaine échéance"
           value={subscription?.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : upcomingInvoice?.dueDate ? formatDate(upcomingInvoice.dueDate) : "—"}
           subvalue={upcomingInvoice?.amountDueCents ? formatAmount(upcomingInvoice.amountDueCents) : undefined}
-          color="#8b5cf6"
+          color="var(--accent)"
         />
         <StatCard
           icon={<CreditCard size={18} />}
@@ -326,7 +326,7 @@ export default function FacturationPage() {
               ? formatAmount(subscription.amountCents) 
               : "—"}
           subvalue={subscription?.amountCents ? "/ mois" : undefined}
-          color="#10b981"
+          color="var(--success)"
         />
       </div>
 
@@ -334,8 +334,8 @@ export default function FacturationPage() {
         <div style={{
           padding: 12,
           borderRadius: 8,
-          backgroundColor: "#fee2e2",
-          color: "#991b1b",
+          backgroundColor: "var(--danger-bg)",
+          color: "var(--danger)",
           marginBottom: 24,
           fontSize: 14,
         }}>
@@ -494,7 +494,7 @@ export default function FacturationPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#3b82f6",
+            color: "var(--accent)",
           }}>
             <Mail size={18} />
           </div>

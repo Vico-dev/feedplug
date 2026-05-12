@@ -91,7 +91,7 @@ export function Sidebar() {
           display: isMobile && mobileOpen ? "block" : "none",
           position: "fixed",
           inset: 0,
-          backgroundColor: "rgba(15, 23, 42, 0.36)",
+          backgroundColor: "rgba(10, 10, 10, 0.32)",
           zIndex: 60,
         }}
       />
@@ -107,11 +107,11 @@ export function Sidebar() {
           height: "100vh",
           width: showExpanded ? 272 : 88,
           padding: 14,
-          background: "#ffffff",
-          borderRight: "1px solid rgba(15, 23, 42, 0.08)",
-          transition: "width 0.28s ease, transform 0.24s ease, box-shadow 0.24s ease",
+          background: "var(--surface)",
+          borderRight: "1px solid var(--line)",
+          transition: "width var(--d-base) var(--ease), transform var(--d-base) var(--ease), box-shadow var(--d-base) var(--ease)",
           overflow: "hidden",
-          boxShadow: "6px 0 24px rgba(15, 23, 42, 0.04)",
+          boxShadow: "none",
           zIndex: 70,
         }}
       >
@@ -126,10 +126,10 @@ export function Sidebar() {
               right: 16,
               width: 38,
               height: 38,
-              border: "1px solid var(--app-border)",
-              borderRadius: 12,
-              background: "#fff",
-              color: "var(--app-text-muted)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--r-lg)",
+              background: "var(--surface)",
+              color: "var(--ink-3)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -152,10 +152,10 @@ export function Sidebar() {
             width: 28,
             height: 28,
             borderRadius: 999,
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            backgroundColor: "#ffffff",
-            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.18)",
-            color: "var(--app-text)",
+            border: "1px solid var(--line)",
+            backgroundColor: "var(--surface)",
+            boxShadow: "var(--sh-md)",
+            color: "var(--ink)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -195,12 +195,12 @@ export function Sidebar() {
               style={{
                 width: 40,
                 height: 40,
-                borderRadius: 14,
-                backgroundColor: "var(--app-text)",
+                borderRadius: "var(--r-lg)",
+                backgroundColor: "var(--ink)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "var(--app-shadow-sm)",
+                boxShadow: "var(--sh-sm)",
                 flexShrink: 0,
               }}
             >
@@ -208,21 +208,30 @@ export function Sidebar() {
             </div>
 
             {showExpanded && (
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 6 }}>
                 <p
                   style={{
                     margin: 0,
-                    fontSize: 15,
+                    fontFamily: "var(--font-display)",
+                    fontSize: 17,
                     fontWeight: 700,
-                    color: "var(--app-text)",
-                    letterSpacing: "-0.03em",
+                    color: "var(--ink)",
+                    letterSpacing: "-0.025em",
                   }}
                 >
                   FeedPlug
                 </p>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--app-text-muted)" }}>
-                  Navigation
-                </p>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    backgroundColor: "var(--accent)",
+                    transform: "translateY(-2px)",
+                    flexShrink: 0,
+                  }}
+                />
               </div>
             )}
           </a>
@@ -246,11 +255,12 @@ export function Sidebar() {
                   <p
                     style={{
                       margin: "0 10px 4px",
+                      fontFamily: "var(--font-mono)",
                       fontSize: 11,
-                      fontWeight: 700,
+                      fontWeight: 500,
                       letterSpacing: "0.14em",
                       textTransform: "uppercase",
-                      color: "var(--app-text-soft)",
+                      color: "var(--ink-3)",
                     }}
                   >
                     {group.label}
@@ -271,17 +281,19 @@ export function Sidebar() {
                         alignItems: "center",
                         justifyContent: showExpanded ? "space-between" : "center",
                         gap: 12,
-                        minHeight: 48,
+                        minHeight: 44,
                         padding: showExpanded ? "0 14px 0 16px" : "0",
-                        borderRadius: 16,
+                        borderRadius: "var(--r-lg)",
                         textDecoration: "none",
-                        color: isActive ? "var(--app-text)" : "var(--app-text-muted)",
-                        background: isActive ? "rgba(15, 118, 110, 0.10)" : "transparent",
-                        border: isActive ? "1px solid rgba(15, 118, 110, 0.14)" : "1px solid transparent",
+                        color: isActive ? "var(--ink)" : "var(--ink-3)",
+                        background: isActive ? "var(--paper-2)" : "transparent",
+                        border: "1px solid transparent",
                         boxShadow: "none",
+                        fontFamily: "var(--font-sans)",
                         fontSize: 14,
                         fontWeight: isActive ? 600 : 500,
-                        transition: "all 0.2s ease",
+                        letterSpacing: "-0.005em",
+                        transition: "background var(--d-fast) var(--ease), color var(--d-fast) var(--ease)",
                       }}
                     >
                       {isActive && (
@@ -289,12 +301,12 @@ export function Sidebar() {
                           aria-hidden="true"
                           style={{
                             position: "absolute",
-                            left: 8,
+                            left: 6,
                             top: 10,
                             bottom: 10,
                             width: 3,
                             borderRadius: 999,
-                            backgroundColor: "var(--app-accent-strong)",
+                            backgroundColor: "var(--accent)",
                           }}
                         />
                       )}
@@ -303,7 +315,7 @@ export function Sidebar() {
                           style={{
                             width: 17,
                             height: 17,
-                            color: isActive ? "var(--app-accent-strong)" : "var(--app-text-muted)",
+                            color: isActive ? "var(--ink)" : "var(--ink-3)",
                             flexShrink: 0,
                           }}
                         />
@@ -327,13 +339,14 @@ export function Sidebar() {
                             height: 22,
                             padding: "0 7px",
                             borderRadius: 999,
-                            backgroundColor: isActive ? "var(--app-accent-strong)" : "#eef2ef",
-                            color: isActive ? "#fff" : "var(--app-text-muted)",
+                            backgroundColor: isActive ? "var(--accent)" : "var(--paper-3)",
+                            color: isActive ? "#ffffff" : "var(--ink-3)",
                             display: "inline-flex",
                             alignItems: "center",
                             justifyContent: "center",
+                            fontFamily: "var(--font-mono)",
                             fontSize: 11,
-                            fontWeight: 700,
+                            fontWeight: 600,
                             flexShrink: 0,
                           }}
                         >
@@ -352,9 +365,9 @@ export function Sidebar() {
           style={{
             marginTop: 12,
             padding: showExpanded ? "12px 14px" : "10px 0",
-            borderRadius: 18,
-            border: "1px solid rgba(15, 23, 42, 0.06)",
-            backgroundColor: "#f7f9f6",
+            borderRadius: "var(--r-lg)",
+            border: "1px solid var(--line)",
+            backgroundColor: "var(--paper-2)",
             display: "flex",
             alignItems: "center",
             justifyContent: showExpanded ? "space-between" : "center",
@@ -364,16 +377,18 @@ export function Sidebar() {
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 14,
-                backgroundColor: "var(--app-text)",
-                color: "#fff",
+                width: 36,
+                height: 36,
+                borderRadius: "var(--r-md)",
+                backgroundColor: "var(--ink)",
+                color: "var(--paper)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                fontFamily: "var(--font-display)",
                 fontSize: 13,
                 fontWeight: 700,
+                letterSpacing: "-0.01em",
                 flexShrink: 0,
               }}
             >
@@ -381,14 +396,25 @@ export function Sidebar() {
             </div>
             {showExpanded && (
               <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>
-                  Session active
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    fontWeight: 500,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-3)",
+                  }}
+                >
+                  Session
                 </p>
                 <p
                   style={{
-                    margin: "2px 0 0",
-                    fontSize: 12,
-                    color: "var(--app-text-muted)",
+                    margin: "3px 0 0",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "var(--ink-2)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",

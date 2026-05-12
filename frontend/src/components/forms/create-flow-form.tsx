@@ -235,15 +235,15 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
         gap: '12px', 
         marginBottom: '24px',
         padding: '16px',
-        backgroundColor: '#f8fafc',
+        backgroundColor: 'var(--paper-2)',
         borderRadius: '8px',
-        border: '1px solid #e2e8f0'
+        border: '1px solid var(--line)'
       }}>
         <div style={{
           width: '48px',
           height: '48px',
           borderRadius: '8px',
-          backgroundColor: '#2563eb',
+          backgroundColor: 'var(--accent)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -252,10 +252,10 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
           <IconComponent style={{ width: '24px', height: '24px' }} />
         </div>
         <div>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 4px 0' }}>
             {config.title}
           </h3>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+          <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
             {config.description}
           </p>
         </div>
@@ -263,13 +263,13 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
 
       {/* Informations générales */}
       <Card style={{ marginBottom: '24px', padding: '20px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '16px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', marginBottom: '16px' }}>
           Informations générales
         </h4>
         
         <div style={{ display: 'grid', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
               Nom du flux *
             </label>
             <input
@@ -280,23 +280,23 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                border: `1px solid ${errors.name ? '#ef4444' : '#d1d5db'}`,
+                border: `1px solid ${errors.name ? 'var(--danger)' : 'var(--line-strong)'}`,
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-              onBlur={(e) => e.target.style.borderColor = errors.name ? '#ef4444' : '#d1d5db'}
+              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.target.style.borderColor = errors.name ? 'var(--danger)' : 'var(--line-strong)'}
             />
             {errors.name && (
-              <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--danger)', marginTop: '4px' }}>
                 {errors.name}
               </p>
             )}
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
               Description
             </label>
             <textarea
@@ -307,19 +307,19 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                border: '1px solid #d1d5db',
+                border: '1px solid var(--line-strong)',
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none',
                 resize: 'vertical'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-              onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--line-strong)'}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
               {config.fields.source.label} *
             </label>
             <input
@@ -330,16 +330,16 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                border: `1px solid ${errors.source ? '#ef4444' : '#d1d5db'}`,
+                border: `1px solid ${errors.source ? 'var(--danger)' : 'var(--line-strong)'}`,
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-              onBlur={(e) => e.target.style.borderColor = errors.source ? '#ef4444' : '#d1d5db'}
+              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={(e) => e.target.style.borderColor = errors.source ? 'var(--danger)' : 'var(--line-strong)'}
             />
             {errors.source && (
-              <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--danger)', marginTop: '4px' }}>
                 {errors.source}
               </p>
             )}
@@ -349,7 +349,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
 
       {/* Configuration spécifique */}
       <Card style={{ marginBottom: '24px', padding: '20px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '16px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', marginBottom: '16px' }}>
           Configuration {flowType}
         </h4>
         
@@ -358,7 +358,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
         ) : flowType === 'CMS' && selectedCMSConnector ? (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h5 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+              <h5 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                 Connecteur sélectionné
               </h5>
               <button
@@ -366,7 +366,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                 onClick={() => setSelectedCMSConnector(null)}
                 style={{
                   fontSize: '12px',
-                  color: '#6b7280',
+                  color: 'var(--ink-3)',
                   backgroundColor: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
@@ -382,7 +382,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                 
                 return (
                   <div key={key}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                       {field.label} {field.type !== 'checkbox' && '*'}
                     </label>
                     
@@ -393,14 +393,14 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                         style={{
                           width: '100%',
                           padding: '10px 12px',
-                          border: `1px solid ${errors[key] ? '#ef4444' : '#d1d5db'}`,
+                          border: `1px solid ${errors[key] ? 'var(--danger)' : 'var(--line-strong)'}`,
                           borderRadius: '6px',
                           fontSize: '14px',
                           outline: 'none',
                           backgroundColor: 'white'
                         }}
-                        onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                        onBlur={(e) => e.target.style.borderColor = errors[key] ? '#ef4444' : '#d1d5db'}
+                        onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.target.style.borderColor = errors[key] ? 'var(--danger)' : 'var(--line-strong)'}
                       >
                         {field.options?.map((option) => {
                           const value = getOptionValue(option);
@@ -418,7 +418,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                           onChange={(e) => handleInputChange(key, e.target.checked)}
                           style={{ width: '16px', height: '16px' }}
                         />
-                        <span style={{ fontSize: '14px', color: '#374151' }}>
+                        <span style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
                           Le fichier contient des en-têtes
                         </span>
                       </div>
@@ -431,18 +431,18 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                         style={{
                           width: '100%',
                           padding: '10px 12px',
-                          border: `1px solid ${errors[key] ? '#ef4444' : '#d1d5db'}`,
+                          border: `1px solid ${errors[key] ? 'var(--danger)' : 'var(--line-strong)'}`,
                           borderRadius: '6px',
                           fontSize: '14px',
                           outline: 'none'
                         }}
-                        onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                        onBlur={(e) => e.target.style.borderColor = errors[key] ? '#ef4444' : '#d1d5db'}
+                        onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.target.style.borderColor = errors[key] ? 'var(--danger)' : 'var(--line-strong)'}
                       />
                     )}
                     
                     {errors[key] && (
-                      <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--danger)', marginTop: '4px' }}>
                         {errors[key]}
                       </p>
                     )}
@@ -458,7 +458,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
               
               return (
                 <div key={key}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                     {field.label} {field.type !== 'checkbox' && '*'}
                   </label>
                   
@@ -469,14 +469,14 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                       style={{
                         width: '100%',
                         padding: '10px 12px',
-                        border: `1px solid ${errors[key] ? '#ef4444' : '#d1d5db'}`,
+                        border: `1px solid ${errors[key] ? 'var(--danger)' : 'var(--line-strong)'}`,
                         borderRadius: '6px',
                         fontSize: '14px',
                         outline: 'none',
                         backgroundColor: 'white'
                       }}
-                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                      onBlur={(e) => e.target.style.borderColor = errors[key] ? '#ef4444' : '#d1d5db'}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                      onBlur={(e) => e.target.style.borderColor = errors[key] ? 'var(--danger)' : 'var(--line-strong)'}
                     >
                       {field.options?.map((option) => {
                         const value = getOptionValue(option);
@@ -494,7 +494,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                         onChange={(e) => handleInputChange(key, e.target.checked)}
                         style={{ width: '16px', height: '16px' }}
                       />
-                      <span style={{ fontSize: '14px', color: '#374151' }}>
+                      <span style={{ fontSize: '14px', color: 'var(--ink-2)' }}>
                         Le fichier contient des en-têtes
                       </span>
                     </div>
@@ -507,18 +507,18 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                       style={{
                         width: '100%',
                         padding: '10px 12px',
-                        border: `1px solid ${errors[key] ? '#ef4444' : '#d1d5db'}`,
+                        border: `1px solid ${errors[key] ? 'var(--danger)' : 'var(--line-strong)'}`,
                         borderRadius: '6px',
                         fontSize: '14px',
                         outline: 'none'
                       }}
-                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                      onBlur={(e) => e.target.style.borderColor = errors[key] ? '#ef4444' : '#d1d5db'}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                      onBlur={(e) => e.target.style.borderColor = errors[key] ? 'var(--danger)' : 'var(--line-strong)'}
                     />
                   )}
                   
                   {errors[key] && (
-                    <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--danger)', marginTop: '4px' }}>
                       {errors[key]}
                     </p>
                   )}
@@ -531,7 +531,7 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
 
       {/* Planification */}
       <Card style={{ marginBottom: '24px', padding: '20px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '16px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', marginBottom: '16px' }}>
           <Clock style={{ width: '16px', height: '16px', display: 'inline', marginRight: '8px' }} />
           Planification
         </h4>
@@ -548,10 +548,10 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
               alignItems: 'center', 
               gap: '12px', 
               padding: '12px',
-              border: `1px solid ${formData.schedule === option.value ? '#2563eb' : '#e5e7eb'}`,
+              border: `1px solid ${formData.schedule === option.value ? 'var(--accent)' : 'var(--line)'}`,
               borderRadius: '8px',
               cursor: 'pointer',
-              backgroundColor: formData.schedule === option.value ? '#eff6ff' : 'white'
+              backgroundColor: formData.schedule === option.value ? 'var(--accent-bg)' : 'white'
             }}>
               <input
                 type="radio"
@@ -562,10 +562,10 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
                 style={{ width: '16px', height: '16px' }}
               />
               <div>
-                <div style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--ink)' }}>
                   {option.label}
                 </div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                   {option.description}
                 </div>
               </div>
@@ -580,13 +580,13 @@ export function CreateFlowForm({ flowType, onClose, onSubmit }: CreateFlowFormPr
           type="button"
           variant="outline"
           onClick={onClose}
-          style={{ border: '1px solid #d1d5db', color: '#374151' }}
+          style={{ border: '1px solid var(--line-strong)', color: 'var(--ink-2)' }}
         >
           Annuler
         </Button>
         <Button
           type="submit"
-          style={{ backgroundColor: '#2563eb', color: 'white', border: 'none' }}
+          style={{ backgroundColor: 'var(--accent)', color: 'white', border: 'none' }}
         >
           Créer le flux
         </Button>

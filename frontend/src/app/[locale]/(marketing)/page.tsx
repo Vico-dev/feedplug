@@ -35,15 +35,25 @@ export default function MarketingLandingPage() {
   const [formStartedAt] = useState(() => Date.now());
 
   useEffect(() => {
+    const elements = Array.from(document.querySelectorAll('.fade-in'));
+    if (typeof IntersectionObserver === 'undefined') {
+      elements.forEach((el) => el.classList.add('animate-in'));
+      return;
+    }
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) entry.target.classList.add('animate-in');
       });
-    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
-    const elements = document.querySelectorAll('.fade-in');
-    elements.forEach(el => observer.observe(el));
+    }, { threshold: 0.05, rootMargin: '0px 0px 0px 0px' });
+    elements.forEach((el) => observer.observe(el));
+    // Safety net: in case observer fails to fire (e.g. when content is
+    // already past the rootMargin on first paint), force-reveal after 1s.
+    const fallback = window.setTimeout(() => {
+      elements.forEach((el) => el.classList.add('animate-in'));
+    }, 1000);
     return () => {
-      elements.forEach(el => observer.unobserve(el));
+      window.clearTimeout(fallback);
+      elements.forEach((el) => observer.unobserve(el));
     };
   }, []);
 
@@ -195,71 +205,6 @@ export default function MarketingLandingPage() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .fade-in { opacity: 0; }
-        .fade-in.animate-in { animation: fadeUp 0.6s ease-out forwards; }
-        .d1 { animation-delay: 0.05s; }
-        .d2 { animation-delay: 0.1s; }
-        .d3 { animation-delay: 0.15s; }
-        .d4 { animation-delay: 0.2s; }
-
-        .hero-h { animation: fadeUp 0.7s ease-out forwards; }
-        .hero-p { animation: fadeUp 0.7s ease-out 0.15s forwards; opacity: 0; }
-        .hero-f { animation: fadeUp 0.7s ease-out 0.3s forwards; opacity: 0; }
-        .hero-c { animation: fadeUp 0.7s ease-out 0.45s forwards; opacity: 0; }
-
-        .cta-btn {
-          background: #111827;
-          color: #fff;
-          border: none;
-          transition: background 0.2s ease, transform 0.15s ease;
-        }
-        .cta-btn:hover { background: #1f2937; transform: translateY(-1px); }
-        .cta-btn:active { transform: translateY(0); }
-
-        .card-hover {
-          transition: box-shadow 0.25s ease, transform 0.2s ease;
-          border: 1px solid #e5e7eb;
-        }
-        .card-hover:hover {
-          box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-          transform: translateY(-3px);
-        }
-
-        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
-        .faq-answer.open { max-height: 300px; }
-        .faq-chevron { transition: transform 0.25s ease; }
-        .faq-chevron.open { transform: rotate(180deg); }
-
-        .input-field {
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-        .input-field:focus {
-          border-color: #111827;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.06);
-        }
-
-        @media (max-width: 768px) {
-          .rg2 { grid-template-columns: 1fr !important; }
-          .rg3 { grid-template-columns: 1fr !important; }
-          .rg4 { grid-template-columns: 1fr 1fr !important; }
-          .rpad { padding: 60px 24px !important; }
-          .rh { padding: 100px 24px 72px !important; }
-          .rtxt { font-size: clamp(32px, 8vw, 56px) !important; }
-          .rtxt2 { font-size: clamp(26px, 6vw, 40px) !important; }
-          .rform { flex-direction: column !important; }
-          .channels-row { gap: 16px !important; }
-        }
-        @media (max-width: 480px) {
-          .rh { padding: 80px 20px 56px !important; }
-          .rpad { padding: 48px 20px !important; }
-          .rg4 { grid-template-columns: 1fr !important; }
-        }
-      `}} />
 
       <MarketingHeader />
 
@@ -268,9 +213,8 @@ export default function MarketingLandingPage() {
         className="rh"
         style={{
           padding: '132px 48px 84px',
-          background:
-            'linear-gradient(180deg, #f7f8f5 0%, #f8fafc 38%, #ffffff 100%)',
-          borderBottom: '1px solid #eceff3',
+          background: 'linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 50%, var(--surface) 100%)',
+          borderBottom: '1px solid var(--line)',
         }}
       >
         <div style={{ maxWidth: '1180px', margin: '0 auto' }}>
@@ -289,25 +233,27 @@ export default function MarketingLandingPage() {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  borderRadius: '999px',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e5e7eb',
+                  gap: '10px',
+                  padding: '8px 14px',
+                  borderRadius: 'var(--r-pill)',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  fontFamily: 'var(--font-mono)',
                   fontSize: '12px',
-                  fontWeight: '600',
-                  letterSpacing: '0.08em',
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  color: '#6b7280',
-                  marginBottom: '24px',
+                  color: 'var(--ink-3)',
+                  marginBottom: '28px',
                 }}
               >
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
+                    width: '7px',
+                    height: '7px',
                     borderRadius: '999px',
-                    backgroundColor: '#111827',
+                    backgroundColor: 'var(--accent)',
+                    boxShadow: '0 0 0 4px var(--accent-bg)',
                     display: 'inline-block',
                   }}
                 />
@@ -317,28 +263,41 @@ export default function MarketingLandingPage() {
               <h1
                 className="hero-h rtxt"
                 style={{
-                  fontSize: 'clamp(42px, 5vw, 68px)',
-                  fontWeight: '550',
-                  letterSpacing: '-0.045em',
-                  lineHeight: '1.02',
-                  color: '#111827',
-                  marginBottom: '22px',
-                  maxWidth: '720px',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'clamp(44px, 5.6vw, 76px)',
+                  fontWeight: 700,
+                  letterSpacing: '-0.035em',
+                  lineHeight: '0.98',
+                  color: 'var(--ink)',
+                  marginBottom: '24px',
+                  maxWidth: '760px',
+                  textWrap: 'balance',
                 }}
               >
                 {t('hero.title')}{' '}
-                <span style={{ color: '#111827' }}>{t('hero.titleHighlight')}</span>{' '}
-                <span style={{ color: '#6b7280', fontWeight: '420' }}>{t('hero.titleEnd')}</span>
+                <span style={{ color: 'var(--ink)' }}>{t('hero.titleHighlight')}</span>{' '}
+                <em
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontStyle: 'italic',
+                    fontWeight: 400,
+                    color: 'var(--ink-2)',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {t('hero.titleEnd')}
+                </em>
               </h1>
 
               <p
                 className="hero-p"
                 style={{
-                  fontSize: '18px',
-                  lineHeight: '1.7',
-                  color: '#4b5563',
-                  fontWeight: '400',
-                  marginBottom: '30px',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '19px',
+                  lineHeight: '1.55',
+                  color: 'var(--ink-2)',
+                  fontWeight: 400,
+                  marginBottom: '32px',
                   maxWidth: '640px',
                 }}
               >
@@ -368,13 +327,13 @@ export default function MarketingLandingPage() {
                   className="rform"
                   style={{
                     display: 'flex',
-                    gap: '10px',
+                    gap: '8px',
                     marginBottom: '12px',
-                    padding: '8px',
-                    border: '1px solid #e5e7eb',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '14px',
-                    boxShadow: '0 14px 44px rgba(15, 23, 42, 0.05)',
+                    padding: '6px',
+                    border: '1px solid var(--line)',
+                    backgroundColor: 'var(--surface)',
+                    borderRadius: 'var(--r-xl)',
+                    boxShadow: 'var(--sh-sm)',
                   }}
                 >
                   <input
@@ -391,12 +350,12 @@ export default function MarketingLandingPage() {
                       flex: 1,
                       padding: '14px 16px',
                       border: 'none',
+                      fontFamily: 'var(--font-sans)',
                       fontSize: '15px',
                       outline: 'none',
                       backgroundColor: 'transparent',
-                      color: '#111827',
-                      fontFamily: 'inherit',
-                      borderRadius: '10px',
+                      color: 'var(--ink)',
+                      borderRadius: 'var(--r-md)',
                     }}
                   />
                   <button
@@ -404,16 +363,17 @@ export default function MarketingLandingPage() {
                     disabled={isSubmitting}
                     className="cta-btn"
                     style={{
-                      padding: '14px 18px',
+                      padding: '14px 20px',
+                      fontFamily: 'var(--font-sans)',
                       fontSize: '15px',
-                      fontWeight: '600',
-                      borderRadius: '10px',
+                      fontWeight: 600,
+                      letterSpacing: '-0.005em',
+                      borderRadius: 'var(--r-md)',
                       cursor: isSubmitting ? 'not-allowed' : 'pointer',
                       opacity: isSubmitting ? 0.6 : 1,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '8px',
-                      fontFamily: 'inherit',
                       whiteSpace: 'nowrap',
                     }}
                   >
@@ -426,17 +386,17 @@ export default function MarketingLandingPage() {
                   </button>
                 </div>
                 {error && (
-                  <div style={{ color: '#dc2626', fontSize: '14px', marginBottom: '8px' }}>
+                  <div style={{ color: 'var(--danger)', fontSize: '14px', marginBottom: '8px' }}>
                     {error}
                   </div>
                 )}
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{t('hero.ctaSub')}</p>
-                <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0' }}>{t('form.redirectHint')}</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '10px' }}>
-                  <Link href={`${localePrefix}/demo?source=landing_page`} style={{ fontSize: '13px', fontWeight: '600', color: '#111827', textDecoration: 'none' }}>
+                <p style={{ fontSize: '13px', color: 'var(--ink-3)', margin: 0 }}>{t('hero.ctaSub')}</p>
+                <p style={{ fontSize: '13px', color: 'var(--ink-4)', margin: '6px 0 0' }}>{t('form.redirectHint')}</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px', marginTop: '12px' }}>
+                  <Link href={`${localePrefix}/demo?source=landing_page`} style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink-2)', textDecoration: 'none', borderBottom: '1px solid var(--line)', paddingBottom: '2px' }}>
                     {heroAlternativeActions.demo}
                   </Link>
-                  <Link href={`${localePrefix}/audit-flux?source=landing_page`} style={{ fontSize: '13px', fontWeight: '600', color: '#0f766e', textDecoration: 'none' }}>
+                  <Link href={`${localePrefix}/audit-flux?source=landing_page`} style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', borderBottom: '1px solid var(--accent-bg)', paddingBottom: '2px' }}>
                     {heroAlternativeActions.audit}
                   </Link>
                 </div>
@@ -456,27 +416,29 @@ export default function MarketingLandingPage() {
                   <div
                     key={metric.label}
                     style={{
-                      padding: '18px 18px 16px',
-                      borderRadius: '16px',
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
+                      padding: '20px 18px 18px',
+                      borderRadius: 'var(--r-xl)',
+                      backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--line)',
                     }}
                   >
                     <div
                       style={{
+                        fontFamily: 'var(--font-display)',
                         fontSize: '28px',
-                        fontWeight: '650',
-                        letterSpacing: '-0.04em',
-                        color: '#111827',
-                        marginBottom: '6px',
+                        fontWeight: 700,
+                        lineHeight: 1.1,
+                        letterSpacing: '-0.025em',
+                        color: 'var(--ink)',
+                        marginBottom: '8px',
                       }}
                     >
                       {metric.value}
                     </div>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '4px' }}>
                       {metric.label}
                     </div>
-                    <div style={{ fontSize: '12px', lineHeight: '1.5', color: '#6b7280' }}>{metric.context}</div>
+                    <div style={{ fontSize: '12px', lineHeight: '1.5', color: 'var(--ink-3)' }}>{metric.context}</div>
                   </div>
                 ))}
               </div>
@@ -487,7 +449,7 @@ export default function MarketingLandingPage() {
                 style={{
                   borderRadius: '24px',
                   backgroundColor: '#ffffff',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--line)',
                   boxShadow: '0 24px 64px rgba(15, 23, 42, 0.08)',
                   overflow: 'hidden',
                 }}
@@ -498,8 +460,8 @@ export default function MarketingLandingPage() {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '18px 22px',
-                    borderBottom: '1px solid #f1f5f9',
-                    backgroundColor: '#fafaf9',
+                    borderBottom: '1px solid var(--paper-2)',
+                    backgroundColor: 'var(--paper-2)',
                   }}
                 >
                   <div>
@@ -509,13 +471,13 @@ export default function MarketingLandingPage() {
                         textTransform: 'uppercase',
                         letterSpacing: '0.08em',
                         fontWeight: '700',
-                        color: '#9ca3af',
+                        color: 'var(--ink-4)',
                         marginBottom: '4px',
                       }}
                     >
                       FeedPlug
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)' }}>
                       Poste de pilotage flux produit
                     </div>
                   </div>
@@ -523,8 +485,8 @@ export default function MarketingLandingPage() {
                     style={{
                       padding: '8px 12px',
                       borderRadius: '999px',
-                      backgroundColor: '#eff6ff',
-                      color: '#1d4ed8',
+                      backgroundColor: 'var(--accent-bg)',
+                      color: 'var(--accent-2)',
                       fontSize: '12px',
                       fontWeight: '600',
                     }}
@@ -543,9 +505,9 @@ export default function MarketingLandingPage() {
                     }}
                   >
                     {[
-                      { label: 'Catalogue', value: '1 source active', tone: '#111827', bg: '#f8fafc' },
-                      { label: 'Optimisation', value: 'IA prête', tone: '#d97706', bg: '#fffbeb' },
-                      { label: 'Diffusion', value: '8 canaux', tone: '#059669', bg: '#ecfdf5' },
+                      { label: 'Catalogue', value: '1 source active', tone: 'var(--ink)', bg: 'var(--paper-2)' },
+                      { label: 'Optimisation', value: 'IA prête', tone: 'var(--warning)', bg: 'var(--warning-bg)' },
+                      { label: 'Diffusion', value: '8 canaux', tone: 'var(--success)', bg: 'var(--success-bg)' },
                     ].map((item) => (
                       <div
                         key={item.label}
@@ -553,10 +515,10 @@ export default function MarketingLandingPage() {
                           padding: '14px',
                           borderRadius: '14px',
                           backgroundColor: item.bg,
-                          border: '1px solid #eef2f7',
+                          border: '1px solid var(--line)',
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px' }}>{item.label}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginBottom: '6px' }}>{item.label}</div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: item.tone }}>{item.value}</div>
                       </div>
                     ))}
@@ -564,7 +526,7 @@ export default function MarketingLandingPage() {
 
                   <div
                     style={{
-                      border: '1px solid #eef2f7',
+                      border: '1px solid var(--line)',
                       borderRadius: '18px',
                       overflow: 'hidden',
                       marginBottom: '16px',
@@ -591,8 +553,8 @@ export default function MarketingLandingPage() {
                         key={step.title}
                         style={{
                           padding: '16px 18px',
-                          borderBottom: index < 2 ? '1px solid #eef2f7' : 'none',
-                          backgroundColor: index === 1 ? '#fafaf9' : '#ffffff',
+                          borderBottom: index < 2 ? '1px solid var(--line)' : 'none',
+                          backgroundColor: index === 1 ? 'var(--paper-2)' : '#ffffff',
                         }}
                       >
                         <div
@@ -604,20 +566,20 @@ export default function MarketingLandingPage() {
                             marginBottom: '6px',
                           }}
                         >
-                          <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827' }}>{step.title}</div>
+                          <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--ink)' }}>{step.title}</div>
                           <div
                             style={{
                               fontSize: '11px',
                               fontWeight: '700',
                               textTransform: 'uppercase',
                               letterSpacing: '0.08em',
-                              color: '#6b7280',
+                              color: 'var(--ink-3)',
                             }}
                           >
                             {step.badge}
                           </div>
                         </div>
-                        <div style={{ fontSize: '14px', lineHeight: '1.65', color: '#6b7280' }}>{step.text}</div>
+                        <div style={{ fontSize: '14px', lineHeight: '1.65', color: 'var(--ink-3)' }}>{step.text}</div>
                       </div>
                     ))}
                   </div>
@@ -635,11 +597,11 @@ export default function MarketingLandingPage() {
                         style={{
                           padding: '8px 12px',
                           borderRadius: '999px',
-                          backgroundColor: '#fafaf9',
-                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'var(--paper-2)',
+                          border: '1px solid var(--line)',
                           fontSize: '12px',
                           fontWeight: '500',
-                          color: '#4b5563',
+                          color: 'var(--ink-3)',
                         }}
                       >
                         {channel}
@@ -669,8 +631,8 @@ export default function MarketingLandingPage() {
                       borderRadius: '12px',
                       textDecoration: 'none',
                       backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      color: '#111827',
+                      border: '1px solid var(--line)',
+                      color: 'var(--ink)',
                       fontSize: '14px',
                       fontWeight: '500',
                     }}
@@ -685,24 +647,24 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <section className="rpad" style={{ padding: '72px 48px', background: 'linear-gradient(180deg, #fffef8 0%, #ffffff 100%)', borderBottom: '1px solid #eceff3' }}>
+      <section className="rpad" style={{ padding: '72px 48px', background: 'linear-gradient(180deg, #fffef8 0%, #ffffff 100%)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <div className="rg2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', alignItems: 'stretch' }}>
-            <div className="fade-in" style={{ padding: '32px', backgroundColor: '#ffffff', borderRadius: '24px', border: '1px solid #eceff3', boxShadow: '0 24px 48px rgba(15,23,42,0.05)' }}>
+            <div className="fade-in" style={{ padding: '32px', backgroundColor: '#ffffff', borderRadius: '24px', border: '1px solid var(--line)', boxShadow: '0 24px 48px rgba(15,23,42,0.05)' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a16207', marginBottom: '14px' }}>
                 {auditSection.eyebrow}
               </div>
-              <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 540, letterSpacing: '-0.03em', color: '#111827', margin: '0 0 14px' }}>
+              <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 540, letterSpacing: '-0.03em', color: 'var(--ink)', margin: '0 0 14px' }}>
                 {auditSection.title}
               </h2>
-              <p style={{ fontSize: '16px', lineHeight: '1.75', color: '#6b7280', margin: '0 0 22px', maxWidth: '720px' }}>
+              <p style={{ fontSize: '16px', lineHeight: '1.75', color: 'var(--ink-3)', margin: '0 0 22px', maxWidth: '720px' }}>
                 {auditSection.description}
               </p>
               <div style={{ display: 'grid', gap: '14px', marginBottom: '24px' }}>
                 {auditSection.bullets.map((bullet) => (
                   <div key={bullet} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                     <CheckCircle style={{ width: '18px', height: '18px', color: '#a16207', flexShrink: 0, marginTop: '3px' }} />
-                    <p style={{ margin: 0, fontSize: '15px', lineHeight: '1.7', color: '#374151' }}>{bullet}</p>
+                    <p style={{ margin: 0, fontSize: '15px', lineHeight: '1.7', color: 'var(--ink-2)' }}>{bullet}</p>
                   </div>
                 ))}
               </div>
@@ -716,7 +678,7 @@ export default function MarketingLandingPage() {
                     padding: '14px 18px',
                     borderRadius: '14px',
                     textDecoration: 'none',
-                    backgroundColor: '#111827',
+                    backgroundColor: 'var(--ink)',
                     color: '#fff',
                     fontSize: '14px',
                     fontWeight: 600,
@@ -735,8 +697,8 @@ export default function MarketingLandingPage() {
                     borderRadius: '14px',
                     textDecoration: 'none',
                     backgroundColor: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    color: '#111827',
+                    border: '1px solid var(--line)',
+                    color: 'var(--ink)',
                     fontSize: '14px',
                     fontWeight: 600,
                   }}
@@ -746,36 +708,36 @@ export default function MarketingLandingPage() {
               </div>
             </div>
 
-            <div className="fade-in d2" style={{ padding: '28px', backgroundColor: '#111827', borderRadius: '24px', color: '#fff', boxShadow: '0 24px 48px rgba(15,23,42,0.12)' }}>
+            <div className="fade-in d2" style={{ padding: '28px', backgroundColor: 'var(--ink)', borderRadius: '24px', color: '#fff', boxShadow: '0 24px 48px rgba(15,23,42,0.12)' }}>
               <div style={{ marginBottom: '18px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fde68a', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#FDE68A', marginBottom: '8px' }}>
                   {auditSection.scoreLabel}
                 </div>
                 <div style={{ fontSize: '58px', lineHeight: 1, fontWeight: 700, letterSpacing: '-0.06em' }}>61/100</div>
               </div>
               <div style={{ display: 'grid', gap: '12px', marginBottom: '20px' }}>
                 <div style={{ padding: '14px 16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '6px' }}>{auditSection.potentialLabel}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--line-strong)', marginBottom: '6px' }}>{auditSection.potentialLabel}</div>
                   <div style={{ fontSize: '28px', fontWeight: 650, letterSpacing: '-0.04em' }}>84/100</div>
-                  <div style={{ fontSize: '13px', color: '#fde68a', marginTop: '4px' }}>+23 points et +18% de visibilite estimee</div>
+                  <div style={{ fontSize: '13px', color: '#FDE68A', marginTop: '4px' }}>+23 points et +18% de visibilite estimee</div>
                 </div>
                 <div style={{ padding: '14px 16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '10px' }}>{auditSection.issuesLabel}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--line-strong)', marginBottom: '10px' }}>{auditSection.issuesLabel}</div>
                   <div style={{ display: 'grid', gap: '8px' }}>
                     {[
                       '34% de produits sans categorie exploitable',
                       '22% sans marque ou identifiant fiable',
                       '18% avec titre trop court ou incomplet',
                     ].map((item) => (
-                      <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#f8fafc', lineHeight: 1.6 }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '999px', backgroundColor: '#f59e0b', marginTop: '8px', flexShrink: 0 }} />
+                      <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--paper-2)', lineHeight: 1.6 }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '999px', backgroundColor: 'var(--warning)', marginTop: '8px', flexShrink: 0 }} />
                         <span>{item}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.7', color: '#cbd5e1' }}>
+              <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.7', color: 'var(--line-strong)' }}>
                 Connexion source, audit automatique et restitution du potentiel directement dans l&apos;interface FeedPlug.
               </p>
             </div>
@@ -792,7 +754,7 @@ export default function MarketingLandingPage() {
                 fontWeight: '700',
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
-                color: '#9ca3af',
+                color: 'var(--ink-4)',
                 marginBottom: '12px',
               }}
             >
@@ -802,9 +764,9 @@ export default function MarketingLandingPage() {
               className="rtxt2"
               style={{
                 fontSize: 'clamp(28px, 4vw, 40px)',
-                fontWeight: '540',
+                fontFamily: 'var(--font-display)', fontWeight: 600,
                 letterSpacing: '-0.03em',
-                color: '#111827',
+                color: 'var(--ink)',
                 margin: 0,
                 maxWidth: '780px',
               }}
@@ -820,60 +782,60 @@ export default function MarketingLandingPage() {
                 className={`fade-in d${i + 1}`}
                 style={{
                   padding: '24px',
-                  backgroundColor: '#fafaf9',
-                  border: '1px solid #eceff3',
+                  backgroundColor: 'var(--paper-2)',
+                  border: '1px solid var(--line)',
                   borderRadius: '18px',
                 }}
               >
-                <div style={{ fontSize: '34px', fontWeight: '650', letterSpacing: '-0.05em', color: '#111827', marginBottom: '8px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '34px', fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.03em', color: 'var(--ink)', marginBottom: '8px' }}>
                   {m.value}
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px' }}>{m.label}</div>
-                <div style={{ fontSize: '13px', lineHeight: '1.55', color: '#6b7280' }}>{m.context}</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '6px' }}>{m.label}</div>
+                <div style={{ fontSize: '13px', lineHeight: '1.55', color: 'var(--ink-3)' }}>{m.context}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="rpad" style={{ padding: '88px 48px', backgroundColor: '#f8fafc', borderTop: '1px solid #eef2f7', borderBottom: '1px solid #eef2f7' }}>
+      <section className="rpad" style={{ padding: '88px 48px', backgroundColor: 'var(--paper-2)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <div className="fade-in" style={{ marginBottom: '42px', maxWidth: '760px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '12px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-4)', marginBottom: '12px' }}>
               Pourquoi FeedPlug
             </div>
-            <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: '540', letterSpacing: '-0.03em', color: '#111827', marginBottom: '12px' }}>
+            <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--ink)', marginBottom: '12px' }}>
               Le problème n’est pas juste le flux. C’est tout ce qui se casse entre la source, l’optimisation et la diffusion.
             </h2>
-            <p style={{ fontSize: '16px', lineHeight: '1.7', color: '#6b7280', margin: 0 }}>
+            <p style={{ fontSize: '16px', lineHeight: '1.7', color: 'var(--ink-3)', margin: 0 }}>
               FeedPlug centralise les irritants opérationnels les plus coûteux, puis donne un chemin de correction clair pour chaque catalogue.
             </p>
           </div>
 
           <div className="rg2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px' }}>
-            <div style={{ padding: '28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #eceff3' }}>
-              <div style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#b91c1c', marginBottom: '18px' }}>
+            <div style={{ padding: '28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid var(--line)' }}>
+              <div style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--danger)', marginBottom: '18px' }}>
                 Ce qui ralentit les équipes
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {[0, 1, 2, 3].map((i) => (
                   <div key={`p-${i}`} className="fade-in" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626', flexShrink: 0, marginTop: '3px' }} />
-                    <p style={{ fontSize: '15px', lineHeight: '1.65', color: '#4b5563', margin: 0 }}>{t(`painSolution.pains.${i}`)}</p>
+                    <AlertTriangle style={{ width: '18px', height: '18px', color: 'var(--danger)', flexShrink: 0, marginTop: '3px' }} />
+                    <p style={{ fontSize: '15px', lineHeight: '1.65', color: 'var(--ink-3)', margin: 0 }}>{t(`painSolution.pains.${i}`)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div style={{ padding: '28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #eceff3' }}>
-              <div style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#111827', marginBottom: '18px' }}>
+            <div style={{ padding: '28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid var(--line)' }}>
+              <div style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink)', marginBottom: '18px' }}>
                 Ce que FeedPlug remet sous contrôle
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {[0, 1, 2, 3].map((i) => (
                   <div key={`s-${i}`} className="fade-in" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <CheckCircle style={{ width: '18px', height: '18px', color: '#059669', flexShrink: 0, marginTop: '3px' }} />
-                    <p style={{ fontSize: '15px', lineHeight: '1.65', color: '#111827', margin: 0 }}>{t(`painSolution.solutions.${i}`)}</p>
+                    <CheckCircle style={{ width: '18px', height: '18px', color: 'var(--success)', flexShrink: 0, marginTop: '3px' }} />
+                    <p style={{ fontSize: '15px', lineHeight: '1.65', color: 'var(--ink)', margin: 0 }}>{t(`painSolution.solutions.${i}`)}</p>
                   </div>
                 ))}
               </div>
@@ -885,13 +847,13 @@ export default function MarketingLandingPage() {
       <section className="rpad" style={{ padding: '88px 48px', backgroundColor: '#ffffff' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <div className="fade-in" style={{ marginBottom: '42px', maxWidth: '760px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '12px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-4)', marginBottom: '12px' }}>
               {t('howItWorks.title')}
             </div>
-            <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: '540', letterSpacing: '-0.03em', color: '#111827', marginBottom: '12px' }}>
+            <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--ink)', marginBottom: '12px' }}>
               Un flux de travail lisible, de l’import initial jusqu’à la diffusion multi-canal.
             </h2>
-            <p style={{ fontSize: '16px', lineHeight: '1.7', color: '#6b7280', margin: 0 }}>{t('howItWorks.subtitle')}</p>
+            <p style={{ fontSize: '16px', lineHeight: '1.7', color: 'var(--ink-3)', margin: 0 }}>{t('howItWorks.subtitle')}</p>
           </div>
 
           <div className="rg3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
@@ -906,8 +868,8 @@ export default function MarketingLandingPage() {
                 style={{
                   padding: '28px',
                   borderRadius: '20px',
-                  backgroundColor: '#fafaf9',
-                  border: '1px solid #eceff3',
+                  backgroundColor: 'var(--paper-2)',
+                  border: '1px solid var(--line)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
@@ -917,20 +879,20 @@ export default function MarketingLandingPage() {
                       height: '42px',
                       borderRadius: '14px',
                       backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--line)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <Icon style={{ width: '20px', height: '20px', color: '#111827' }} />
+                    <Icon style={{ width: '20px', height: '20px', color: 'var(--ink)' }} />
                   </div>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#9ca3af', letterSpacing: '0.04em' }}>{num}</div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--ink-4)', letterSpacing: '0.04em' }}>{num}</div>
                 </div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', marginBottom: '10px' }}>
                   {t(`howItWorks.${step}.title`)}
                 </h3>
-                <p style={{ fontSize: '15px', lineHeight: '1.7', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '15px', lineHeight: '1.7', color: 'var(--ink-3)', margin: 0 }}>
                   {t(`howItWorks.${step}.description`)}
                 </p>
               </div>
@@ -939,14 +901,14 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <section className="rpad" style={{ padding: '88px 48px', backgroundColor: '#111827' }}>
+      <section className="rpad" style={{ padding: '88px 48px', backgroundColor: 'var(--ink)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <div className="rg2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1.1fr)', gap: '28px', alignItems: 'start' }}>
             <div className="fade-in">
               <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: '12px' }}>
                 {t('differentiators.title')}
               </div>
-              <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: '540', letterSpacing: '-0.03em', color: '#ffffff', marginBottom: '14px' }}>
+              <h2 className="rtxt2" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.03em', color: '#ffffff', marginBottom: '14px' }}>
                 Un produit d’opérations catalogue, pas un simple exporteur de flux.
               </h2>
               <p style={{ fontSize: '16px', lineHeight: '1.75', color: 'rgba(255,255,255,0.58)', margin: 0 }}>
@@ -1003,33 +965,33 @@ export default function MarketingLandingPage() {
       </section>
 
       {/* ====== FAQ ====== */}
-      <section className="rpad" style={{ padding: '96px 48px', backgroundColor: '#f9fafb', borderTop: '1px solid #f3f4f6' }}>
+      <section className="rpad" style={{ padding: '96px 48px', backgroundColor: 'var(--paper-2)', borderTop: '1px solid var(--paper-2)' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto' }}>
           <h2 className="fade-in rtxt2" style={{
             fontSize: 'clamp(26px, 4vw, 34px)', fontWeight: '500',
-            letterSpacing: '-0.02em', color: '#111827', marginBottom: '40px', textAlign: 'center'
+            letterSpacing: '-0.02em', color: 'var(--ink)', marginBottom: '40px', textAlign: 'center'
           }}>
             {t('faq.title')}
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={`faq-${i}`} className="fade-in" style={{
-                borderBottom: '1px solid #e5e7eb',
-                ...(i === 0 ? { borderTop: '1px solid #e5e7eb' } : {})
+                borderBottom: '1px solid var(--line)',
+                ...(i === 0 ? { borderTop: '1px solid var(--line)' } : {})
               }}>
                 <button onClick={() => setOpenFaqIndex(openFaqIndex === i ? null : i)} style={{
                   width: '100%', padding: '20px 4px', display: 'flex', justifyContent: 'space-between',
                   alignItems: 'center', border: 'none', background: 'none', cursor: 'pointer',
                   textAlign: 'left', fontFamily: 'inherit'
                 }}>
-                  <span style={{ fontSize: '16px', fontWeight: '500', color: '#111827', paddingRight: '16px' }}>
+                  <span style={{ fontSize: '16px', fontWeight: '500', color: 'var(--ink)', paddingRight: '16px' }}>
                     {t(`faq.items.${i}.q`)}
                   </span>
                   <ChevronDown className={`faq-chevron ${openFaqIndex === i ? 'open' : ''}`}
-                    style={{ width: '18px', height: '18px', color: '#9ca3af', flexShrink: 0 }} />
+                    style={{ width: '18px', height: '18px', color: 'var(--ink-4)', flexShrink: 0 }} />
                 </button>
                 <div className={`faq-answer ${openFaqIndex === i ? 'open' : ''}`} style={{ paddingLeft: '4px', paddingRight: '4px' }}>
-                  <p style={{ fontSize: '15px', lineHeight: '1.7', color: '#6b7280', margin: 0, paddingBottom: '20px' }}>
+                  <p style={{ fontSize: '15px', lineHeight: '1.7', color: 'var(--ink-3)', margin: 0, paddingBottom: '20px' }}>
                     {t(`faq.items.${i}.a`)}
                   </p>
                 </div>
@@ -1040,7 +1002,7 @@ export default function MarketingLandingPage() {
       </section>
 
       {/* ====== CTA FINAL ====== */}
-      <section className="rpad" style={{ padding: '100px 48px', backgroundColor: '#111827' }}>
+      <section className="rpad" style={{ padding: '100px 48px', backgroundColor: 'var(--ink)' }}>
         <div style={{ maxWidth: '700px', margin: '0 auto', textAlign: 'center' }}>
           <h2 className="fade-in rtxt2" style={{
             fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: '500',
@@ -1056,7 +1018,7 @@ export default function MarketingLandingPage() {
           </p>
           <button className="fade-in d2" onClick={() => document.getElementById('hero')?.scrollIntoView({ behavior: 'smooth' })}
             style={{
-              padding: '14px 28px', backgroundColor: '#ffffff', color: '#111827',
+              padding: '14px 28px', backgroundColor: '#ffffff', color: 'var(--ink)',
               border: 'none', fontSize: '15px', fontWeight: '600', borderRadius: '6px',
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '10px',
               fontFamily: 'inherit', transition: 'opacity 0.2s ease'
@@ -1072,38 +1034,38 @@ export default function MarketingLandingPage() {
       </section>
 
       {/* ====== FOOTER ====== */}
-      <footer className="rpad" style={{ padding: '56px 48px', backgroundColor: '#ffffff', borderTop: '1px solid #f3f4f6' }}>
+      <footer className="rpad" style={{ padding: '56px 48px', backgroundColor: '#ffffff', borderTop: '1px solid var(--paper-2)' }}>
         <div style={{
           maxWidth: '1100px', margin: '0 auto',
           display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '40px'
         }}>
           <div style={{ maxWidth: '260px' }}>
-            <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '10px' }}>FeedPlug</div>
-            <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.6' }}>
+            <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--ink)', marginBottom: '10px' }}>FeedPlug</div>
+            <p style={{ fontSize: '14px', color: 'var(--ink-3)', lineHeight: '1.6' }}>
               {t('hero.description')}
             </p>
           </div>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9ca3af', marginBottom: '14px' }}>{footerResourcesLabel}</div>
+            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-4)', marginBottom: '14px' }}>{footerResourcesLabel}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {footerResources.map((item) => (
-                <Link key={item.href} href={item.href} style={{ fontSize: '14px', color: '#6b7280', textDecoration: 'none' }}>
+                <Link key={item.href} href={item.href} style={{ fontSize: '14px', color: 'var(--ink-3)', textDecoration: 'none' }}>
                   {item.label}
                 </Link>
               ))}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9ca3af', marginBottom: '14px' }}>Légal</div>
+            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-4)', marginBottom: '14px' }}>Légal</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Link href={`${localePrefix}/legal/privacy`} style={{ fontSize: '14px', color: '#6b7280', textDecoration: 'none' }}>Politique de confidentialité</Link>
-              <Link href={`${localePrefix}/legal/terms`} style={{ fontSize: '14px', color: '#6b7280', textDecoration: 'none' }}>Conditions générales</Link>
+              <Link href={`${localePrefix}/legal/privacy`} style={{ fontSize: '14px', color: 'var(--ink-3)', textDecoration: 'none' }}>Politique de confidentialité</Link>
+              <Link href={`${localePrefix}/legal/terms`} style={{ fontSize: '14px', color: 'var(--ink-3)', textDecoration: 'none' }}>Conditions générales</Link>
             </div>
           </div>
         </div>
         <div style={{
           maxWidth: '1100px', margin: '28px auto 0', paddingTop: '20px',
-          borderTop: '1px solid #f3f4f6', fontSize: '13px', color: '#9ca3af'
+          borderTop: '1px solid var(--paper-2)', fontSize: '13px', color: 'var(--ink-4)'
         }}>
           © {new Date().getFullYear()} FeedPlug. Tous droits réservés.
         </div>

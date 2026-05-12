@@ -25,13 +25,13 @@ export default function MarketingHeader() {
         top: 0,
         left: 0,
         right: 0,
-        backgroundColor: scrolled ? "rgba(255,255,255,0.9)" : "rgba(248,250,252,0.72)",
+        backgroundColor: scrolled ? "rgba(250,250,250,0.85)" : "rgba(250,250,250,0.65)",
         backdropFilter: "blur(18px)",
         WebkitBackdropFilter: "blur(18px)",
-        borderBottom: scrolled ? "1px solid rgba(226,232,240,0.95)" : "1px solid rgba(226,232,240,0.5)",
+        borderBottom: scrolled ? "1px solid var(--line)" : "1px solid rgba(229,229,229,0.5)",
         zIndex: 1000,
-        transition: "background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease",
-        boxShadow: scrolled ? "0 10px 30px rgba(15,23,42,0.06)" : "none",
+        transition: "background-color var(--d-base) var(--ease), border-color var(--d-base) var(--ease)",
+        boxShadow: scrolled ? "var(--sh-xs)" : "none",
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: `
@@ -74,30 +74,46 @@ export default function MarketingHeader() {
             style={{
               width: "36px",
               height: "36px",
-              borderRadius: "12px",
+              borderRadius: "var(--r-md)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#111827",
-              color: "#ffffff",
-              fontSize: "14px",
+              backgroundColor: "var(--ink)",
+              color: "var(--paper)",
+              fontFamily: "var(--font-display)",
+              fontSize: "13px",
               fontWeight: 700,
-              letterSpacing: "-0.04em",
-              boxShadow: "0 8px 20px rgba(15,23,42,0.14)",
+              letterSpacing: "-0.02em",
+              boxShadow: "var(--sh-sm)",
             }}
           >
             FP
           </span>
           <span
             style={{
+              display: "inline-flex",
+              alignItems: "baseline",
+              gap: "6px",
+              fontFamily: "var(--font-display)",
               fontSize: "17px",
-              fontWeight: 650,
-              letterSpacing: "-0.03em",
-              color: "#111827",
-              transition: "color 0.3s ease",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "var(--ink)",
+              transition: "color var(--d-base) var(--ease)",
             }}
           >
             FeedPlug
+            <span
+              aria-hidden="true"
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "999px",
+                backgroundColor: "var(--accent)",
+                transform: "translateY(-2px)",
+                display: "inline-block",
+              }}
+            />
           </span>
         </Link>
         <MarketingNav showHome={true} locale={locale} dark={false} />

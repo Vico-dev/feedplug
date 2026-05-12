@@ -26,7 +26,7 @@ export default function Error({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#f9fafb",
+        backgroundColor: "var(--paper-2)",
         padding: "24px",
       }}
     >
@@ -37,7 +37,7 @@ export default function Error({
           textAlign: "center",
           backgroundColor: "white",
           borderRadius: "12px",
-          border: "1px solid #e5e7eb",
+          border: "1px solid var(--line)",
           padding: "48px 32px",
         }}
       >
@@ -45,7 +45,7 @@ export default function Error({
           style={{
             width: "48px",
             height: "48px",
-            color: "#dc2626",
+            color: "var(--danger)",
             margin: "0 auto 16px",
           }}
         />
@@ -53,7 +53,7 @@ export default function Error({
           style={{
             fontSize: "20px",
             fontWeight: "600",
-            color: "#111827",
+            color: "var(--ink)",
             margin: "0 0 8px",
           }}
         >
@@ -62,7 +62,7 @@ export default function Error({
         <p
           style={{
             fontSize: "14px",
-            color: "#6b7280",
+            color: "var(--ink-3)",
             margin: "0 0 24px",
             lineHeight: "1.5",
           }}
@@ -77,7 +77,7 @@ export default function Error({
             alignItems: "center",
             gap: "8px",
             padding: "12px 24px",
-            backgroundColor: "#111827",
+            backgroundColor: "var(--ink)",
             color: "white",
             border: "none",
             borderRadius: "8px",

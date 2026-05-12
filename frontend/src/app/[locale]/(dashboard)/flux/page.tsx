@@ -597,12 +597,12 @@ export default function FluxPage() {
               ? 'Export IA'
               : 'Export pret',
         statusTone: isConnected
-          ? { background: '#ecfdf5', color: '#166534', border: '#bbf7d0' }
+          ? { background: '#ecfdf5', color: 'var(--success)', border: '#bbf7d0' }
           : channel.delivery === 'both'
-            ? { background: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' }
+            ? { background: 'var(--accent-bg)', color: 'var(--accent-2)', border: 'var(--accent-bg)' }
             : channel.family === 'ai'
-              ? { background: '#f8fafc', color: '#111827', border: '#cbd5e1' }
-              : { background: '#ffffff', color: '#475569', border: '#e2e8f0' },
+              ? { background: 'var(--paper-2)', color: 'var(--ink)', border: 'var(--line-strong)' }
+              : { background: '#ffffff', color: 'var(--ink-2)', border: 'var(--line)' },
       };
     }),
   }));
@@ -657,8 +657,8 @@ export default function FluxPage() {
         description: syncCoverage.mappingCount === 0
           ? 'Associez au moins un titre, un identifiant ou une URL produit avant la première synchro.'
           : `Le flux a un mapping partiel. Complétez : ${syncCoverage.missing.join(', ')}.`,
-        accent: '#b91c1c',
-        background: '#fef2f2',
+        accent: 'var(--danger)',
+        background: 'var(--danger-bg)',
         priority: 'attention' as const,
         nextStep: 'Compléter le mapping dans Sources',
       };
@@ -668,8 +668,8 @@ export default function FluxPage() {
       return {
         label: 'Source en pause',
         description: 'Le mapping est prêt, mais la source est actuellement en pause. Reprenez-la avant la prochaine synchro.',
-        accent: '#d97706',
-        background: '#fffbeb',
+        accent: 'var(--warning)',
+        background: 'var(--warning-bg)',
         priority: 'attention' as const,
         nextStep: 'Réactiver la source',
       };
@@ -679,8 +679,8 @@ export default function FluxPage() {
       return {
         label: 'Dernière synchro en erreur',
         description: latestRun?.errorMessage || 'Ce flux remonte une erreur. Vérifiez la source ou relancez une synchro.',
-        accent: '#dc2626',
-        background: '#fef2f2',
+        accent: 'var(--danger)',
+        background: 'var(--danger-bg)',
         priority: 'attention' as const,
         nextStep: 'Ouvrir la source et corriger le blocage',
       };
@@ -690,8 +690,8 @@ export default function FluxPage() {
       return {
         label: 'Configuration en attente',
         description: 'Finalisez ce flux avant le premier export ou push.',
-        accent: '#d97706',
-        background: '#fffbeb',
+        accent: 'var(--warning)',
+        background: 'var(--warning-bg)',
         priority: 'attention' as const,
         nextStep: 'Terminer la configuration du flux',
       };
@@ -703,8 +703,8 @@ export default function FluxPage() {
         description: connectedChannelsCount > 0
           ? `Export CSV prêt. Activez ce flux ou poussez-le vers ${availableChannelsLabel}.`
           : 'Export CSV prêt. Connectez Google Merchant Center ou Amazon pour le push automatique.',
-        accent: '#2563eb',
-        background: '#eff6ff',
+        accent: 'var(--accent)',
+        background: 'var(--accent-bg)',
         priority: 'ready' as const,
         nextStep: connectedChannelsCount > 0 ? 'Activer ou pousser ce flux' : 'Connecter un canal de diffusion',
       };
@@ -715,8 +715,8 @@ export default function FluxPage() {
       description: connectedChannelsCount > 0
         ? `Vous pouvez exporter ce flux ou le pousser vers ${availableChannelsLabel}.`
         : 'Ce flux est prêt en CSV. Connectez un canal pour le push automatique.',
-      accent: '#15803d',
-      background: '#f0fdf4',
+      accent: 'var(--success)',
+      background: 'var(--success-bg)',
       priority: 'ready' as const,
       nextStep: connectedChannelsCount > 0 ? 'Lancer un export ou un push' : 'Connecter Google Merchant Center ou Amazon',
     };
@@ -730,24 +730,24 @@ export default function FluxPage() {
     ? {
         title: "Créez votre premier flux d'export",
         description: "Choisissez une source existante puis créez un flux pour commencer à diffuser votre catalogue.",
-        tone: '#111827',
+        tone: 'var(--ink)',
       }
     : connectedChannelsCount === 0
       ? {
           title: 'Connectez un canal de diffusion',
           description: "Vos flux sont prêts en CSV, mais vous devez relier Google Merchant Center ou Amazon pour pousser automatiquement vos produits.",
-          tone: '#2563eb',
+          tone: 'var(--accent)',
         }
       : attentionFeedsCount > 0
         ? {
             title: 'Vérifiez les flux à débloquer',
             description: "Certains flux demandent encore une action côté source, mapping ou synchro. Traitez-les avant de lancer de nouveaux exports.",
-            tone: '#d97706',
+            tone: 'var(--warning)',
           }
         : {
             title: 'Lancez votre première diffusion',
             description: `Vos flux et vos connexions sont prêts. Vous pouvez exporter en CSV ou pousser directement vers ${availableChannelsLabel}.`,
-            tone: '#15803d',
+            tone: 'var(--success)',
           };
 
   const getReadinessBadge = (readiness: ReturnType<typeof getFeedReadiness>) => {
@@ -759,12 +759,12 @@ export default function FluxPage() {
 
   const getIssueAccent = (severity: FeedAudit["topIssues"][number]["severity"]) => {
     if (severity === 'high') {
-      return { border: '#fecaca', background: '#fef2f2', text: '#b91c1c', label: 'Priorite haute' };
+      return { border: '#fecaca', background: 'var(--danger-bg)', text: 'var(--danger)', label: 'Priorite haute' };
     }
     if (severity === 'medium') {
-      return { border: '#fde68a', background: '#fffbeb', text: '#b45309', label: 'Priorite moyenne' };
+      return { border: '#fde68a', background: 'var(--warning-bg)', text: 'var(--warning)', label: 'Priorite moyenne' };
     }
-    return { border: '#cbd5e1', background: '#f8fafc', text: '#475569', label: 'Priorite basse' };
+    return { border: 'var(--line-strong)', background: 'var(--paper-2)', text: 'var(--ink-2)', label: 'Priorite basse' };
   };
 
   return (
@@ -773,19 +773,19 @@ export default function FluxPage() {
         <PageCard
           style={{
             marginBottom: '20px',
-            borderColor: '#99f6e4',
-            background: 'linear-gradient(135deg, #ecfeff 0%, #f8fafc 100%)',
+            borderColor: 'var(--accent-bg)',
+            background: 'linear-gradient(135deg, var(--accent-bg) 0%, var(--paper-2) 100%)',
             boxShadow: '0 22px 50px rgba(15, 118, 110, 0.12)',
           }}
         >
           <div style={{ display: 'grid', gap: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
               <div style={{ display: 'grid', gap: '6px' }}>
-                <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#0f766e' }}>
+                <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                   Etape requise
                 </p>
-                <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#111827' }}>Choisir un Merchant Center</h2>
-                <p style={{ margin: 0, fontSize: '14px', color: '#4b5563', lineHeight: 1.5 }}>
+                <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--ink)' }}>Choisir un Merchant Center</h2>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--ink-3)', lineHeight: 1.5 }}>
                   {gmcSelection.email
                     ? `Plusieurs Merchant Centers sont accessibles avec ${gmcSelection.email}. Selectionnez celui que FeedPlug doit piloter.`
                     : "Plusieurs Merchant Centers sont disponibles. Selectionnez celui que FeedPlug doit piloter."}
@@ -814,7 +814,7 @@ export default function FluxPage() {
                       width: '100%',
                       textAlign: 'left',
                       borderRadius: '16px',
-                      border: selected ? '1.5px solid #0f766e' : '1px solid #d1d5db',
+                      border: selected ? '1.5px solid var(--accent)' : '1px solid var(--line-strong)',
                       backgroundColor: selected ? '#f0fdfa' : '#ffffff',
                       padding: '14px 16px',
                       cursor: 'pointer',
@@ -823,10 +823,10 @@ export default function FluxPage() {
                       boxShadow: selected ? '0 12px 24px rgba(15,118,110,0.10)' : 'none',
                     }}
                   >
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
                       {merchant.merchantName || merchant.label || `Merchant Center ${merchant.merchantId}`}
                     </span>
-                    <span style={{ fontSize: '12px', color: '#4b5563' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                       ID Merchant Center: {merchant.merchantId}
                       {merchant.aggregatorId ? ` · Aggregator ${merchant.aggregatorId}` : ''}
                     </span>
@@ -861,9 +861,9 @@ export default function FluxPage() {
           display: 'flex',
           alignItems: 'flex-start',
           gap: '10px',
-          backgroundColor: toast.type === 'success' ? '#f0fdf4' : toast.type === 'error' ? '#fef2f2' : '#eff6ff',
-          border: `1px solid ${toast.type === 'success' ? '#bbf7d0' : toast.type === 'error' ? '#fecaca' : '#bfdbfe'}`,
-          color: toast.type === 'success' ? '#166534' : toast.type === 'error' ? '#991b1b' : '#1e40af',
+          backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : toast.type === 'error' ? 'var(--danger-bg)' : 'var(--accent-bg)',
+          border: `1px solid ${toast.type === 'success' ? '#bbf7d0' : toast.type === 'error' ? '#fecaca' : 'var(--accent-bg)'}`,
+          color: toast.type === 'success' ? 'var(--success)' : toast.type === 'error' ? 'var(--danger)' : 'var(--accent-2)',
         }}>
           {toast.type === 'success' ? <CheckCircle style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: 2 }} /> :
            toast.type === 'error' ? <AlertCircle style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: 2 }} /> :
@@ -883,27 +883,27 @@ export default function FluxPage() {
         <div className="feedplug-shell-card" style={{
           marginBottom: '20px',
           padding: '14px 16px',
-          backgroundColor: '#fffbeb',
-          border: '1px solid #fcd34d',
+          backgroundColor: 'var(--warning-bg)',
+          border: '1px solid var(--warning)',
           fontSize: '14px',
-          color: '#92400e'
+          color: 'var(--warning)'
         }}>
-          {t("fluxPage.limitReached", { count: channelsCount, max: maxChannels })} <Link href={`/${locale}/tarifs`} prefetch={false} style={{ fontWeight: 600, color: '#b45309', textDecoration: 'underline' }}>{t("fluxPage.pricingLinkLabel")}</Link>{t("fluxPage.limitReachedSuffix")}
+          {t("fluxPage.limitReached", { count: channelsCount, max: maxChannels })} <Link href={`/${locale}/tarifs`} prefetch={false} style={{ fontWeight: 600, color: 'var(--warning)', textDecoration: 'underline' }}>{t("fluxPage.pricingLinkLabel")}</Link>{t("fluxPage.limitReachedSuffix")}
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <DashboardSection title="Connexions de diffusion" description="Reliez vos plateformes principales pour exporter ou pousser automatiquement votre catalogue.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
-            <PageCard style={{ borderColor: gmcStatus.connected ? '#bbf7d0' : '#e2e8f0', backgroundColor: gmcStatus.connected ? '#f0fdf4' : '#ffffff', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
+            <PageCard style={{ borderColor: gmcStatus.connected ? '#bbf7d0' : 'var(--line)', backgroundColor: gmcStatus.connected ? 'var(--success-bg)' : '#ffffff', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: gmcStatus.connected ? '#dcfce7' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Globe style={{ width: '22px', height: '22px', color: gmcStatus.connected ? '#16a34a' : '#6b7280' }} />
+                  <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: gmcStatus.connected ? 'var(--success-bg)' : 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Globe style={{ width: '22px', height: '22px', color: gmcStatus.connected ? 'var(--success)' : 'var(--ink-3)' }} />
                   </div>
                   <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: '0 0 2px' }}>Google Merchant Center</p>
-                    <p style={{ fontSize: '13px', color: gmcStatus.connected ? '#15803d' : '#6b7280', margin: 0 }}>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 2px' }}>Google Merchant Center</p>
+                    <p style={{ fontSize: '13px', color: gmcStatus.connected ? 'var(--success)' : 'var(--ink-3)', margin: 0 }}>
                       {gmcStatus.connected
                         ? `Connecte - ${gmcStatus.email || 'Compte Google'} ${gmcStatus.merchantName ? `(${gmcStatus.merchantName}) ` : ''}${gmcStatus.merchantId ? `(MC ${gmcStatus.merchantId})` : ''}`
                         : 'Connectez votre compte pour pousser automatiquement vos produits'}
@@ -922,15 +922,15 @@ export default function FluxPage() {
               </div>
             </PageCard>
 
-            <PageCard style={{ borderColor: amazonStatus.connected ? '#fcd34d' : '#e2e8f0', backgroundColor: amazonStatus.connected ? '#fffbeb' : '#ffffff', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
+            <PageCard style={{ borderColor: amazonStatus.connected ? 'var(--warning)' : 'var(--line)', backgroundColor: amazonStatus.connected ? 'var(--warning-bg)' : '#ffffff', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: amazonStatus.connected ? '#fef3c7' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ShoppingCart style={{ width: '22px', height: '22px', color: amazonStatus.connected ? '#d97706' : '#6b7280' }} />
+                  <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: amazonStatus.connected ? 'var(--warning-bg)' : 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ShoppingCart style={{ width: '22px', height: '22px', color: amazonStatus.connected ? 'var(--warning)' : 'var(--ink-3)' }} />
                   </div>
                   <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: '0 0 2px' }}>Amazon Seller Central</p>
-                    <p style={{ fontSize: '13px', color: amazonStatus.connected ? '#b45309' : '#6b7280', margin: 0 }}>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 2px' }}>Amazon Seller Central</p>
+                    <p style={{ fontSize: '13px', color: amazonStatus.connected ? 'var(--warning)' : 'var(--ink-3)', margin: 0 }}>
                       {amazonStatus.connected
                         ? `Connecte ${amazonStatus.sellerId ? `(Seller ${amazonStatus.sellerId})` : ''}`
                         : 'Connectez votre compte pour pousser vos produits vers Amazon FR, UK, DE, IT, ES'}
@@ -956,10 +956,10 @@ export default function FluxPage() {
         const hasNoProducts = (pushResult.total ?? 0) === 0 && (pushResult.succeeded ?? 0) === 0 && !hasErrors;
         const isMca = pushResult.mcaError === true;
         const firstError = !isMca ? (pushResult.errors?.[0]?.errors?.[0] || pushResult.errors?.[0]?.error) : undefined;
-        const borderColor = allFailed ? '#fca5a5' : hasErrors ? '#fcd34d' : hasNoProducts ? '#cbd5e1' : '#86efac';
-        const bgColor = allFailed ? '#fef2f2' : hasErrors ? '#fffbeb' : hasNoProducts ? '#f8fafc' : '#f0fdf4';
-        const textColor = allFailed ? '#991b1b' : hasErrors ? '#92400e' : hasNoProducts ? '#334155' : '#166534';
-        const subColor = allFailed ? '#b91c1c' : hasErrors ? '#b45309' : hasNoProducts ? '#64748b' : '#15803d';
+        const borderColor = allFailed ? 'var(--danger)' : hasErrors ? 'var(--warning)' : hasNoProducts ? 'var(--line-strong)' : 'var(--success)';
+        const bgColor = allFailed ? 'var(--danger-bg)' : hasErrors ? 'var(--warning-bg)' : hasNoProducts ? 'var(--paper-2)' : 'var(--success-bg)';
+        const textColor = allFailed ? 'var(--danger)' : hasErrors ? 'var(--warning)' : hasNoProducts ? 'var(--ink-2)' : 'var(--success)';
+        const subColor = allFailed ? 'var(--danger)' : hasErrors ? 'var(--warning)' : hasNoProducts ? 'var(--ink-3)' : 'var(--success)';
         return (
           <div className="feedplug-shell-card" style={{ border: `1px solid ${borderColor}`, padding: '16px 20px', backgroundColor: bgColor, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderRadius: '14px' }}>
             <div style={{ flex: 1 }}>
@@ -980,13 +980,13 @@ export default function FluxPage() {
               {isMca && (
                 <button
                   onClick={() => { setPushResult(null); handleConnectGMC(); }}
-                  style={{ marginTop: '10px', padding: '6px 14px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
+                  style={{ marginTop: '10px', padding: '6px 14px', backgroundColor: 'var(--danger)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
                 >
                   Reconnecter Google Merchant Center
                 </button>
               )}
             </div>
-            <button onClick={() => setPushResult(null)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#6b7280', marginLeft: '12px' }}>×</button>
+            <button onClick={() => setPushResult(null)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--ink-3)', marginLeft: '12px' }}>×</button>
           </div>
         );
       })()}
@@ -1001,28 +1001,28 @@ export default function FluxPage() {
               label="Canaux supportes"
               value={SUPPORTED_CHANNELS.length}
               hint="Surface totale de diffusion disponible"
-              accent="#2563eb"
+              accent="var(--accent)"
             />
             <DashboardStatCard
               icon={<ShoppingCart size={20} />}
               label="Push directs"
               value={directPushChannels.length}
               hint="Canaux pouvant etre pousses directement une fois relies"
-              accent="#b45309"
+              accent="var(--warning)"
             />
             <DashboardStatCard
               icon={<Download size={20} />}
               label="Exports prets"
               value={exportReadyChannels.length}
               hint="Canaux accessibles via export catalogue"
-              accent="#0f766e"
+              accent="var(--accent)"
             />
             <DashboardStatCard
               icon={<FileText size={20} />}
               label="Assistants IA"
               value={aiChannels.length}
               hint="Sorties dediees a ChatGPT, Gemini et Perplexity"
-              accent="#111827"
+              accent="var(--ink)"
             />
           </DashboardStatGrid>
 
@@ -1042,7 +1042,7 @@ export default function FluxPage() {
                       <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: family.meta.accent }}>
                         {family.meta.label}
                       </p>
-                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>
+                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
                         {family.channels.length} canal{family.channels.length > 1 ? 'aux' : ''} dans cette famille.
                       </p>
                     </div>
@@ -1063,7 +1063,7 @@ export default function FluxPage() {
                           minWidth: '120px',
                         }}
                       >
-                        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, color: '#111827' }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, color: 'var(--ink)' }}>
                           {channel.label}
                         </p>
                         <p style={{ margin: 0, fontSize: '11px', color: channel.statusTone.color }}>
@@ -1088,21 +1088,21 @@ export default function FluxPage() {
               label="Flux actifs"
               value={activeFeedsCount}
               hint={`${activeFeedsCount} sur ${feeds.length} prêts ou actifs`}
-              accent="#0ea5e9"
+              accent="var(--accent)"
             />
             <DashboardStatCard
               icon={<Globe size={20} />}
               label="Canaux connectés"
               value={connectedChannelsCount}
               hint={connectedChannelsCount > 0 ? availableChannelsLabel : 'Aucun canal relié'}
-              accent={connectedChannelsCount > 0 ? '#16a34a' : '#2563eb'}
+              accent={connectedChannelsCount > 0 ? 'var(--success)' : 'var(--accent)'}
             />
             <DashboardStatCard
               icon={<AlertCircle size={20} />}
               label="À vérifier"
               value={attentionFeedsCount}
               hint={attentionFeedsCount > 0 ? 'Flux inactifs, en attente ou en erreur' : 'Aucun blocage signalé'}
-              accent={attentionFeedsCount > 0 ? '#d97706' : '#94a3b8'}
+              accent={attentionFeedsCount > 0 ? 'var(--warning)' : 'var(--ink-4)'}
             />
           </DashboardStatGrid>
 
@@ -1112,10 +1112,10 @@ export default function FluxPage() {
                 <p style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: nextAction.tone, margin: '0 0 8px' }}>
                   Prochaine action
                 </p>
-                <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: '0 0 6px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 6px' }}>
                   {nextAction.title}
                 </h3>
-                <p style={{ fontSize: '14px', lineHeight: 1.6, color: '#6b7280', margin: 0, maxWidth: '760px' }}>
+                <p style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--ink-3)', margin: 0, maxWidth: '760px' }}>
                   {nextAction.description}
                 </p>
               </div>
@@ -1163,7 +1163,7 @@ export default function FluxPage() {
                 border: '1px solid rgba(148,163,184,0.35)',
                 padding: '0 14px',
                 backgroundColor: '#fff',
-                color: '#0f172a',
+                color: 'var(--ink)',
                 fontSize: 14,
               }}
             >
@@ -1195,44 +1195,44 @@ export default function FluxPage() {
                   label="Score flux"
                   value={`${feedAudit.score}/100`}
                   hint={`${selectedAuditFeed.name} · ${feedAudit.summary.totalProducts} produits analyses`}
-                  accent="#0f766e"
+                  accent="var(--accent)"
                 />
                 <DashboardStatCard
                   icon={<TrendingUp size={20} />}
                   label="Potentiel avec accompagnement"
                   value={`${feedAudit.potentialScore}/100`}
                   hint={`Jusqu'a +${feedAudit.estimatedVisibilityLiftPct}% de visibilite estimee`}
-                  accent="#2563eb"
+                  accent="var(--accent)"
                 />
                 <DashboardStatCard
                   icon={<CheckCircle size={20} />}
                   label="Produits recuperables"
                   value={feedAudit.estimatedAdditionalApprovedProducts}
                   hint="Produits supplementaires potentiellement diffusable apres correction"
-                  accent="#16a34a"
+                  accent="var(--success)"
                 />
               </DashboardStatGrid>
 
               <PageCard style={{ marginTop: '20px', border: '1px solid rgba(226,232,240,0.9)', boxShadow: '0 10px 28px rgba(15,23,42,0.04)' }}>
                 <div style={{ display: 'grid', gap: '18px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   {[
-                    { label: 'Couverture des donnees', value: feedAudit.scoreBreakdown.dataCoverage, tone: '#0f766e' },
-                    { label: 'Qualite produit moyenne', value: feedAudit.scoreBreakdown.productQuality, tone: '#1d4ed8' },
-                    { label: 'Readiness canal', value: feedAudit.scoreBreakdown.channelReadiness, tone: '#7c3aed' },
-                    { label: 'Produits deja prets', value: feedAudit.summary.approvalReadyRate, tone: '#15803d', suffix: '%' },
+                    { label: 'Couverture des donnees', value: feedAudit.scoreBreakdown.dataCoverage, tone: 'var(--accent)' },
+                    { label: 'Qualite produit moyenne', value: feedAudit.scoreBreakdown.productQuality, tone: 'var(--accent-2)' },
+                    { label: 'Readiness canal', value: feedAudit.scoreBreakdown.channelReadiness, tone: 'var(--accent)' },
+                    { label: 'Produits deja prets', value: feedAudit.summary.approvalReadyRate, tone: 'var(--success)', suffix: '%' },
                   ].map((item) => (
                     <div key={item.label} style={{ padding: '16px 0' }}>
-                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#64748b' }}>{item.label}</p>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-3)' }}>{item.label}</p>
                       <p style={{ margin: '10px 0 6px', fontSize: '30px', fontWeight: 700, letterSpacing: '-0.04em', color: item.tone }}>
                         {item.value}{item.suffix ?? '/100'}
                       </p>
-                      <div style={{ height: '8px', borderRadius: '999px', backgroundColor: '#e2e8f0', overflow: 'hidden' }}>
+                      <div style={{ height: '8px', borderRadius: '999px', backgroundColor: 'var(--line)', overflow: 'hidden' }}>
                         <div style={{ width: `${Math.max(4, Math.min(item.value, 100))}%`, height: '100%', borderRadius: '999px', backgroundColor: item.tone }} />
                       </div>
                     </div>
                   ))}
                 </div>
-                <p style={{ margin: '8px 0 0', fontSize: '13px', lineHeight: 1.6, color: '#64748b' }}>
+                <p style={{ margin: '8px 0 0', fontSize: '13px', lineHeight: 1.6, color: 'var(--ink-3)' }}>
                   Estimation issue de l&apos;audit technique du flux. {feedAudit.methodology.estimation}
                 </p>
               </PageCard>
@@ -1254,7 +1254,7 @@ export default function FluxPage() {
                           <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent.text }}>
                             {accent.label}
                           </p>
-                          <h3 style={{ margin: '10px 0 6px', fontSize: '18px', fontWeight: 600, color: '#0f172a' }}>
+                          <h3 style={{ margin: '10px 0 6px', fontSize: '18px', fontWeight: 600, color: 'var(--ink)' }}>
                             {issue.label}
                           </h3>
                         </div>
@@ -1262,10 +1262,10 @@ export default function FluxPage() {
                           {issue.affectedRate}%
                         </span>
                       </div>
-                      <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#334155', lineHeight: 1.6 }}>
+                      <p style={{ margin: '0 0 8px', fontSize: '14px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
                         {issue.affectedProducts} produits concernes. {issue.impact}
                       </p>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>
+                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-2)', lineHeight: 1.6 }}>
                         Action recommandee: {issue.recommendation}
                       </p>
                     </PageCard>
@@ -1333,21 +1333,21 @@ export default function FluxPage() {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '260px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: feed.status === 'ERROR' ? '#fef2f2' : '#f0f9ff', borderRadius: '14px' }}>
-                    <FileText style={{ width: '20px', height: '20px', color: readiness.priority === 'attention' ? '#dc2626' : '#2563eb' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: feed.status === 'ERROR' ? 'var(--danger-bg)' : 'var(--accent-bg)', borderRadius: '14px' }}>
+                    <FileText style={{ width: '20px', height: '20px', color: readiness.priority === 'attention' ? 'var(--danger)' : 'var(--accent)' }} />
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {feed.name}
                       </h3>
                       {getReadinessBadge(readiness)}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                         Source {feed.source?.name ?? '—'}
                       </span>
-                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                      <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                         {formatFrequency(feed.frequency)}
                       </span>
                     </div>
@@ -1376,42 +1376,42 @@ export default function FluxPage() {
                         {exportingId === feed.id ? 'Export...' : 'CSV'}
                       </button>
                       {exportMenuFeedId === feed.id && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '260px', maxHeight: '70vh', overflowY: 'auto', padding: '4px 0' }}>
-                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid var(--line)', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '260px', maxHeight: '70vh', overflowY: 'auto', padding: '4px 0' }}>
+                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Moteurs de recherche
                           </div>
                           {gmcPushTargets.length > 0 ? (
                             gmcPushTargets.map((target) => (
-                              <button key={target.destinationId} type="button" onClick={() => handleExportGmcTarget(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                              <button key={target.destinationId} type="button" onClick={() => handleExportGmcTarget(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                                 {`Google Merchant Center · ${target.label}`}
                               </button>
                             ))
                           ) : (
-                            <button type="button" onClick={() => handleExportCsv(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                            <button type="button" onClick={() => handleExportCsv(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                               Google Merchant Center
                             </button>
                           )}
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Bing', () => exportFeedAsCsvBing(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Bing', () => exportFeedAsCsvBing(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Bing / Microsoft
                           </button>
-                          <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }} />
-                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <div style={{ borderTop: '1px solid var(--line)', margin: '4px 0' }} />
+                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Réseaux sociaux
                           </div>
-                          <button type="button" onClick={() => handleExportCsvMeta(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportCsvMeta(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Meta (Facebook / Instagram)
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Pinterest', () => exportFeedAsCsvPinterest(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Pinterest', () => exportFeedAsCsvPinterest(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Pinterest
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'TikTok', () => exportFeedAsCsvTikTok(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'TikTok', () => exportFeedAsCsvTikTok(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             TikTok Shop
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Snapchat', () => exportFeedAsCsvSnapchat(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Snapchat', () => exportFeedAsCsvSnapchat(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Snapchat
                           </button>
-                          <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }} />
-                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <div style={{ borderTop: '1px solid var(--line)', margin: '4px 0' }} />
+                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Marketplaces
                           </div>
                           {(amazonPushTargets.length > 0
@@ -1426,37 +1426,37 @@ export default function FluxPage() {
                               key={target.destinationId || target.channelKey}
                               type="button"
                               onClick={() => target.destinationId ? handleExportAmazonTarget(feed.id, target) : handleExportCsvAmazon(feed.id, target.channelKey || 'amazon_fr')}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}
                             >
                               {target.label}
                             </button>
                           ))}
-                          <button type="button" onClick={() => handleExportCsvCdiscount(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportCsvCdiscount(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Cdiscount
                           </button>
-                          <button type="button" onClick={() => handleExportCsvRakuten(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportCsvRakuten(feed.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Rakuten
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Yandex', () => exportFeedAsCsvYandex(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Yandex', () => exportFeedAsCsvYandex(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Yandex Market
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Baidu', () => exportFeedAsCsvBaidu(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Baidu', () => exportFeedAsCsvBaidu(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Baidu
                           </button>
-                          <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }} />
-                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <div style={{ borderTop: '1px solid var(--line)', margin: '4px 0' }} />
+                          <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             LLM / IA
                           </div>
-                          <button type="button" onClick={() => handleExportChatGPT(feed.id, 'json')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportChatGPT(feed.id, 'json')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             ChatGPT (JSON)
                           </button>
-                          <button type="button" onClick={() => handleExportChatGPT(feed.id, 'csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportChatGPT(feed.id, 'csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             ChatGPT (CSV)
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Perplexity', () => exportFeedAsCsvPerplexity(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Perplexity', () => exportFeedAsCsvPerplexity(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Perplexity
                           </button>
-                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Gemini', () => exportFeedAsCsvGemini(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Gemini', () => exportFeedAsCsvGemini(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Google Gemini
                           </button>
                         </div>
@@ -1469,8 +1469,8 @@ export default function FluxPage() {
                             onClick={() => setGmcPushMenuFeedId(gmcPushMenuFeedId === feed.id ? null : feed.id)}
                             disabled={!!pushingId}
                             style={{
-                              border: '1px solid #16a34a',
-                              color: '#16a34a',
+                              border: '1px solid var(--success)',
+                              color: 'var(--success)',
                               padding: '6px 12px',
                               borderRadius: '10px',
                               fontSize: '12px',
@@ -1486,9 +1486,9 @@ export default function FluxPage() {
                             {pushingId === feed.id ? 'Push...' : 'Push Google'}
                           </button>
                           {gmcPushMenuFeedId === feed.id && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '220px', padding: '4px 0' }}>
+                            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid var(--line)', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '220px', padding: '4px 0' }}>
                               {gmcPushTargets.map((target) => (
-                                <button key={target.destinationId} type="button" onClick={() => handlePushGMC(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                                <button key={target.destinationId} type="button" onClick={() => handlePushGMC(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                                   {target.label}
                                 </button>
                               ))}
@@ -1500,8 +1500,8 @@ export default function FluxPage() {
                           onClick={() => handlePushGMC(feed.id, gmcPushTargets[0] || null)}
                           disabled={!!pushingId}
                           style={{
-                              border: '1px solid #16a34a',
-                              color: '#16a34a',
+                              border: '1px solid var(--success)',
+                              color: 'var(--success)',
                               padding: '6px 12px',
                               borderRadius: '10px',
                             fontSize: '12px',
@@ -1524,8 +1524,8 @@ export default function FluxPage() {
                           onClick={() => setAmazonPushMenuFeedId(amazonPushMenuFeedId === feed.id ? null : feed.id)}
                           disabled={!!pushingId}
                           style={{ 
-                            border: '1px solid #d97706', 
-                            color: '#d97706', 
+                            border: '1px solid var(--warning)', 
+                            color: 'var(--warning)', 
                             padding: '6px 12px', 
                             borderRadius: '10px', 
                             fontSize: '12px',
@@ -1541,7 +1541,7 @@ export default function FluxPage() {
                           {pushingId === feed.id ? 'Push...' : 'Push Amazon'}
                         </button>
                         {amazonPushMenuFeedId === feed.id && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '160px', padding: '4px 0' }}>
+                          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid var(--line)', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: '160px', padding: '4px 0' }}>
                             {(amazonPushTargets.length > 0
                               ? amazonPushTargets
                               : AMAZON_EXPORT_CHANNELS.map((ch) => ({
@@ -1550,7 +1550,7 @@ export default function FluxPage() {
                                   channelKey: ch.channelKey,
                                 }))
                             ).map((target) => (
-                              <button key={target.destinationId || target.channelKey} type="button" onClick={() => handlePushAmazon(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: '#111827' }}>
+                              <button key={target.destinationId || target.channelKey} type="button" onClick={() => handlePushAmazon(feed.id, target)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                                 {target.label}
                               </button>
                             ))}
@@ -1562,8 +1562,8 @@ export default function FluxPage() {
                       type="button"
                       onClick={() => setSelectedAuditFeedId(feed.id)}
                       style={{
-                        border: selectedAuditFeedId === feed.id ? '1px solid #0f766e' : '1px solid #cbd5e1',
-                        color: selectedAuditFeedId === feed.id ? '#0f766e' : '#334155',
+                        border: selectedAuditFeedId === feed.id ? '1px solid var(--accent)' : '1px solid var(--line-strong)',
+                        color: selectedAuditFeedId === feed.id ? 'var(--accent)' : 'var(--ink-2)',
                         padding: '6px 12px',
                         borderRadius: '10px',
                         fontSize: '12px',
@@ -1599,18 +1599,18 @@ export default function FluxPage() {
                     <p style={{ fontSize: '13px', fontWeight: 700, color: readiness.accent, margin: '0 0 4px' }}>
                       {readiness.label}
                     </p>
-                    <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>
+                    <p style={{ fontSize: '14px', color: 'var(--ink-2)', margin: 0 }}>
                       {readiness.description}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', maxWidth: '480px' }}>
-                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: 'var(--ink-2)', fontWeight: 500 }}>
                       {feed.source?.connector ?? '—'}
                     </span>
-                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: 'var(--ink-2)', fontWeight: 500 }}>
                       Dernière exécution: {formatDateTime(feed.source?.lastRunAt)}
                     </span>
-                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                    <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', fontSize: '12px', color: 'var(--ink-2)', fontWeight: 500 }}>
                       {readiness.nextStep}
                     </span>
                   </div>

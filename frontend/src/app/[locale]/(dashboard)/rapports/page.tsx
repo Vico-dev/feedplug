@@ -230,7 +230,7 @@ export default function RapportsPage() {
                 fontSize: '13px',
                 fontWeight: '600',
                 backgroundColor: selectedReportType === 'overview' ? 'var(--app-accent-soft)' : 'rgba(255,255,255,0.8)',
-                color: selectedReportType === 'overview' ? 'var(--app-accent-strong)' : '#374151',
+                color: selectedReportType === 'overview' ? 'var(--app-accent-strong)' : 'var(--ink-2)',
                 border: selectedReportType === 'overview' ? '1px solid rgba(15, 118, 110, 0.18)' : '1px solid var(--app-border)',
                 cursor: 'pointer'
               }}
@@ -246,7 +246,7 @@ export default function RapportsPage() {
                 fontSize: '13px',
                 fontWeight: '600',
                 backgroundColor: selectedReportType === 'flows' ? 'var(--app-accent-soft)' : 'rgba(255,255,255,0.8)',
-                color: selectedReportType === 'flows' ? 'var(--app-accent-strong)' : '#374151',
+                color: selectedReportType === 'flows' ? 'var(--app-accent-strong)' : 'var(--ink-2)',
                 border: selectedReportType === 'flows' ? '1px solid rgba(15, 118, 110, 0.18)' : '1px solid var(--app-border)',
                 cursor: 'pointer'
               }}
@@ -261,9 +261,9 @@ export default function RapportsPage() {
                 borderRadius: '999px', 
                 fontSize: '13px',
                 fontWeight: '600',
-                backgroundColor: selectedReportType === 'ab-tests' ? '#fef3c7' : 'rgba(255,255,255,0.8)',
-                color: selectedReportType === 'ab-tests' ? '#b45309' : '#374151',
-                border: selectedReportType === 'ab-tests' ? '1px solid #fcd34d' : '1px solid var(--app-border)',
+                backgroundColor: selectedReportType === 'ab-tests' ? 'var(--warning-bg)' : 'rgba(255,255,255,0.8)',
+                color: selectedReportType === 'ab-tests' ? 'var(--warning)' : 'var(--ink-2)',
+                border: selectedReportType === 'ab-tests' ? '1px solid var(--warning)' : '1px solid var(--app-border)',
                 cursor: 'pointer'
               }}
             >
@@ -278,7 +278,7 @@ export default function RapportsPage() {
                 fontSize: '13px',
                 fontWeight: '600',
                 backgroundColor: selectedReportType === 'custom' ? 'var(--app-accent-soft)' : 'rgba(255,255,255,0.8)',
-                color: selectedReportType === 'custom' ? 'var(--app-accent-strong)' : '#374151',
+                color: selectedReportType === 'custom' ? 'var(--app-accent-strong)' : 'var(--ink-2)',
                 border: selectedReportType === 'custom' ? '1px solid rgba(15, 118, 110, 0.18)' : '1px solid var(--app-border)',
                 cursor: 'pointer'
               }}
@@ -289,8 +289,8 @@ export default function RapportsPage() {
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calendar style={{ width: '16px', height: '16px', color: '#6b7280' }} />
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>Période :</span>
+              <Calendar style={{ width: '16px', height: '16px', color: 'var(--ink-3)' }} />
+              <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)' }}>Période :</span>
             </div>
             
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -307,7 +307,7 @@ export default function RapportsPage() {
                     minHeight: 36,
                     padding: '0 12px',
                     backgroundColor: selectedPeriod === period.key ? 'var(--app-text)' : 'transparent',
-                    color: selectedPeriod === period.key ? 'white' : '#6b7280',
+                    color: selectedPeriod === period.key ? 'white' : 'var(--ink-3)',
                     border: '1px solid var(--app-border)',
                     borderRadius: '999px',
                     fontSize: '13px',
@@ -329,7 +329,7 @@ export default function RapportsPage() {
                 minHeight: 40,
                 padding: '0 12px',
                 backgroundColor: showAdvancedFilters ? 'rgba(15, 118, 110, 0.08)' : 'transparent',
-                color: '#6b7280',
+                color: 'var(--ink-3)',
                 border: '1px solid var(--app-border)',
                 borderRadius: '12px',
                 fontSize: '13px',
@@ -350,13 +350,13 @@ export default function RapportsPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                   Plateforme
                 </label>
                 <select style={{ 
                   width: '100%', 
                   padding: '8px 12px', 
-                  border: '1px solid #d1d5db', 
+                  border: '1px solid var(--line-strong)', 
                   borderRadius: '2px', 
                   fontSize: '14px' 
                 }}>
@@ -368,13 +368,13 @@ export default function RapportsPage() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                   Statut
                 </label>
                 <select style={{ 
                   width: '100%', 
                   padding: '8px 12px', 
-                  border: '1px solid #d1d5db', 
+                  border: '1px solid var(--line-strong)', 
                   borderRadius: '2px', 
                   fontSize: '14px' 
                 }}>
@@ -385,13 +385,13 @@ export default function RapportsPage() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '6px' }}>
                   Type de flux
                 </label>
                 <select style={{ 
                   width: '100%', 
                   padding: '8px 12px', 
-                  border: '1px solid #d1d5db', 
+                  border: '1px solid var(--line-strong)', 
                   borderRadius: '2px', 
                   fontSize: '14px' 
                 }}>
@@ -406,26 +406,26 @@ export default function RapportsPage() {
           </div>
         )}
         <DashboardStatGrid>
-          <DashboardStatCard icon={<DollarSign size={20} />} label="Revenus generes" value={`€${totalMetrics.revenue.toLocaleString('en-US')}`} hint="+12% vs periode precedente" accent="#16a34a" />
-          <DashboardStatCard icon={<Target size={20} />} label="Conversions" value={totalMetrics.conversions.toLocaleString('en-US')} hint={`${overallConversionRate.toFixed(1)}% de taux`} accent="#2563eb" />
-          <DashboardStatCard icon={<MousePointer size={20} />} label="Taux de clic" value={`${overallCTR.toFixed(1)}%`} hint={`${totalMetrics.clicks.toLocaleString('en-US')} clics`} accent="#d97706" />
-          <DashboardStatCard icon={<TrendingUp size={20} />} label="ROI" value={`${overallROI.toFixed(0)}%`} hint="Retour sur investissement consolide" accent="#0f766e" />
+          <DashboardStatCard icon={<DollarSign size={20} />} label="Revenus generes" value={`€${totalMetrics.revenue.toLocaleString('en-US')}`} hint="+12% vs periode precedente" accent="var(--success)" />
+          <DashboardStatCard icon={<Target size={20} />} label="Conversions" value={totalMetrics.conversions.toLocaleString('en-US')} hint={`${overallConversionRate.toFixed(1)}% de taux`} accent="var(--accent)" />
+          <DashboardStatCard icon={<MousePointer size={20} />} label="Taux de clic" value={`${overallCTR.toFixed(1)}%`} hint={`${totalMetrics.clicks.toLocaleString('en-US')} clics`} accent="var(--warning)" />
+          <DashboardStatCard icon={<TrendingUp size={20} />} label="ROI" value={`${overallROI.toFixed(0)}%`} hint="Retour sur investissement consolide" accent="#2A6FE8" />
         </DashboardStatGrid>
       </div>
 
       {/* Métriques principales legacy conservees plus bas pour le detail de la page */}
       <div style={{ display: 'none' }}>
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: '#f0fdf4', borderRadius: '2px' }}>
-                <DollarSign style={{ width: '24px', height: '24px', color: '#22c55e' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: 'var(--success-bg)', borderRadius: '2px' }}>
+                <DollarSign style={{ width: '24px', height: '24px', color: 'var(--success)' }} />
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '300', color: '#0a0a0a', margin: 0 }}>
                   Revenus générés
                 </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                   Total des ventes
                 </p>
               </div>
@@ -435,24 +435,24 @@ export default function RapportsPage() {
                 €{totalMetrics.revenue.toLocaleString('en-US')}
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                <ArrowUp style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '500' }}>+12%</span>
+                <ArrowUp style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
+                <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '500' }}>+12%</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: '#f0f9ff', borderRadius: '12px' }}>
-                <Target style={{ width: '24px', height: '24px', color: '#2563eb' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: 'var(--accent-bg)', borderRadius: '12px' }}>
+                <Target style={{ width: '24px', height: '24px', color: 'var(--accent)' }} />
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '300', color: '#0a0a0a', margin: 0 }}>
                   Conversions
                 </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                   {overallConversionRate.toFixed(1)}% de taux
                 </p>
               </div>
@@ -462,24 +462,24 @@ export default function RapportsPage() {
                 {totalMetrics.conversions.toLocaleString('en-US')}
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                <ArrowUp style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '500' }}>+8%</span>
+                <ArrowUp style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
+                <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '500' }}>+8%</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: '#fef3c7', borderRadius: '12px' }}>
-                <MousePointer style={{ width: '24px', height: '24px', color: '#f59e0b' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: 'var(--warning-bg)', borderRadius: '12px' }}>
+                <MousePointer style={{ width: '24px', height: '24px', color: 'var(--warning)' }} />
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '300', color: '#0a0a0a', margin: 0 }}>
                   Taux de clic (CTR)
                 </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                   {totalMetrics.clicks.toLocaleString('en-US')} clics
                 </p>
               </div>
@@ -489,24 +489,24 @@ export default function RapportsPage() {
                 {overallCTR.toFixed(1)}%
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                <ArrowUp style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '500' }}>+15%</span>
+                <ArrowUp style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
+                <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '500' }}>+15%</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: '2px', backgroundColor: 'white', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: '#f0f9ff', borderRadius: '12px' }}>
-                <TrendingUp style={{ width: '24px', height: '24px', color: '#2563eb' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', backgroundColor: 'var(--accent-bg)', borderRadius: '12px' }}>
+                <TrendingUp style={{ width: '24px', height: '24px', color: 'var(--accent)' }} />
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '300', color: '#0a0a0a', margin: 0 }}>
                   ROI
                 </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                   Retour sur investissement
                 </p>
               </div>
@@ -516,8 +516,8 @@ export default function RapportsPage() {
                 {overallROI.toFixed(0)}%
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                <ArrowUp style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '500' }}>+22%</span>
+                <ArrowUp style={{ width: '16px', height: '16px', color: 'var(--success)' }} />
+                <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '500' }}>+22%</span>
               </div>
             </div>
           </div>
@@ -530,54 +530,54 @@ export default function RapportsPage() {
           {/* Graphiques principaux */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
             {/* Graphique des performances */}
-            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid #e5e7eb' }}>
+            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid var(--line)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                   Évolution des revenus
                 </h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', color: '#6b7280', cursor: 'pointer', borderRadius: '2px' }}>
+                  <button style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', borderRadius: '2px' }}>
                     <Eye style={{ width: '16px', height: '16px' }} />
                   </button>
-                  <button style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', color: '#6b7280', cursor: 'pointer', borderRadius: '2px' }}>
+                  <button style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', borderRadius: '2px' }}>
                     <Download style={{ width: '16px', height: '16px' }} />
                   </button>
                 </div>
               </div>
               
-              <div style={{ height: '300px', backgroundColor: '#f9fafb', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb' }}>
+              <div style={{ height: '300px', backgroundColor: 'var(--paper-2)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <BarChart3 style={{ width: '48px', height: '48px', color: '#9ca3af', margin: '0 auto 8px' }} />
-                  <p style={{ color: '#6b7280', margin: 0 }}>Graphique des revenus (7 derniers jours)</p>
+                  <BarChart3 style={{ width: '48px', height: '48px', color: 'var(--ink-4)', margin: '0 auto 8px' }} />
+                  <p style={{ color: 'var(--ink-3)', margin: 0 }}>Graphique des revenus (7 derniers jours)</p>
                 </div>
               </div>
             </div>
 
             {/* Répartition des canaux */}
-            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid #e5e7eb' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>
+            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid var(--line)' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 24px 0' }}>
                 Répartition par canal
               </h2>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {flowPerformances.map((flow, index) => {
                   const percentage = totalMetrics.revenue > 0 ? (flow.revenue / totalMetrics.revenue * 100) : 0;
-                  const colors = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
+                  const colors = ['var(--accent)', 'var(--accent)', 'var(--success)', 'var(--warning)', 'var(--danger)'];
                   
                   return (
-                        <div key={flow.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '1px solid #f3f4f6', borderRadius: '2px' }}>
+                        <div key={flow.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '1px solid var(--paper-2)', borderRadius: '2px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{ width: '12px', height: '12px', backgroundColor: colors[index % colors.length], borderRadius: '50%' }}></div>
                         <div>
-                          <p style={{ fontWeight: '500', color: '#1f2937', margin: '0 0 2px 0', fontSize: '14px' }}>
+                          <p style={{ fontWeight: '500', color: 'var(--ink-2)', margin: '0 0 2px 0', fontSize: '14px' }}>
                             {flow.name}
                           </p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                          <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>
                             €{flow.revenue.toLocaleString('en-US')}
                           </p>
                         </div>
                       </div>
-                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>
                         {percentage.toFixed(1)}%
                       </span>
                     </div>
@@ -588,60 +588,60 @@ export default function RapportsPage() {
           </div>
 
           {/* Tableau des performances détaillées */}
-          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>
+          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid var(--line)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 24px 0' }}>
               Performances détaillées par flux
             </h2>
             
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Flux</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Impressions</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Clics</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>CTR</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Conversions</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Revenus</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#374151' }}>ROI</th>
-                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Statut</th>
+                  <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Flux</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Impressions</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Clics</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>CTR</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Conversions</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Revenus</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>ROI</th>
+                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)' }}>Statut</th>
                   </tr>
                 </thead>
                 <tbody>
                   {flowPerformances.map((flow) => (
-                    <tr key={flow.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
+                    <tr key={flow.id} style={{ borderBottom: '1px solid var(--paper-2)' }}>
+                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {flow.name}
                           {flow.abTestId && (
-                            <span style={{ fontSize: '10px', backgroundColor: '#f59e0b', color: 'white', padding: '2px 6px', borderRadius: '2px', fontWeight: '500' }}>
+                            <span style={{ fontSize: '10px', backgroundColor: 'var(--warning)', color: 'white', padding: '2px 6px', borderRadius: '2px', fontWeight: '500' }}>
                               A/B {flow.abTestVariant}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--ink-3)' }}>
                         {flow.impressions.toLocaleString('en-US')}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--ink-3)' }}>
                         {flow.clicks.toLocaleString('en-US')}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#16a34a', fontWeight: '500' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--success)', fontWeight: '500' }}>
                         {flow.ctr}%
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--ink-3)' }}>
                         {flow.conversions}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--ink-2)', fontWeight: '500' }}>
                         €{flow.revenue.toLocaleString('en-US')}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#16a34a', fontWeight: '500' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: 'var(--success)', fontWeight: '500' }}>
                         {flow.roi}%
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        {flow.status === 'active' && <CheckCircle style={{ width: '16px', height: '16px', color: '#22c55e' }} />}
-                        {flow.status === 'paused' && <Clock style={{ width: '16px', height: '16px', color: '#f59e0b' }} />}
-                        {flow.status === 'error' && <XCircle style={{ width: '16px', height: '16px', color: '#ef4444' }} />}
+                        {flow.status === 'active' && <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--success)' }} />}
+                        {flow.status === 'paused' && <Clock style={{ width: '16px', height: '16px', color: 'var(--warning)' }} />}
+                        {flow.status === 'error' && <XCircle style={{ width: '16px', height: '16px', color: 'var(--danger)' }} />}
                       </td>
                     </tr>
                   ))}
@@ -655,82 +655,82 @@ export default function RapportsPage() {
       {selectedReportType === 'ab-tests' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {abTestResults.map((test) => (
-            <div key={test.id} style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid #f59e0b' }}>
+            <div key={test.id} style={{ backgroundColor: 'white', padding: '24px', borderRadius: '2px', border: '1px solid var(--warning)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px 0' }}>
                     {test.name}
                   </h2>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                  <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                     Test en cours • Confiance: {test.confidence}%
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '12px', backgroundColor: '#dcfce7', color: '#16a34a', padding: '4px 8px', borderRadius: '2px', fontWeight: '500' }}>
+                  <span style={{ fontSize: '12px', backgroundColor: 'var(--success-bg)', color: 'var(--success)', padding: '4px 8px', borderRadius: '2px', fontWeight: '500' }}>
                     En cours
                   </span>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <div style={{ backgroundColor: '#f9fafb', padding: '20px', borderRadius: '2px', border: '1px solid #e5e7eb' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
+                <div style={{ backgroundColor: 'var(--paper-2)', padding: '20px', borderRadius: '2px', border: '1px solid var(--line)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 16px 0' }}>
                     Variant A
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Impressions</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Impressions</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantA.impressions.toLocaleString('en-US')}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Clics</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Clics</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantA.clicks}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Conversions</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Conversions</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantA.conversions}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Revenus</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Revenus</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         €{test.variantA.revenue}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#f9fafb', padding: '20px', borderRadius: '2px', border: '1px solid #e5e7eb' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
+                <div style={{ backgroundColor: 'var(--paper-2)', padding: '20px', borderRadius: '2px', border: '1px solid var(--line)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 16px 0' }}>
                     Variant B
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Impressions</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Impressions</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantB.impressions.toLocaleString('en-US')}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Clics</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Clics</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantB.clicks}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Conversions</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Conversions</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         {test.variantB.conversions}
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Revenus</p>
-                      <p style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 4px 0' }}>Revenus</p>
+                      <p style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                         €{test.variantB.revenue}
                       </p>
                     </div>
@@ -743,24 +743,24 @@ export default function RapportsPage() {
       )}
 
       {selectedReportType === 'flows' && (
-        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>
+        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid var(--line)' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 24px 0' }}>
             Analyse détaillée des flux
           </h2>
-          <p style={{ color: '#6b7280', margin: 0 }}>
+          <p style={{ color: 'var(--ink-3)', margin: 0 }}>
             Vue détaillée des performances de chaque flux avec analyses approfondies.
           </p>
         </div>
       )}
 
       {selectedReportType === 'custom' && (
-        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px 0' }}>
                 Rapports personnalisés
               </h2>
-              <p style={{ color: '#6b7280', margin: 0 }}>
+              <p style={{ color: 'var(--ink-3)', margin: 0 }}>
                 Créez vos propres rapports avec les métriques qui vous intéressent.
               </p>
             </div>
@@ -791,7 +791,7 @@ export default function RapportsPage() {
             gap: '20px' 
           }}>
             <div style={{
-              border: '2px dashed #d1d5db',
+              border: '2px dashed var(--line-strong)',
               borderRadius: '2px',
               padding: '40px',
               textAlign: 'center',
@@ -799,45 +799,45 @@ export default function RapportsPage() {
               transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#2563eb';
-              e.currentTarget.style.backgroundColor = '#f8fafc';
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.backgroundColor = 'var(--paper-2)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.borderColor = 'var(--line-strong)';
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
             onClick={() => setShowTemplates(true)}
             >
-              <Plus style={{ width: '48px', height: '48px', color: '#9ca3af', margin: '0 auto 16px' }} />
-              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>
+              <Plus style={{ width: '48px', height: '48px', color: 'var(--ink-4)', margin: '0 auto 16px' }} />
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: '0 0 8px 0' }}>
                 Nouveau rapport
               </h3>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+              <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: 0 }}>
                 Commencez avec un template ou créez votre propre rapport
               </p>
             </div>
             
             <div style={{
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--line)',
               borderRadius: '2px',
               padding: '20px',
-              backgroundColor: '#f9fafb'
+              backgroundColor: 'var(--paper-2)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <BarChart3 style={{ width: '24px', height: '24px', color: '#6b7280' }} />
-                <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                <BarChart3 style={{ width: '24px', height: '24px', color: 'var(--ink-3)' }} />
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>
                   Rapport de performance
                 </h3>
               </div>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+              <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '0 0 16px 0' }}>
                 Créé le 15 janvier 2024
               </p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button style={{
                   padding: '6px 12px',
                   backgroundColor: 'transparent',
-                  color: '#6b7280',
-                  border: '1px solid #d1d5db',
+                  color: 'var(--ink-3)',
+                  border: '1px solid var(--line-strong)',
                   borderRadius: '2px',
                   fontSize: '12px',
                   cursor: 'pointer'
@@ -847,8 +847,8 @@ export default function RapportsPage() {
                 <button style={{
                   padding: '6px 12px',
                   backgroundColor: 'transparent',
-                  color: '#6b7280',
-                  border: '1px solid #d1d5db',
+                  color: 'var(--ink-3)',
+                  border: '1px solid var(--line-strong)',
                   borderRadius: '2px',
                   fontSize: '12px',
                   cursor: 'pointer'

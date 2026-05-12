@@ -2,7 +2,7 @@
 
 /**
  * Carte du monde épurée en arrière-plan — DA FeedPlug (gris discret)
- * Forme simplifiée équirectangulaire, teinte #e5e7eb / #d1d5db
+ * Forme simplifiée équirectangulaire, teinte var(--line) / var(--line-strong)
  */
 export default function WorldMapBackground() {
   return (
@@ -30,8 +30,8 @@ export default function WorldMapBackground() {
       >
         <defs>
           <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#9ca3af" />
-            <stop offset="100%" stopColor="#d1d5db" />
+            <stop offset="0%" stopColor="var(--ink-4)" />
+            <stop offset="100%" stopColor="var(--line-strong)" />
           </linearGradient>
         </defs>
         {/* Amérique du Nord */}

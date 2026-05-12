@@ -18,7 +18,7 @@ export default function AppleIcon() {
           justifyContent: "center",
           backgroundColor: "#ffffff",
           borderRadius: 24,
-          border: "2px solid #e5e7eb",
+          border: "2px solid #E5E5E5",
         }}
       >
         <span

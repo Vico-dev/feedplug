@@ -150,15 +150,15 @@ export const CHANNEL_FAMILY_META: Record<
 > = {
   shopping: {
     label: "Shopping",
-    accent: "#2563eb",
-    background: "#eff6ff",
-    border: "#bfdbfe",
+    accent: "var(--accent)",
+    background: "var(--accent-bg)",
+    border: "var(--accent-bg)",
   },
   marketplace: {
     label: "Marketplaces",
-    accent: "#b45309",
-    background: "#fffbeb",
-    border: "#fde68a",
+    accent: "var(--warning)",
+    background: "var(--warning-bg)",
+    border: "#FDE68A",
   },
   social: {
     label: "Social ads",
@@ -168,21 +168,21 @@ export const CHANNEL_FAMILY_META: Record<
   },
   search: {
     label: "Search",
-    accent: "#0f766e",
-    background: "#ecfeff",
+    accent: "#2A6FE8",
+    background: "#E8EFFB",
     border: "#a5f3fc",
   },
   international: {
     label: "International",
-    accent: "#7c3aed",
-    background: "#f5f3ff",
+    accent: "var(--accent)",
+    background: "var(--accent-bg)",
     border: "#ddd6fe",
   },
   ai: {
     label: "Assistants IA",
-    accent: "#111827",
-    background: "#f8fafc",
-    border: "#cbd5e1",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line-strong)",
   },
 };
 

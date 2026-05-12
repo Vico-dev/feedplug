@@ -39,11 +39,11 @@ interface ChartProps {
 }
 
 const defaultColors = [
-  "#0f172a", // slate-900
-  "#1e293b", // slate-800
-  "#334155", // slate-700
-  "#475569", // slate-600
-  "#64748b", // slate-500
+  "var(--ink)", // slate-900
+  "var(--ink-2)", // slate-800
+  "var(--ink-2)", // slate-700
+  "var(--ink-2)", // slate-600
+  "var(--ink-3)", // slate-500
 ];
 
 export function Chart({
@@ -68,23 +68,23 @@ export function Chart({
       case "line":
         return (
           <LineChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />}
             <XAxis 
               dataKey="name" 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             <YAxis 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             {showTooltip && (
               <Tooltip 
                 contentStyle={{
                   backgroundColor: "white",
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid var(--line)",
                   borderRadius: "8px",
                   boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
@@ -105,23 +105,23 @@ export function Chart({
       case "area":
         return (
           <AreaChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />}
             <XAxis 
               dataKey="name" 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             <YAxis 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             {showTooltip && (
               <Tooltip 
                 contentStyle={{
                   backgroundColor: "white",
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid var(--line)",
                   borderRadius: "8px",
                   boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
@@ -147,23 +147,23 @@ export function Chart({
       case "bar":
         return (
           <BarChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />}
             <XAxis 
               dataKey="name" 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             <YAxis 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: "#64748b" }}
+              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
             />
             {showTooltip && (
               <Tooltip 
                 contentStyle={{
                   backgroundColor: "white",
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid var(--line)",
                   borderRadius: "8px",
                   boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
@@ -198,7 +198,7 @@ export function Chart({
               <Tooltip 
                 contentStyle={{
                   backgroundColor: "white",
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid var(--line)",
                   borderRadius: "8px",
                   boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}

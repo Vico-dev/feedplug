@@ -95,7 +95,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 color: "#ffffff",
                 fontSize: 14,
                 fontWeight: 700,
@@ -105,28 +105,28 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
             >
               FP
             </span>
-            <span style={{ color: "#111827", fontSize: 17, fontWeight: 650, letterSpacing: "-0.03em" }}>
+            <span style={{ color: "var(--ink)", fontSize: 17, fontWeight: 650, letterSpacing: "-0.03em" }}>
               FeedPlug
             </span>
           </Link>
 
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <Link href="/" style={{ color: "#475569", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>
+            <Link href="/" style={{ color: "var(--ink-2)", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>
               Accueil
             </Link>
-            <Link href="/tarifs" style={{ color: "#475569", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>
+            <Link href="/tarifs" style={{ color: "var(--ink-2)", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>
               Tarifs
             </Link>
-            <span style={{ color: "#0f172a", fontSize: 14, fontWeight: 700 }}>Documentation</span>
+            <span style={{ color: "var(--ink)", fontSize: 14, fontWeight: 700 }}>Documentation</span>
             <a
               href="https://app.feedplug.com/login"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 borderRadius: 999,
-                border: "1px solid #e2e8f0",
+                border: "1px solid var(--line)",
                 background: "#ffffff",
-                color: "#0f172a",
+                color: "var(--ink)",
                 fontSize: 14,
                 fontWeight: 600,
                 padding: "10px 14px",
@@ -169,7 +169,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
         style={{
           minHeight: "100vh",
           background:
-            "radial-gradient(circle at top left, rgba(148,163,184,0.11), transparent 24%), linear-gradient(180deg, #f8fafc 0%, #ffffff 28%)",
+            "radial-gradient(circle at top left, rgba(148,163,184,0.11), transparent 24%), linear-gradient(180deg, var(--paper-2) 0%, #ffffff 28%)",
           color: "#0a0a0a",
           padding: "128px 24px 96px",
         }}
@@ -195,9 +195,9 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                   gap: 8,
                   padding: "8px 12px",
                   borderRadius: 999,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  color: "#475569",
+                  background: "var(--paper-2)",
+                  border: "1px solid var(--line)",
+                  color: "var(--ink-2)",
                   fontSize: 13,
                   fontWeight: 700,
                   marginBottom: 16,
@@ -211,7 +211,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                   fontSize: "clamp(2rem, 4vw, 3.6rem)",
                   lineHeight: 0.98,
                   letterSpacing: "-0.05em",
-                  color: "#0f172a",
+                  color: "var(--ink)",
                 }}
               >
                 Tout le socle produit, expliqué sans friction.
@@ -219,7 +219,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
               <p
                 style={{
                   margin: "18px 0 0",
-                  color: "#475569",
+                  color: "var(--ink-2)",
                   fontSize: 17,
                   lineHeight: 1.75,
                   maxWidth: 760,
@@ -232,8 +232,8 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
             <div
               style={{
                 borderRadius: 30,
-                background: "#0f172a",
-                color: "#f8fafc",
+                background: "var(--ink)",
+                color: "var(--paper-2)",
                 padding: "28px 26px",
                 boxShadow: "0 24px 80px rgba(15,23,42,0.16)",
               }}
@@ -252,7 +252,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     style={{
                       textDecoration: "none",
-                      color: "#f8fafc",
+                      color: "var(--paper-2)",
                       borderRadius: 18,
                       padding: "12px 14px",
                       background: "rgba(255,255,255,0.05)",
@@ -299,7 +299,7 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                 padding: 20,
               }}
             >
-              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "#94a3b8", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-4)", marginBottom: 12 }}>
                 Navigation
               </div>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -314,10 +314,10 @@ export default function DocsShell({ children }: { children: React.ReactNode }) {
                         borderRadius: 16,
                         fontSize: 14,
                         textDecoration: "none",
-                        color: isActive ? "#0f172a" : "#475569",
+                        color: isActive ? "var(--ink)" : "var(--ink-2)",
                         fontWeight: isActive ? 700 : 500,
-                        backgroundColor: isActive ? "#f8fafc" : "transparent",
-                        border: isActive ? "1px solid #e2e8f0" : "1px solid transparent",
+                        backgroundColor: isActive ? "var(--paper-2)" : "transparent",
+                        border: isActive ? "1px solid var(--line)" : "1px solid transparent",
                       }}
                     >
                       {label}

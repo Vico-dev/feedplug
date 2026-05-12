@@ -130,13 +130,13 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>{label}</span>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        style={{ minHeight: 52, borderRadius: 16, border: "1px solid #cbd5e1", padding: "0 16px", fontSize: 15, color: "#0f172a", background: "#fff" }}
+        style={{ minHeight: 52, borderRadius: 16, border: "1px solid var(--line-strong)", padding: "0 16px", fontSize: 15, color: "var(--ink)", background: "#fff" }}
       />
     </label>
   );
@@ -247,17 +247,17 @@ export default function AuditFluxPage() {
   return (
     <>
       <MarketingHeader />
-      <main style={{ minHeight: "100vh", background: "radial-gradient(circle at top left, rgba(14,165,233,0.08), transparent 28%), linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)" }}>
+      <main style={{ minHeight: "100vh", background: "radial-gradient(circle at top left, rgba(14,165,233,0.08), transparent 28%), linear-gradient(180deg, var(--paper-2) 0%, #ffffff 100%)" }}>
         <section style={{ padding: "124px 24px 48px" }}>
           <div style={{ maxWidth: 1180, margin: "0 auto" }}>
             <div style={{ maxWidth: 760, marginBottom: 28 }}>
-              <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0f766e" }}>
+              <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#2A6FE8" }}>
                 Audit technique gratuit
               </p>
-              <h1 style={{ margin: "0 0 14px", fontSize: "clamp(36px, 5vw, 58px)", lineHeight: 1.02, letterSpacing: "-0.05em", color: "#0f172a" }}>
+              <h1 style={{ margin: "0 0 14px", fontSize: "clamp(36px, 5vw, 58px)", lineHeight: 1.02, letterSpacing: "-0.05em", color: "var(--ink)" }}>
                 Un audit de flux base sur vos vraies donnees, pas sur du declaratif.
               </h1>
-              <p style={{ margin: 0, fontSize: 18, lineHeight: 1.75, color: "#475569" }}>
+              <p style={{ margin: 0, fontSize: 18, lineHeight: 1.75, color: "var(--ink-2)" }}>
                 Vous laissez vos coordonnees, vous indiquez la source catalogue, puis FeedPlug attend une vraie connexion Shopify, Google Merchant Center ou flux pour produire la note gratuite.
               </p>
             </div>
@@ -280,11 +280,11 @@ export default function AuditFluxPage() {
                   style={{
                     padding: "10px 14px",
                     borderRadius: 999,
-                    border: "1px solid #dbeafe",
+                    border: "1px solid var(--accent-bg)",
                     backgroundColor: "#f8fbff",
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#1d4ed8",
+                    color: "var(--accent-2)",
                   }}
                 >
                   {item}
@@ -293,7 +293,7 @@ export default function AuditFluxPage() {
             </div>
 
             <div style={{ display: "grid", gap: 24, gridTemplateColumns: "minmax(0, 1.25fr) minmax(320px, 0.75fr)", alignItems: "start" }}>
-              <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 32, padding: 28, boxShadow: "0 24px 60px rgba(15,23,42,0.08)" }}>
+              <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 32, padding: 28, boxShadow: "0 24px 60px rgba(15,23,42,0.08)" }}>
                 <input
                   type="text"
                   name="website"
@@ -317,14 +317,14 @@ export default function AuditFluxPage() {
                     const active = item.id === step;
                     const done = item.id < step;
                     return (
-                      <div key={item.id} style={{ borderRadius: 20, border: active ? "1px solid #0f766e" : "1px solid #e2e8f0", background: active ? "#f0fdfa" : "#fff", padding: 16 }}>
+                      <div key={item.id} style={{ borderRadius: 20, border: active ? "1px solid #2A6FE8" : "1px solid var(--line)", background: active ? "#E8EFFB" : "#fff", padding: 16 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", background: done || active ? "#0f766e" : "#e2e8f0", color: done || active ? "#fff" : "#64748b", fontSize: 13, fontWeight: 700 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", background: done || active ? "#2A6FE8" : "var(--line)", color: done || active ? "#fff" : "var(--ink-3)", fontSize: 13, fontWeight: 700 }}>
                             {done ? "✓" : item.id}
                           </div>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{item.title}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{item.title}</span>
                         </div>
-                        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#64748b" }}>{item.caption}</p>
+                        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink-3)" }}>{item.caption}</p>
                       </div>
                     );
                   })}
@@ -333,8 +333,8 @@ export default function AuditFluxPage() {
                 {step === 1 ? (
                   <section>
                     <div style={{ marginBottom: 20 }}>
-                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "#0f172a" }}>Qui doit recevoir l’audit ?</h2>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "#64748b" }}>
+                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Qui doit recevoir l’audit ?</h2>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
                         On collecte les coordonnees du bon contact avant toute connexion technique.
                       </p>
                     </div>
@@ -352,8 +352,8 @@ export default function AuditFluxPage() {
                 {step === 2 ? (
                   <section>
                     <div style={{ marginBottom: 20 }}>
-                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "#0f172a" }}>Quelle est la vraie source du flux ?</h2>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "#64748b" }}>
+                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Quelle est la vraie source du flux ?</h2>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
                         On capte le CMS ou la source catalogue pour brancher l’audit sur les vraies donnees ensuite.
                       </p>
                     </div>
@@ -369,13 +369,13 @@ export default function AuditFluxPage() {
                               textAlign: "left",
                               padding: 18,
                               borderRadius: 22,
-                              border: selected ? "1px solid #0f766e" : "1px solid #e2e8f0",
-                              background: selected ? "#f0fdfa" : "#fff",
+                              border: selected ? "1px solid #2A6FE8" : "1px solid var(--line)",
+                              background: selected ? "#E8EFFB" : "#fff",
                               cursor: "pointer",
                             }}
                           >
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>{option.label}</div>
-                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "#64748b" }}>{option.description}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }}>{option.label}</div>
+                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--ink-3)" }}>{option.description}</div>
                           </button>
                         );
                       })}
@@ -389,11 +389,11 @@ export default function AuditFluxPage() {
                         onChange={(value) => setForm((current) => ({ ...current, sourceValue: value }))}
                       />
                       <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Taille approximative du catalogue</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Taille approximative du catalogue</span>
                         <select
                           value={String(form.catalogSize)}
                           onChange={(event) => setForm((current) => ({ ...current, catalogSize: Number(event.target.value) }))}
-                          style={{ minHeight: 52, borderRadius: 16, border: "1px solid #cbd5e1", padding: "0 16px", fontSize: 15, color: "#0f172a", background: "#fff" }}
+                          style={{ minHeight: 52, borderRadius: 16, border: "1px solid var(--line-strong)", padding: "0 16px", fontSize: 15, color: "var(--ink)", background: "#fff" }}
                         >
                           {CATALOG_SIZE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -407,14 +407,14 @@ export default function AuditFluxPage() {
                 {step === 3 ? (
                   <section>
                     <div style={{ marginBottom: 20 }}>
-                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "#0f172a" }}>Que faut-il auditer en priorite ?</h2>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "#64748b" }}>
+                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Que faut-il auditer en priorite ?</h2>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
                         Cette etape ne sert pas a calculer une note. Elle sert a preparer l’analyse technique reelle du flux une fois la source connectee.
                       </p>
                     </div>
 
                     <div style={{ marginBottom: 24 }}>
-                      <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: "#334155" }}>Canaux a regarder en priorite</div>
+                      <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Canaux a regarder en priorite</div>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         {CHANNEL_OPTIONS.map((channel) => {
                           const selected = form.targetChannels.includes(channel.value);
@@ -427,9 +427,9 @@ export default function AuditFluxPage() {
                                 minHeight: 44,
                                 padding: "0 16px",
                                 borderRadius: 999,
-                                border: selected ? "1px solid #0f766e" : "1px solid #cbd5e1",
-                                background: selected ? "#ecfdf5" : "#fff",
-                                color: selected ? "#0f766e" : "#334155",
+                                border: selected ? "1px solid #2A6FE8" : "1px solid var(--line-strong)",
+                                background: selected ? "var(--success-bg)" : "#fff",
+                                color: selected ? "#2A6FE8" : "var(--ink-2)",
                                 fontSize: 14,
                                 fontWeight: 700,
                                 cursor: "pointer",
@@ -442,17 +442,17 @@ export default function AuditFluxPage() {
                       </div>
                     </div>
 
-                    <div style={{ borderRadius: 24, border: "1px solid #e2e8f0", background: "#f8fafc", padding: 22 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0f766e", marginBottom: 8 }}>
+                    <div style={{ borderRadius: 24, border: "1px solid var(--line)", background: "var(--paper-2)", padding: 22 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#2A6FE8", marginBottom: 8 }}>
                         Ce qui va se passer ensuite
                       </div>
-                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "#334155" }}>
+                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
                         1. Votre demande d’audit est enregistree.
                       </p>
-                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "#334155" }}>
+                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
                         2. Vous connectez Shopify ou Google Merchant Center, ou bien notre equipe reprend votre source Presta, CSV ou PIM.
                       </p>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "#334155" }}>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
                         3. La note gratuite est ensuite calculee sur les vraies donnees du flux.
                       </p>
                     </div>
@@ -477,7 +477,7 @@ export default function AuditFluxPage() {
                 ) : null}
 
                 {error ? (
-                  <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 16, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 14 }}>
+                  <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 16, background: "var(--danger-bg)", border: "1px solid #fecaca", color: "var(--danger)", fontSize: 14 }}>
                     {error}
                   </div>
                 ) : null}
@@ -485,33 +485,33 @@ export default function AuditFluxPage() {
                 <div style={{ marginTop: 28, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     {step > 1 ? (
-                      <button type="button" onClick={previousStep} style={{ minHeight: 50, padding: "0 18px", borderRadius: 16, border: "1px solid #cbd5e1", background: "#fff", color: "#0f172a", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                      <button type="button" onClick={previousStep} style={{ minHeight: 50, padding: "0 18px", borderRadius: 16, border: "1px solid var(--line-strong)", background: "#fff", color: "var(--ink)", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                         <ChevronLeft size={16} />
                         Retour
                       </button>
                     ) : null}
 
                     {step < 3 ? (
-                      <button type="button" onClick={nextStep} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "#0f172a", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                      <button type="button" onClick={nextStep} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "var(--ink)", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
                         Continuer
                         <ArrowRight size={16} />
                       </button>
                     ) : (
-                      <button type="submit" disabled={!canSubmit} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "#0f172a", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.6 }}>
+                      <button type="submit" disabled={!canSubmit} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "var(--ink)", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.6 }}>
                         {submitting ? "Creation..." : "Creer ma demande d audit"}
                         <ArrowRight size={16} />
                       </button>
                     )}
                   </div>
 
-                  <Link href={`/${locale}`} style={{ color: "#64748b", textDecoration: "none", fontSize: 14 }}>
+                  <Link href={`/${locale}`} style={{ color: "var(--ink-3)", textDecoration: "none", fontSize: 14 }}>
                     Retour au site
                   </Link>
                 </div>
               </form>
 
               <aside style={{ display: "grid", gap: 18 }}>
-                <div style={{ background: "#0f172a", color: "#fff", borderRadius: 28, padding: 24 }}>
+                <div style={{ background: "var(--ink)", color: "#fff", borderRadius: 28, padding: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                     <CheckCircle2 size={18} />
                     <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Promesse gratuite</span>
@@ -544,12 +544,12 @@ export default function AuditFluxPage() {
                     text: "Les donnees collectees servent a qualifier le lead et a preparer la suite commerciale.",
                   },
                 ].map((item) => (
-                  <div key={item.title} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 22 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "#ecfeff", color: "#0f766e", marginBottom: 14 }}>
+                  <div key={item.title} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 24, padding: 22 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "#E8EFFB", color: "#2A6FE8", marginBottom: 14 }}>
                       {item.icon}
                     </div>
-                    <h3 style={{ margin: "0 0 8px", fontSize: 18, color: "#0f172a" }}>{item.title}</h3>
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: "#475569" }}>{item.text}</p>
+                    <h3 style={{ margin: "0 0 8px", fontSize: 18, color: "var(--ink)" }}>{item.title}</h3>
+                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: "var(--ink-2)" }}>{item.text}</p>
                   </div>
                 ))}
               </aside>

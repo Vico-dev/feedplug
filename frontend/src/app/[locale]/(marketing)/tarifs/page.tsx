@@ -163,7 +163,7 @@ export default function TarifsPage() {
           minHeight: "100vh",
           backgroundColor: "#ffffff",
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          color: "#111827",
+          color: "var(--ink)",
         }}
       >
         <section
@@ -179,8 +179,8 @@ export default function TarifsPage() {
               marginBottom: 40,
               padding: "40px 32px",
               borderRadius: 28,
-              border: "1px solid #e5e7eb",
-              background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+              border: "1px solid var(--line)",
+              background: "linear-gradient(180deg, var(--paper-2) 0%, #ffffff 100%)",
               boxShadow: "0 22px 64px rgba(15,23,42,0.06)",
             }}
           >
@@ -198,7 +198,7 @@ export default function TarifsPage() {
             <p
               style={{
                 fontSize: 20,
-                color: "#4b5563",
+                color: "var(--ink-3)",
                 margin: 0,
                 maxWidth: 560,
                 marginLeft: "auto",
@@ -216,19 +216,19 @@ export default function TarifsPage() {
                 gap: "24px 32px",
                 marginTop: 32,
                 fontSize: 14,
-                color: "#4a4a4a",
+                color: "var(--ink-2)",
               }}
             >
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Zap style={{ width: 18, height: 18, color: "#111827", flexShrink: 0 }} />
+                <Zap style={{ width: 18, height: 18, color: "var(--ink)", flexShrink: 0 }} />
                 {t("badge1")}
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Shield style={{ width: 18, height: 18, color: "#111827", flexShrink: 0 }} />
+                <Shield style={{ width: 18, height: 18, color: "var(--ink)", flexShrink: 0 }} />
                 {t("badge2")}
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <CheckCircle style={{ width: 18, height: 18, color: "#111827", flexShrink: 0 }} />
+                <CheckCircle style={{ width: 18, height: 18, color: "var(--ink)", flexShrink: 0 }} />
                 {t("badge3")}
               </span>
             </div>
@@ -247,7 +247,7 @@ export default function TarifsPage() {
             <div
               style={{
                 backgroundColor: "#fff",
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--line)",
                 borderRadius: 24,
                 padding: 32,
                 boxShadow: "0 16px 44px rgba(15,23,42,0.04)",
@@ -270,11 +270,11 @@ export default function TarifsPage() {
                       fontSize: 11,
                       fontWeight: 600,
                       backgroundColor: "#fafafa",
-                      border: "1px solid #e5e7eb",
+                      border: "1px solid var(--line)",
                       padding: "4px 10px",
                       borderRadius: 999,
                       whiteSpace: "nowrap",
-                      color: "#4a4a4a",
+                      color: "var(--ink-2)",
                     }}
                   >
                     {t("mostPopular")}
@@ -288,7 +288,7 @@ export default function TarifsPage() {
                     display: "block",
                     fontSize: 14,
                     fontWeight: 500,
-                    color: "#4a4a4a",
+                    color: "var(--ink-2)",
                     marginBottom: 10,
                   }}
                 >
@@ -306,11 +306,11 @@ export default function TarifsPage() {
                         border:
                           productTier === tier
                             ? "2px solid #0a0a0a"
-                            : "1px solid #e5e7eb",
+                            : "1px solid var(--line)",
                         backgroundColor: productTier === tier ? "#fafafa" : "#fff",
                         fontSize: 14,
                         fontWeight: 500,
-                        color: productTier === tier ? "#0a0a0a" : "#4a4a4a",
+                        color: productTier === tier ? "#0a0a0a" : "var(--ink-2)",
                         cursor: "pointer",
                         transition: "all 0.15s",
                       }}
@@ -319,7 +319,7 @@ export default function TarifsPage() {
                     </button>
                   ))}
                 </div>
-                <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8, marginBottom: 0 }}>
                   {t("over50k")}{" "}
                   <Link href="/demo?source=pricing_contact" style={{ color: "#0a0a0a", textDecoration: "underline" }}>
                     {t("contactUs")}
@@ -334,7 +334,7 @@ export default function TarifsPage() {
                     display: "block",
                     fontSize: 14,
                     fontWeight: 500,
-                    color: "#4a4a4a",
+                    color: "var(--ink-2)",
                     marginBottom: 10,
                   }}
                 >
@@ -365,7 +365,7 @@ export default function TarifsPage() {
                           borderRadius: 12,
                           border: selected
                             ? "2px solid #0a0a0a"
-                            : "1px solid #e5e7eb",
+                            : "1px solid var(--line)",
                           backgroundColor: selected ? "#fafafa" : "#fff",
                           cursor:
                             selected || selectedPlatformIds.length < MAX_SELECTABLE_CHANNELS
@@ -398,7 +398,7 @@ export default function TarifsPage() {
                         <span
                           style={{
                             fontSize: 10,
-                            color: "#4a4a4a",
+                            color: "var(--ink-2)",
                             textAlign: "center",
                             lineHeight: 1.2,
                             maxWidth: "100%",
@@ -413,7 +413,7 @@ export default function TarifsPage() {
                     );
                   })}
                 </div>
-                <p style={{ fontSize: 12, color: "#6b7280", marginTop: 10, marginBottom: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 10, marginBottom: 0 }}>
                   {t("channelsSelected", { count: selectedPlatformIds.length })}
                   {". "}
                   {t("moreChannelsDevis")}
@@ -424,8 +424,8 @@ export default function TarifsPage() {
                 style={{
                   padding: 16,
                   borderRadius: 16,
-                  backgroundColor: "#fafaf9",
-                  border: "1px solid #e5e7eb",
+                  backgroundColor: "var(--paper-2)",
+                  border: "1px solid var(--line)",
                 }}
               >
                 <label
@@ -445,12 +445,12 @@ export default function TarifsPage() {
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <Sparkles style={{ width: 18, height: 18, color: "#0a0a0a" }} />
                     <strong style={{ fontSize: 14 }}>{t("addonIATitle")}</strong>
-                    <span style={{ fontSize: 14, color: "#4a4a4a" }}>
+                    <span style={{ fontSize: 14, color: "var(--ink-2)" }}>
                       {t("addonIADesc")}
                     </span>
                   </span>
                 </label>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: "6px 0 0 30px" }}>
+                <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "6px 0 0 30px" }}>
                   +{formatCurrency(ADDON_IA_PRICE_EUR, "EUR", locale)} {t("addonPricePerMonth")}
                 </p>
               </div>
@@ -459,13 +459,13 @@ export default function TarifsPage() {
             <div
               className="tarifs-sticky-box"
               style={{
-                backgroundColor: "#111827",
+                backgroundColor: "var(--ink)",
                 borderRadius: 24,
                 padding: 32,
                 color: "#fff",
                 position: "sticky",
                 top: 100,
-                border: "1px solid #111827",
+                border: "1px solid var(--ink)",
                 boxShadow: "0 20px 48px rgba(15,23,42,0.16)",
               }}
             >
@@ -550,7 +550,7 @@ export default function TarifsPage() {
                       fontSize: 15,
                       fontWeight: 600,
                       backgroundColor: "#fff",
-                      color: "#111827",
+                      color: "var(--ink)",
                       textDecoration: "none",
                       transition: "opacity 0.2s, transform 0.15s",
                     }}
@@ -587,7 +587,7 @@ export default function TarifsPage() {
                       fontSize: 15,
                       fontWeight: 600,
                       backgroundColor: "#fff",
-                      color: "#111827",
+                      color: "var(--ink)",
                       textDecoration: "none",
                     }}
                   >
@@ -601,7 +601,7 @@ export default function TarifsPage() {
           <details
             style={{
               backgroundColor: "#fff",
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--line)",
               borderRadius: 20,
               padding: "20px 24px",
               marginTop: 24,
@@ -611,7 +611,7 @@ export default function TarifsPage() {
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: "#4a4a4a",
+                color: "var(--ink-2)",
                 cursor: "pointer",
               }}
             >
@@ -627,11 +627,11 @@ export default function TarifsPage() {
               >
                 <thead>
                   <tr>
-                    <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e5e7eb", color: "#4a4a4a" }}>
+                    <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--line)", color: "var(--ink-2)" }}>
                       {t("products")}
                     </th>
                     {CHANNEL_OPTIONS.map((n) => (
-                      <th key={n} style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb", color: "#4a4a4a" }}>
+                      <th key={n} style={{ padding: "10px 12px", borderBottom: "1px solid var(--line)", color: "var(--ink-2)" }}>
                         {n} {n > 1 ? t("channels") : t("channel")}
                       </th>
                     ))}
@@ -653,7 +653,7 @@ export default function TarifsPage() {
                 </tbody>
               </table>
             </div>
-            <p style={{ fontSize: 12, color: "#6b7280", marginTop: 12, marginBottom: 0 }}>
+            <p style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 12, marginBottom: 0 }}>
               {t("addonGridNote")}
             </p>
           </details>
@@ -686,7 +686,7 @@ export default function TarifsPage() {
             style={{
               textAlign: "center",
               fontSize: 14,
-              color: "#6b7280",
+              color: "var(--ink-3)",
               marginTop: 40,
             }}
           >
@@ -697,7 +697,7 @@ export default function TarifsPage() {
             style={{
               marginTop: 56,
               paddingTop: 40,
-              borderTop: "1px solid #e5e7eb",
+              borderTop: "1px solid var(--line)",
             }}
           >
             <h2
@@ -715,7 +715,7 @@ export default function TarifsPage() {
               style={{
                 fontSize: 16,
                 lineHeight: 1.7,
-                color: "#6b7280",
+                color: "var(--ink-3)",
                 margin: "0 auto 28px",
                 maxWidth: 760,
                 textAlign: "center",
@@ -738,19 +738,19 @@ export default function TarifsPage() {
                   style={{
                     padding: 24,
                     borderRadius: 2,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid var(--line)",
                     backgroundColor: "#fff",
                     textDecoration: "none",
                     color: "#0a0a0a",
                   }}
                 >
-                  <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
                     Landing page
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 10 }}>
                     {card.label}
                   </div>
-                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "#4a4a4a" }}>{card.body}</p>
+                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-2)" }}>{card.body}</p>
                 </Link>
               ))}
             </div>

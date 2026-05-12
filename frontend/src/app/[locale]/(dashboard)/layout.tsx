@@ -223,7 +223,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         alignItems: 'center', 
         justifyContent: 'center', 
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, #f8fbf8 0%, var(--app-bg) 100%)'
+        background: 'linear-gradient(180deg, var(--paper-2) 0%, var(--app-bg) 100%)'
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
@@ -235,7 +235,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
             animation: 'spin 1s linear infinite',
             margin: '0 auto 16px'
           }} />
-          <p style={{ color: '#6b7280', fontSize: '14px' }}>{t('loading')}</p>
+          <p style={{ color: 'var(--ink-3)', fontSize: '14px' }}>{t('loading')}</p>
         </div>
       </div>
     );

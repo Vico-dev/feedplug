@@ -21,14 +21,14 @@ export default function DashboardError({
 
   return (
     <div style={{ padding: "32px", maxWidth: "600px", margin: "0 auto", textAlign: "center", paddingTop: "80px" }}>
-      <AlertCircle style={{ width: "48px", height: "48px", color: "#dc2626", margin: "0 auto 16px" }} />
-      <h2 style={{ fontSize: "20px", fontWeight: "600", color: "#111827", margin: "0 0 8px" }}>
+      <AlertCircle style={{ width: "48px", height: "48px", color: "var(--danger)", margin: "0 auto 16px" }} />
+      <h2 style={{ fontSize: "20px", fontWeight: "600", color: "var(--ink)", margin: "0 0 8px" }}>
         Erreur de chargement
       </h2>
-      <p style={{ fontSize: "14px", color: "#6b7280", margin: "0 0 24px", lineHeight: "1.5" }}>
+      <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 24px", lineHeight: "1.5" }}>
         Cette page n&apos;a pas pu se charger correctement.
         {error.message && (
-          <span style={{ display: "block", marginTop: "8px", fontSize: "12px", color: "#9ca3af" }}>
+          <span style={{ display: "block", marginTop: "8px", fontSize: "12px", color: "var(--ink-4)" }}>
             {error.message.substring(0, 200)}
           </span>
         )}
@@ -38,7 +38,7 @@ export default function DashboardError({
           onClick={reset}
           style={{
             display: "inline-flex", alignItems: "center", gap: "8px",
-            padding: "10px 20px", backgroundColor: "#111827", color: "white",
+            padding: "10px 20px", backgroundColor: "var(--ink)", color: "white",
             border: "none", borderRadius: "8px", fontSize: "14px", cursor: "pointer",
           }}
         >
@@ -49,8 +49,8 @@ export default function DashboardError({
           href="/dashboard"
           style={{
             display: "inline-flex", alignItems: "center", gap: "8px",
-            padding: "10px 20px", border: "1px solid #d1d5db", borderRadius: "8px",
-            fontSize: "14px", color: "#374151", textDecoration: "none",
+            padding: "10px 20px", border: "1px solid var(--line-strong)", borderRadius: "8px",
+            fontSize: "14px", color: "var(--ink-2)", textDecoration: "none",
           }}
         >
           <ArrowLeft style={{ width: "14px", height: "14px" }} />
