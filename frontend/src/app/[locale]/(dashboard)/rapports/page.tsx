@@ -406,10 +406,10 @@ export default function RapportsPage() {
           </div>
         )}
         <DashboardStatGrid>
-          <DashboardStatCard icon={<DollarSign size={20} />} label="Revenus generes" value={`€${totalMetrics.revenue.toLocaleString('en-US')}`} hint="+12% vs periode precedente" accent="var(--success)" />
-          <DashboardStatCard icon={<Target size={20} />} label="Conversions" value={totalMetrics.conversions.toLocaleString('en-US')} hint={`${overallConversionRate.toFixed(1)}% de taux`} accent="var(--accent)" />
-          <DashboardStatCard icon={<MousePointer size={20} />} label="Taux de clic" value={`${overallCTR.toFixed(1)}%`} hint={`${totalMetrics.clicks.toLocaleString('en-US')} clics`} accent="var(--warning)" />
-          <DashboardStatCard icon={<TrendingUp size={20} />} label="ROI" value={`${overallROI.toFixed(0)}%`} hint="Retour sur investissement consolide" accent="#2A6FE8" />
+          <DashboardStatCard icon={<DollarSign size={20} />} label="Revenus generes" value={`€${totalMetrics.revenue.toLocaleString('en-US')}`} hint="+12% vs periode precedente" accent="var(--ink)" />
+          <DashboardStatCard icon={<Target size={20} />} label="Conversions" value={totalMetrics.conversions.toLocaleString('en-US')} hint={`${overallConversionRate.toFixed(1)}% de taux`} accent="var(--ink)" />
+          <DashboardStatCard icon={<MousePointer size={20} />} label="Taux de clic" value={`${overallCTR.toFixed(1)}%`} hint={`${totalMetrics.clicks.toLocaleString('en-US')} clics`} accent="var(--ink)" />
+          <DashboardStatCard icon={<TrendingUp size={20} />} label="ROI" value={`${overallROI.toFixed(0)}%`} hint="Retour sur investissement consolide" accent="var(--ink)" />
         </DashboardStatGrid>
       </div>
 

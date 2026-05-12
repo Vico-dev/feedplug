@@ -1376,7 +1376,7 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            <div className="border-t border-border bg-[#fbfcfb] p-6 xl:border-l xl:border-t-0">
+            <div className="border-t border-border bg-[var(--paper)] p-6 xl:border-l xl:border-t-0">
               <div className="rounded-2xl border border-border/80 bg-background p-5 shadow-[0_8px_22px_rgba(15,23,42,0.03)]">
                 <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Cockpit produit</div>
                 <div className={cn('mt-2 text-4xl font-bold', scoreColor)}>{globalScore}</div>
@@ -1678,7 +1678,7 @@ export default function ProductDetailPage() {
                         {destinationActivationGroups.map((group) => {
                           const activeGroupCount = group.items.filter((entry) => entry.isEnabled).length;
                           return (
-                            <div key={group.marketId} className="rounded-xl border border-border/70 bg-[#fafcfa] p-3">
+                            <div key={group.marketId} className="rounded-xl border border-border/70 bg-[var(--paper)] p-3">
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                   <div className="font-medium text-foreground">{group.marketName}</div>
@@ -1780,7 +1780,7 @@ export default function ProductDetailPage() {
                         })}
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-xl border border-dashed border-border/80 bg-[#fafcfa] px-4 py-3 text-sm text-muted-foreground">
+                      <div className="mt-4 rounded-xl border border-dashed border-border/80 bg-[var(--paper)] px-4 py-3 text-sm text-muted-foreground">
                         Cree d abord un marche dans Flux pour activer une diffusion plus fine par pays, langue ou marketplace.
                       </div>
                     )}

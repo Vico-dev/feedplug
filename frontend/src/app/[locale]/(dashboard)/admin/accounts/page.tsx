@@ -564,7 +564,7 @@ export default function AdminAccountsPage() {
                             alignItems: "center",
                             gap: "6px",
                             padding: "4px 10px",
-                            backgroundColor: "#faf5ff",
+                            backgroundColor: "var(--accent-bg)",
                             borderRadius: "2px",
                           }}
                         >

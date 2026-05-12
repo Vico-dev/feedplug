@@ -750,12 +750,12 @@ export default function DemoPage() {
                       <div
                         style={{
                           borderRadius: 16,
-                          border: "1px solid #e5e7eb",
-                          backgroundColor: "#f8fafc",
+                          border: "1px solid var(--line)",
+                          backgroundColor: "var(--paper-2)",
                           padding: "14px 16px",
                         }}
                       >
-                        <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#475569" }}>
+                        <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>
                           {locale === "en" ? "Anti-spam check" : locale === "es" ? "Verificacion anti-spam" : "Verification anti-spam"}
                         </div>
                         <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />
@@ -800,16 +800,16 @@ export default function DemoPage() {
                 <div
                   style={{
                     borderRadius: 20,
-                    border: "1px solid #d1fae5",
+                    border: "1px solid var(--success-bg)",
                     backgroundColor: "var(--success-bg)",
                     padding: 20,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                     <CheckCircle2 style={{ width: 18, height: 18, color: "var(--success)" }} />
-                    <strong style={{ fontSize: 16, color: "#065f46" }}>{content.successTitle}</strong>
+                    <strong style={{ fontSize: 16, color: "var(--success)" }}>{content.successTitle}</strong>
                   </div>
-                  <p style={{ margin: "0 0 18px", fontSize: 14, lineHeight: 1.65, color: "#047857" }}>
+                  <p style={{ margin: "0 0 18px", fontSize: 14, lineHeight: 1.65, color: "var(--success)" }}>
                     {content.successDescription}
                   </p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -840,7 +840,7 @@ export default function DemoPage() {
                         borderRadius: 12,
                         border: "1px solid #BBF7D0",
                         backgroundColor: "#ffffff",
-                        color: "#065f46",
+                        color: "var(--success)",
                         textDecoration: "none",
                         fontSize: 14,
                         fontWeight: 600,

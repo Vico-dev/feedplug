@@ -60,7 +60,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
             height: 48,
             borderRadius: 16,
             backgroundColor: "rgba(14, 165, 233, 0.12)",
-            color: "#0369a1",
+            color: "var(--accent-2)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -73,7 +73,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         <div style={{ padding: 14, borderRadius: 16, backgroundColor: "rgba(2,132,199,0.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0369a1" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--accent-2)" }}>
             <Languages size={16} />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("cardLocales")}</span>
           </div>
@@ -81,7 +81,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
         </div>
 
         <div style={{ padding: 14, borderRadius: 16, backgroundColor: "rgba(16,185,129,0.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#047857" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--success)" }}>
             <Store size={16} />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("cardChannels")}</span>
           </div>
@@ -89,7 +89,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
         </div>
 
         <div style={{ padding: 14, borderRadius: 16, backgroundColor: "rgba(15,23,42,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#334155" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-2)" }}>
             <Rocket size={16} />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("cardDestinations")}</span>
           </div>
@@ -149,7 +149,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
             padding: 14,
             borderRadius: 14,
             backgroundColor: "rgba(16,185,129,0.1)",
-            color: "#065f46",
+            color: "var(--success)",
             fontSize: 14,
             fontWeight: 600,
           }}
@@ -162,7 +162,7 @@ export function MarketCard({ market, sourceMarketName }: MarketCardProps) {
             padding: 14,
             borderRadius: 14,
             backgroundColor: "rgba(245,158,11,0.12)",
-            color: "#92400e",
+            color: "var(--warning)",
             fontSize: 14,
             fontWeight: 600,
           }}

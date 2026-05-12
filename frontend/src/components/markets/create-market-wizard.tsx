@@ -183,7 +183,7 @@ export function CreateMarketWizard({
             padding: 18,
             borderRadius: 16,
             border: "1px dashed var(--app-border)",
-            backgroundColor: "var(--app-surface-subtle, #f8fafc)",
+            backgroundColor: "var(--app-surface-subtle, var(--paper-2))",
             color: "var(--app-text-muted)",
           }}
         >
@@ -257,7 +257,7 @@ export function CreateMarketWizard({
                     height: 40,
                     borderRadius: 14,
                     backgroundColor: "rgba(14, 165, 233, 0.14)",
-                    color: "#0369a1",
+                    color: "var(--accent-2)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -319,7 +319,7 @@ export function CreateMarketWizard({
                     height: 40,
                     borderRadius: 14,
                     backgroundColor: "rgba(16, 185, 129, 0.14)",
-                    color: "#047857",
+                    color: "var(--success)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -386,7 +386,7 @@ export function CreateMarketWizard({
                 padding: 18,
                 border: "1px solid rgba(15, 23, 42, 0.08)",
                 background: "linear-gradient(140deg, rgba(15,23,42,0.95), rgba(30,41,59,0.92))",
-                color: "#f8fafc",
+                color: "var(--paper-2)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

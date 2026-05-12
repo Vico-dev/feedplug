@@ -464,12 +464,12 @@ export default function AuditFluxPage() {
                     style={{
                       marginTop: 22,
                       borderRadius: 20,
-                      border: "1px solid #e2e8f0",
-                      background: "#f8fafc",
+                      border: "1px solid var(--line)",
+                      background: "var(--paper-2)",
                       padding: 18,
                     }}
                   >
-                    <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#475569" }}>
+                    <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>
                       Verification anti-spam
                     </div>
                     <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />

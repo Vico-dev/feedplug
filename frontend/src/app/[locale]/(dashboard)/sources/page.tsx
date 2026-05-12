@@ -1049,21 +1049,21 @@ export default function SourcesPage() {
             label="Sources connectees"
             value={loading ? '...' : totalSources}
             hint={!loading && activeSources > 0 ? `${activeSources} active${activeSources > 1 ? 's' : ''}` : 'Aucune source active pour le moment'}
-            accent="#2A6FE8"
+            accent="var(--ink)"
           />
           <DashboardStatCard
             icon={<RefreshCw size={20} />}
             label="Prêtes à synchroniser"
             value={loading ? '...' : sourcesReadyToSync}
             hint={loading ? '...' : sourcesNeedingMapping > 0 ? `${sourcesNeedingMapping} mapping(s) à compléter` : 'Toutes les sources configurées sont prêtes'}
-            accent="var(--accent)"
+            accent="var(--ink)"
           />
           <DashboardStatCard
             icon={<Layers size={20} />}
             label="Sources secondaires"
             value={Object.values(enrichmentSourcesByFeed).reduce((sum, list) => sum + list.length, 0)}
             hint="Attributs additionnels relies au catalogue principal"
-            accent="var(--warning)"
+            accent="var(--ink)"
           />
         </DashboardStatGrid>
 
@@ -1494,7 +1494,7 @@ export default function SourcesPage() {
                     }}
                   >
                     {!connector.available && (
-                      <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'var(--warning)', color: '#78350f', fontSize: '10px', fontWeight: '600', padding: '4px 8px', borderRadius: '4px' }}>
+                      <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'var(--warning)', color: 'var(--warning)', fontSize: '10px', fontWeight: '600', padding: '4px 8px', borderRadius: '4px' }}>
                         Bientôt
                       </div>
                     )}
@@ -1750,7 +1750,7 @@ export default function SourcesPage() {
                     <div
                       key={step.id}
                       style={{
-                        border: `1px solid ${isActive ? '#93c5fd' : isDone ? '#BBF7D0' : 'var(--line)'}`,
+                        border: `1px solid ${isActive ? 'var(--accent-bg)' : isDone ? '#BBF7D0' : 'var(--line)'}`,
                         backgroundColor: isActive ? 'var(--accent-bg)' : isDone ? 'var(--success-bg)' : 'var(--paper-2)',
                         borderRadius: '10px',
                         padding: '14px'
@@ -1965,14 +1965,14 @@ export default function SourcesPage() {
                     gap: '10px',
                     marginBottom: '16px'
                   }}>
-                    <div style={{ backgroundColor: 'white', border: '1px solid #d1fae5', borderRadius: '8px', padding: '12px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                    <div style={{ backgroundColor: 'white', border: '1px solid var(--success-bg)', borderRadius: '8px', padding: '12px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                         Champs clés couverts
                       </div>
-                      <div style={{ fontSize: '22px', fontWeight: 700, color: '#065f46' }}>
+                      <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--success)' }}>
                         {mappedRequiredCount}/{requiredFieldsForSelectedChannel.length || 0}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#047857' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--success)' }}>
                         {requiredFieldsForSelectedChannel.length > 0
                           ? 'Utiles pour valider le flux cible.'
                           : 'Aucun champ obligatoire sur cette vue.'}
@@ -1993,7 +1993,7 @@ export default function SourcesPage() {
                       <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                         Statut du mapping
                       </div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e3a8a', lineHeight: 1.2 }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-2)', lineHeight: 1.2 }}>
                         {missingRequiredFields.length === 0 ? 'Prêt à créer la source' : 'Création possible, synchro à compléter'}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--accent-2)' }}>
@@ -2009,9 +2009,9 @@ export default function SourcesPage() {
                       marginBottom: '16px',
                       padding: '12px 14px',
                       borderRadius: '8px',
-                      backgroundColor: '#fff7ed',
-                      border: '1px solid #fdba74',
-                      color: '#9a3412'
+                      backgroundColor: 'var(--warning-bg)',
+                      border: '1px solid var(--warning)',
+                      color: 'var(--warning)'
                     }}>
                       <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                         Champs clés encore absents

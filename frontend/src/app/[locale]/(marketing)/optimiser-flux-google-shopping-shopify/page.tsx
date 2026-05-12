@@ -1578,7 +1578,7 @@ function FeedPlugShowcase({ copy }: { copy: ScreenCopy }) {
                   borderRadius: 999,
                   backgroundColor: "rgba(52,211,153,0.12)",
                   border: "1px solid rgba(52,211,153,0.2)",
-                  color: "#d1fae5",
+                  color: "var(--success-bg)",
                   fontSize: 12,
                   fontWeight: 600,
                 }}

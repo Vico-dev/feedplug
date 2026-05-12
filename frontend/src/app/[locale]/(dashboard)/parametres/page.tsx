@@ -310,9 +310,9 @@ export default function ParametresPage() {
       />
 
       <DashboardStatGrid>
-        <DashboardStatCard icon={<User size={20} />} label="Compte" value={account?.name || user?.account?.name || "Mon compte"} hint={user?.email || "Profil utilisateur"} accent="#2A6FE8" />
-        <DashboardStatCard icon={<Users size={20} />} label="Membres" value={users.length || 1} hint={canInvite ? "Invitations disponibles" : "Gestion limitee selon votre role"} accent="var(--accent)" />
-        <DashboardStatCard icon={<Shield size={20} />} label="Securite" value="Active" hint="Acces, mot de passe et roles centralises ici" accent="var(--warning)" />
+        <DashboardStatCard icon={<User size={20} />} label="Compte" value={account?.name || user?.account?.name || "Mon compte"} hint={user?.email || "Profil utilisateur"} accent="var(--ink)" />
+        <DashboardStatCard icon={<Users size={20} />} label="Membres" value={users.length || 1} hint={canInvite ? "Invitations disponibles" : "Gestion limitee selon votre role"} accent="var(--ink)" />
+        <DashboardStatCard icon={<Shield size={20} />} label="Securite" value="Active" hint="Acces, mot de passe et roles centralises ici" accent="var(--ink)" />
       </DashboardStatGrid>
 
       <div
@@ -512,7 +512,7 @@ export default function ParametresPage() {
                     <h3 style={{ fontSize: "14px", fontWeight: "500", color: "var(--ink-2)", margin: "0 0 12px 0" }}>
                       Mot de passe
                     </h3>
-                    <button type="button" style={{ width: "100%", minHeight: 44, backgroundColor: "transparent", color: "var(--accent)", border: "1px solid #93c5fd", borderRadius: "12px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }} onClick={() => setChangePasswordOpen(true)}>
+                    <button type="button" style={{ width: "100%", minHeight: 44, backgroundColor: "transparent", color: "var(--accent)", border: "1px solid var(--accent-bg)", borderRadius: "12px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }} onClick={() => setChangePasswordOpen(true)}>
                       <Key style={{ width: "16px", height: "16px" }} />
                       Changer le mot de passe
                     </button>

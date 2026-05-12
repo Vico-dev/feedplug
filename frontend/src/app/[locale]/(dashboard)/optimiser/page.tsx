@@ -242,8 +242,8 @@ const PLATFORMS = [
 const STATUS_CONFIG: Record<ABTestStatus, { label: string; color: string; bg: string }> = {
   DRAFT: { label: 'Brouillon', color: 'var(--ink-3)', bg: 'var(--paper-2)' },
   RUNNING: { label: 'En cours', color: 'var(--accent)', bg: 'var(--accent-bg)' },
-  COMPLETED: { label: 'Terminé', color: '#16a34a', bg: '#dcfce7' },
-  CANCELLED: { label: 'Annulé', color: 'var(--danger)', bg: '#fee2e2' },
+  COMPLETED: { label: 'Terminé', color: 'var(--success)', bg: 'var(--success-bg)' },
+  CANCELLED: { label: 'Annulé', color: 'var(--danger)', bg: 'var(--danger-bg)' },
 };
 
 function formatConditionSentence(rule: Rule) {
@@ -782,7 +782,7 @@ export default function OptimiserPage() {
             </PageCard>
             <PageCard style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}><Trophy size={17} /></div>
+                <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'var(--success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}><Trophy size={17} /></div>
                 <span style={{ fontSize: 13, color: 'var(--app-text-muted)' }}>Terminés</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 600 }}>{abTests.filter(t => t.status === 'COMPLETED').length}</div>
@@ -1185,24 +1185,24 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
   const getSuggestionIcon = (type: IASuggestion['type']) => {
     const icons: Record<string, { icon: typeof Type; color: string; bg: string }> = {
-      title: { icon: Type, color: 'var(--accent)', bg: '#f3e8ff' },
-      description: { icon: LayoutList, color: '#f59e0b', bg: '#fef3c7' },
+      title: { icon: Type, color: 'var(--accent)', bg: 'var(--accent-bg)' },
+      description: { icon: LayoutList, color: 'var(--warning)', bg: 'var(--warning-bg)' },
       category: { icon: Filter, color: 'var(--accent)', bg: 'var(--accent-bg)' },
-      image: { icon: ImageIcon, color: '#ec4899', bg: '#fce7f3' },
-      price: { icon: BarChart3, color: '#16a34a', bg: '#dcfce7' },
+      image: { icon: ImageIcon, color: 'var(--accent)', bg: 'var(--accent-bg)' },
+      price: { icon: BarChart3, color: 'var(--success)', bg: 'var(--success-bg)' },
     };
     return icons[type] || icons.title;
   };
 
   const getImpactBadge = (impact: IASuggestion['impact']) => {
-    const config = { high: { label: 'Impact fort', color: 'var(--danger)', bg: '#fee2e2' }, medium: { label: 'Impact moyen', color: '#f59e0b', bg: '#fef3c7' }, low: { label: 'Impact faible', color: 'var(--ink-3)', bg: 'var(--paper-2)' } };
+    const config = { high: { label: 'Impact fort', color: 'var(--danger)', bg: 'var(--danger-bg)' }, medium: { label: 'Impact moyen', color: 'var(--warning)', bg: 'var(--warning-bg)' }, low: { label: 'Impact faible', color: 'var(--ink-3)', bg: 'var(--paper-2)' } };
     return config[impact];
   };
 
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
+        <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
             <Bot size={14} /> Intelligence artificielle
           </div>
@@ -1223,7 +1223,7 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #5b21b6 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
+      <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
           <Bot size={14} /> Intelligence artificielle
         </div>

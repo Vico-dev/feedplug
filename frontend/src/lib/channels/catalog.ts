@@ -144,45 +144,51 @@ export const SUPPORTED_CHANNELS: SupportedChannel[] = [
   },
 ];
 
+/**
+ * Tesla mineral keeps a single accent. We differentiate families through
+ * the LABEL (mono eyebrow uppercase) — every card uses the same neutral
+ * paper-2 surface with a line border, so the visual hierarchy comes from
+ * typography and content, not from pastel backgrounds.
+ */
 export const CHANNEL_FAMILY_META: Record<
   ChannelFamily,
   { label: string; accent: string; background: string; border: string }
 > = {
   shopping: {
     label: "Shopping",
-    accent: "var(--accent)",
-    background: "var(--accent-bg)",
-    border: "var(--accent-bg)",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line)",
   },
   marketplace: {
     label: "Marketplaces",
-    accent: "var(--warning)",
-    background: "var(--warning-bg)",
-    border: "#FDE68A",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line)",
   },
   social: {
     label: "Social ads",
-    accent: "#be185d",
-    background: "#fdf2f8",
-    border: "#fbcfe8",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line)",
   },
   search: {
     label: "Search",
-    accent: "#2A6FE8",
-    background: "#E8EFFB",
-    border: "#a5f3fc",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line)",
   },
   international: {
     label: "International",
-    accent: "var(--accent)",
-    background: "var(--accent-bg)",
-    border: "#ddd6fe",
+    accent: "var(--ink)",
+    background: "var(--paper-2)",
+    border: "var(--line)",
   },
   ai: {
     label: "Assistants IA",
     accent: "var(--ink)",
     background: "var(--paper-2)",
-    border: "var(--line-strong)",
+    border: "var(--line)",
   },
 };
 

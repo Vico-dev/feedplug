@@ -35,28 +35,28 @@ export function MarketReadinessPanel({ markets }: MarketReadinessPanelProps) {
           label={t("summaryTotal")}
           value={totalMarkets}
           hint={t("summaryTotalHint")}
-          accent="#0369a1"
+          accent="var(--ink)"
         />
         <DashboardStatCard
           icon={<Rocket size={18} />}
           label={t("summaryReady")}
           value={readyMarkets}
           hint={t("summaryReadyHint")}
-          accent="#047857"
+          accent="var(--ink)"
         />
         <DashboardStatCard
           icon={<AlertTriangle size={18} />}
           label={t("summaryActionRequired")}
           value={actionRequiredMarkets}
           hint={t("summaryActionRequiredHint")}
-          accent="#b45309"
+          accent="var(--ink)"
         />
         <DashboardStatCard
           icon={<Layers3 size={18} />}
           label={t("summaryDestinations")}
           value={totalDestinations}
           hint={t("summaryDestinationsHint")}
-          accent="#475569"
+          accent="var(--ink)"
         />
       </DashboardStatGrid>
 

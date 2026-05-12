@@ -466,7 +466,7 @@ export default async function MarketplacesFeedPage({
                 return (
                   <div key={step.title} className="marketplaces-card" style={stepCardStyle}>
                     <div style={{ ...stepIconWrapStyle, backgroundColor: "var(--success-bg)" }}>
-                      <Icon style={{ width: 20, height: 20, color: "#047857" }} />
+                      <Icon style={{ width: 20, height: 20, color: "var(--success)" }} />
                     </div>
                     <h3 style={stepTitleStyle}>{step.title}</h3>
                     <p style={cardParagraphMutedStyle}>{step.body}</p>

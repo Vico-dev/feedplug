@@ -125,7 +125,7 @@ export default function DocsScorePage() {
         <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 8, color: "var(--warning)" }}>
           <AlertTriangle size={18} /> En résumé
         </h3>
-        <p style={{ margin: 0, color: "#78350f", fontSize: 14, lineHeight: 1.6 }}>
+        <p style={{ margin: 0, color: "var(--warning)", fontSize: 14, lineHeight: 1.6 }}>
           Le score FeedPlug vous donne une mesure objective de la qualité et de la conformité de vos fiches. Il vous aide à prioriser les corrections, à éviter les rejets sur les canaux et à améliorer visibilité et conversion. Utilisez-le en complément de l&apos;IA pour optimiser votre catalogue de façon ciblée.
         </p>
       </section>

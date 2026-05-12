@@ -117,7 +117,7 @@ function formatInvoiceStatus(status: string | null | undefined) {
 function StatusBadge({ status }: { status: string | null }) {
   const statusConfig: Record<string, { bg: string; color: string; icon: React.ReactNode; label: string }> = {
     active: { bg: "var(--success-bg)", color: "var(--success)", icon: <CheckCircle size={16} />, label: "Abonnement actif" },
-    pending: { bg: "var(--warning-bg)", color: "#854d0e", icon: <Clock size={16} />, label: "En attente" },
+    pending: { bg: "var(--warning-bg)", color: "var(--warning)", icon: <Clock size={16} />, label: "En attente" },
     payment_failed: { bg: "var(--danger-bg)", color: "var(--danger)", icon: <XCircle size={16} />, label: "À régulariser" },
     trial: { bg: "var(--accent-bg)", color: "var(--accent-2)", icon: <ShieldCheck size={16} />, label: "Essai actif" },
   };

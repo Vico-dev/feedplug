@@ -351,7 +351,7 @@ export default function ComparisonLanding({
               <ul className="comparison-bullet-list">
                 {copy.quickBullets.map((item) => (
                   <li key={item} className="comparison-bullet-item" style={{ color: "rgba(248,250,252,0.92)" }}>
-                    <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: 3, color: "#93c5fd" }} />
+                    <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: 3, color: "var(--accent-bg)" }} />
                     <span>{item}</span>
                   </li>
                 ))}

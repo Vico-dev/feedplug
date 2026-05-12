@@ -368,7 +368,7 @@ export function CreateExportModal({ isOpen, onClose }: CreateExportModalProps) {
                           top: '10px',
                           right: '10px',
                           backgroundColor: 'var(--warning)',
-                          color: '#78350f',
+                          color: 'var(--warning)',
                           fontSize: '10px',
                           fontWeight: '600',
                           padding: '3px 6px',

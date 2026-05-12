@@ -252,7 +252,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
       style={{
         display: 'flex',
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, #f8faf7 0%, #f2f5f1 100%)',
+        background: 'linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%)',
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: `

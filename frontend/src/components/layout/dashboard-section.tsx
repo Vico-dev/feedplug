@@ -39,9 +39,10 @@ export function DashboardSection({
               <h2
                 style={{
                   margin: 0,
-                  fontSize: 18,
+                  fontFamily: "var(--font-display)",
+                  fontSize: 20,
                   fontWeight: 600,
-                  color: "var(--app-text)",
+                  color: "var(--ink)",
                   letterSpacing: "-0.02em",
                 }}
               >
@@ -53,8 +54,8 @@ export function DashboardSection({
                 style={{
                   margin: title ? "6px 0 0" : 0,
                   fontSize: 14,
-                  lineHeight: 1.6,
-                  color: "var(--app-text-muted)",
+                  lineHeight: 1.55,
+                  color: "var(--ink-3)",
                 }}
               >
                 {description}
@@ -87,12 +88,21 @@ export function DashboardStatGrid({
   );
 }
 
+/**
+ * Tesla mineral KPI tile.
+ *
+ * The `accent` prop drives the icon chip color. To keep the palette
+ * coherent we map any DS-token accent ("var(--ink)", "var(--danger)" …)
+ * to a tasteful neutral background (paper-2 / soft-danger / soft-success
+ * etc.). Hex values are still respected for back-compat but should be
+ * avoided in new code.
+ */
 export function DashboardStatCard({
   icon,
   label,
   value,
   hint,
-  accent = "var(--app-accent)",
+  accent = "var(--ink)",
 }: {
   icon?: ReactNode;
   label: ReactNode;
@@ -100,38 +110,61 @@ export function DashboardStatCard({
   hint?: ReactNode;
   accent?: string;
 }) {
+  // Map known DS accents to (foreground, background) pairs. Anything else
+  // falls back to the neutral ink/paper-2 pair.
+  const iconChip: { fg: string; bg: string } = (() => {
+    if (accent.includes("--success")) return { fg: "var(--success)", bg: "var(--success-bg)" };
+    if (accent.includes("--warning")) return { fg: "var(--warning)", bg: "var(--warning-bg)" };
+    if (accent.includes("--danger")) return { fg: "var(--danger)", bg: "var(--danger-bg)" };
+    if (accent.includes("--accent")) return { fg: "var(--accent)", bg: "var(--accent-bg)" };
+    return { fg: "var(--ink-2)", bg: "var(--paper-2)" };
+  })();
+
   return (
     <div className="feedplug-shell-card" style={{ padding: 20 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--app-text-muted)" }}>{label}</p>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--ink-3)",
+            }}
+          >
+            {label}
+          </p>
           <p
             style={{
               margin: "10px 0 0",
+              fontFamily: "var(--font-display)",
               fontSize: 30,
               lineHeight: 1,
-              fontWeight: 600,
-              letterSpacing: "-0.04em",
-              color: "var(--app-text)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "var(--ink)",
             }}
           >
             {value}
           </p>
           {hint && (
-            <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--app-text-muted)" }}>{hint}</p>
+            <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--ink-3)" }}>{hint}</p>
           )}
         </div>
         {icon && (
           <div
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
+              width: 40,
+              height: 40,
+              borderRadius: "var(--r-lg)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: `${accent}18`,
-              color: accent,
+              backgroundColor: iconChip.bg,
+              color: iconChip.fg,
               flexShrink: 0,
             }}
           >

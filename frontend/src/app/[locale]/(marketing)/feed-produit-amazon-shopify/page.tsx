@@ -753,7 +753,7 @@ export default async function AmazonShopifyFeedPage({
                         width: 42,
                         height: 42,
                         borderRadius: 12,
-                        backgroundColor: "#fff7ed",
+                        backgroundColor: "var(--warning-bg)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",

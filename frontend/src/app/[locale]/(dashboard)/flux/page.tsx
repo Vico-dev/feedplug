@@ -597,12 +597,8 @@ export default function FluxPage() {
               ? 'Export IA'
               : 'Export pret',
         statusTone: isConnected
-          ? { background: '#ecfdf5', color: 'var(--success)', border: '#bbf7d0' }
-          : channel.delivery === 'both'
-            ? { background: 'var(--accent-bg)', color: 'var(--accent-2)', border: 'var(--accent-bg)' }
-            : channel.family === 'ai'
-              ? { background: 'var(--paper-2)', color: 'var(--ink)', border: 'var(--line-strong)' }
-              : { background: '#ffffff', color: 'var(--ink-2)', border: 'var(--line)' },
+          ? { background: 'var(--success-bg)', color: 'var(--success)', border: '#BBF7D0' }
+          : { background: 'var(--surface)', color: 'var(--ink-3)', border: 'var(--line)' },
       };
     }),
   }));
@@ -1001,21 +997,21 @@ export default function FluxPage() {
               label="Canaux supportes"
               value={SUPPORTED_CHANNELS.length}
               hint="Surface totale de diffusion disponible"
-              accent="var(--accent)"
+              accent="var(--ink)"
             />
             <DashboardStatCard
               icon={<ShoppingCart size={20} />}
               label="Push directs"
               value={directPushChannels.length}
               hint="Canaux pouvant etre pousses directement une fois relies"
-              accent="var(--warning)"
+              accent="var(--ink)"
             />
             <DashboardStatCard
               icon={<Download size={20} />}
               label="Exports prets"
               value={exportReadyChannels.length}
               hint="Canaux accessibles via export catalogue"
-              accent="var(--accent)"
+              accent="var(--ink)"
             />
             <DashboardStatCard
               icon={<FileText size={20} />}
@@ -1088,7 +1084,7 @@ export default function FluxPage() {
               label="Flux actifs"
               value={activeFeedsCount}
               hint={`${activeFeedsCount} sur ${feeds.length} prêts ou actifs`}
-              accent="var(--accent)"
+              accent="var(--ink)"
             />
             <DashboardStatCard
               icon={<Globe size={20} />}
@@ -1195,21 +1191,21 @@ export default function FluxPage() {
                   label="Score flux"
                   value={`${feedAudit.score}/100`}
                   hint={`${selectedAuditFeed.name} · ${feedAudit.summary.totalProducts} produits analyses`}
-                  accent="var(--accent)"
+                  accent="var(--ink)"
                 />
                 <DashboardStatCard
                   icon={<TrendingUp size={20} />}
                   label="Potentiel avec accompagnement"
                   value={`${feedAudit.potentialScore}/100`}
                   hint={`Jusqu'a +${feedAudit.estimatedVisibilityLiftPct}% de visibilite estimee`}
-                  accent="var(--accent)"
+                  accent="var(--ink)"
                 />
                 <DashboardStatCard
                   icon={<CheckCircle size={20} />}
                   label="Produits recuperables"
                   value={feedAudit.estimatedAdditionalApprovedProducts}
                   hint="Produits supplementaires potentiellement diffusable apres correction"
-                  accent="var(--success)"
+                  accent="var(--ink)"
                 />
               </DashboardStatGrid>
 

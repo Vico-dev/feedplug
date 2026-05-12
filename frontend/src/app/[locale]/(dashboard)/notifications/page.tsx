@@ -74,7 +74,7 @@ function getNotificationColor(type: string) {
     case "ab_test":
       return "var(--accent)";
     case "performance":
-      return "#0891b2";
+      return "var(--accent)";
     default:
       return "var(--ink-3)";
   }
@@ -155,14 +155,14 @@ export default function NotificationsPage() {
             label="Tests A/B"
             value={notifications.filter((item) => item.type === "ab_test").length}
             hint="Alertes liees aux experimentations"
-            accent="var(--accent)"
+            accent="var(--ink)"
           />
           <DashboardStatCard
             icon={<TrendingUp size={20} />}
             label="Performance"
             value={notifications.filter((item) => item.type === "performance").length}
             hint="Variations et resultats de diffusion"
-            accent="#0891b2"
+            accent="var(--ink)"
           />
         </DashboardStatGrid>
 
