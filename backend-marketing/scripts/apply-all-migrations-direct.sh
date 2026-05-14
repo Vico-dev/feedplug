@@ -40,7 +40,9 @@ echo "⚠️  Assure-toi que Cloud SQL Proxy tourne dans un autre terminal avec 
 echo "    ./cloud-sql-proxy $PROJECT:$REGION:$INSTANCE"
 echo ""
 
-# Liste des migrations à appliquer dans l'ordre
+# Liste des migrations à appliquer dans l'ordre.
+# Chaque fichier est idempotent (CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT
+# EXISTS, etc.) donc rejouer une migration déjà appliquée est sans effet.
 MIGRATIONS=(
   "001_create_marketing_leads.sql"
   "002_ingestion_models.sql"
@@ -51,10 +53,27 @@ MIGRATIONS=(
   "010_multi_tenancy.sql"
   "011_dashboard_score_evolution.sql"
   "012_feature_ideas.sql"
+  "013_export_channel.sql"
+  "014_rules_revisions_bulk_edit.sql"
+  "015_enrichment_source.sql"
+  "016_account_trial.sql"
+  "017_billing_onboarding.sql"
+  "018_ab_test.sql"
+  "019_channel_scoring_config.sql"
+  "020_user_status_lastloginat.sql"
+  "021_product_score_history.sql"
+  "022_ab_test_rule_id.sql"
+  "023_platform_connection_unique.sql"
+  "024_account_addon_ia.sql"
+  "025_account_company_phone_billing.sql"
+  "026_account_max_channels.sql"
+  "027_account_billing_status.sql"
+  "027_performance_channel_history.sql"
   "028_marketing_nurture.sql"
   "029_marketing_click_tracking.sql"
   "030_oauth_ephemeral_state.sql"
   "031_shared_rate_limits.sql"
+  "032_markets_market_runtime.sql"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -71,8 +90,21 @@ for migration in "${MIGRATIONS[@]}"; do
     continue
   fi
 
+  # Migrations qui ne sont PAS idempotentes (ALTER sans IF NOT EXISTS, etc.) :
+  # on les laisse échouer silencieusement si déjà jouées, sinon on plante tout
+  # le script à chaque relance dès que la prod aurait avancé.
+  NON_IDEMPOTENT=("018_ab_test.sql")
+  is_non_idempotent=false
+  for ni in "${NON_IDEMPOTENT[@]}"; do
+    if [ "$migration" = "$ni" ]; then is_non_idempotent=true; fi
+  done
+
   echo "   → Application de $migration ..."
-  if ! PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$USER" -d "$DATABASE" -f "$migration_path"; then
+  if PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$USER" -d "$DATABASE" -v ON_ERROR_STOP=1 -f "$migration_path"; then
+    echo "      ✅ OK"
+  elif [ "$is_non_idempotent" = true ]; then
+    echo "      ⚠️  Échec ignoré (migration $migration non idempotente, probablement déjà appliquée)."
+  else
     echo ""
     echo "❌ Erreur lors de l'application de $migration"
     echo "💡 Vérifie que :"
@@ -81,8 +113,6 @@ for migration in "${MIGRATIONS[@]}"; do
     echo "   3. La base $DATABASE existe sur l'instance $INSTANCE"
     exit 1
   fi
-
-  echo "      ✅ OK"
   echo ""
 done
 
