@@ -1160,24 +1160,60 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
   const handleApply = async (suggestion: IASuggestion) => {
     setApplying(suggestion.id);
     try {
-      let ruleData: Partial<Rule> = { name: suggestion.title, isActive: true, runOnIngestion: true };
+      // Each suggestion type maps to (a) the field to fill, (b) a default
+      // condition that scopes the rule to the products actually missing
+      // that field. The backend requires a non-empty `conditions` array,
+      // and these defaults make the rules semantically meaningful — we
+      // only optimize what's actually broken.
+      const TYPE_TO_FIELD: Record<IASuggestion['type'], string> = {
+        category: 'google_product_category',
+        title: 'title',
+        description: 'description',
+        image: 'image_link',
+        price: 'price',
+      };
+      const targetField = TYPE_TO_FIELD[suggestion.type] || suggestion.type;
+      const feedIds = selectedFeed ? [selectedFeed] : [];
+
+      let ruleData: Partial<Rule> = { name: suggestion.title, isActive: true, runOnIngestion: true, feedIds };
       switch (suggestion.type) {
         case 'category':
-          ruleData = { ...ruleData, conditionJson: { operator: 'AND', conditions: [{ field: 'google_product_category', operator: 'is_empty' }] }, actionJson: { type: 'ai_fill', params: { field: 'google_product_category' } }, channelIds: ['gmc'], feedIds: selectedFeed ? [selectedFeed] : [] };
+          ruleData = {
+            ...ruleData,
+            conditionJson: { operator: 'AND', conditions: [{ field: 'google_product_category', operator: 'is_empty' }] },
+            actionJson: { type: 'ai_fill', params: { field: 'google_product_category' } },
+            channelIds: ['gmc'],
+          };
           break;
         case 'title':
-          ruleData = { ...ruleData, conditionJson: { operator: 'AND', conditions: [{ field: 'brand', operator: 'is_not_empty' }] }, actionJson: { type: 'template', params: { field: 'title', template: '{brand} - {title}' } }, feedIds: selectedFeed ? [selectedFeed] : [] };
+          ruleData = {
+            ...ruleData,
+            conditionJson: { operator: 'AND', conditions: [{ field: 'brand', operator: 'is_not_empty' }] },
+            actionJson: { type: 'template', params: { field: 'title', template: '{brand} - {title}' } },
+          };
           break;
         case 'description':
-          ruleData = { ...ruleData, conditionJson: { operator: 'AND', conditions: [] }, actionJson: { type: 'ai_fill', params: { field: 'description' } }, feedIds: selectedFeed ? [selectedFeed] : [] };
-          break;
+        case 'image':
+        case 'price':
         default:
-          ruleData = { ...ruleData, conditionJson: { operator: 'AND', conditions: [] }, actionJson: { type: 'ai_fill', params: { field: suggestion.type } }, feedIds: selectedFeed ? [selectedFeed] : [] };
+          ruleData = {
+            ...ruleData,
+            // Only apply to products where the target field is empty —
+            // this satisfies the backend's "non-empty conditions" rule
+            // AND scopes the optimization to the products that need it.
+            conditionJson: { operator: 'AND', conditions: [{ field: targetField, operator: 'is_empty' }] },
+            actionJson: { type: 'ai_fill', params: { field: targetField } },
+          };
       }
+
       await apiClient.post('/rules', ruleData);
       onRuleCreated();
     } catch (e) {
-      alert('Erreur lors de la création de la règle');
+      const message = e instanceof Error && e.message ? e.message : 'Erreur lors de la création de la règle';
+      // Surface the actual backend reason (e.g. validation details) so
+      // future failures don't hide behind a generic message.
+      console.error('POST /rules failed:', e);
+      alert(message);
     } finally {
       setApplying(null);
     }
@@ -1202,11 +1238,12 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
-            <Bot size={14} /> Intelligence artificielle
+        <div style={{ background: 'var(--ink)', borderRadius: 'var(--card-radius)', padding: 28, color: 'var(--paper)' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.06)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-4)', marginBottom: 16 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: 'var(--accent)', boxShadow: '0 0 0 4px rgba(42,111,232,0.18)' }} />
+            <Bot size={12} /> Intelligence artificielle
           </div>
-          <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700 }}>Analyse en cours...</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.05 }}>Analyse en cours…</h2>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
           {[1, 2, 3].map(i => (
@@ -1223,12 +1260,18 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)', borderRadius: 'var(--card-radius)', padding: 28, color: 'white' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.2)', fontSize: 13, marginBottom: 12 }}>
-          <Bot size={14} /> Intelligence artificielle
+      <div style={{ background: 'var(--ink)', borderRadius: 'var(--card-radius)', padding: 32, color: 'var(--paper)' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.06)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-4)', marginBottom: 18 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: 'var(--accent)', boxShadow: '0 0 0 4px rgba(42,111,232,0.18)' }} />
+          <Bot size={12} /> Intelligence artificielle
         </div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700 }}>Suggestions intelligentes</h2>
-        <p style={{ margin: 0, fontSize: 14, opacity: 0.9, maxWidth: 600 }}>
+        <h2 style={{ margin: '0 0 10px', fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.05, color: 'var(--paper)' }}>
+          Suggestions{' '}
+          <em style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontWeight: 400, color: 'var(--ink-4)', letterSpacing: '-0.02em' }}>
+            intelligentes
+          </em>
+        </h2>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--ink-4)', maxWidth: 640 }}>
           L&apos;IA analyse vos produits et suggère des optimisations basées sur les meilleures pratiques e-commerce.
         </p>
       </div>
