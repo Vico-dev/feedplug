@@ -10302,6 +10302,108 @@ app.get('/api/v1/markets/:marketId/readiness', authenticateToken, async (req, re
   }
 });
 
+// GET /api/v1/markets/:marketId/preview?productId=<feedItemId>&localeId=<marketLocaleId>&refresh=1
+//
+// Renvoie côte à côte le produit source et sa version traduite pour la
+// locale par défaut (ou la locale demandée) du marché. Sert au composant
+// MarketPreviewPanel côté front. La traduction est mise en cache via la
+// table AICache (cf. ai/ai-wrapper.js) — `refresh=1` la bypass.
+const { translateProductForMarket } = require('./optimization/market-translation');
+app.get('/api/v1/markets/:marketId/preview', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    const { marketId } = req.params;
+    const productId = String(req.query.productId || '').trim();
+    const requestedLocaleId = String(req.query.localeId || '').trim();
+    const forceRefresh = String(req.query.refresh || '').trim() === '1';
+
+    if (!productId) {
+      return res.status(400).json({ message: 'Paramètre productId requis' });
+    }
+
+    // 1. Marché + locales + vérification d'ownership.
+    await ensureMarketsBackfillForAccount(accountId);
+    const markets = await getHydratedMarketsForAccount(accountId);
+    const market = markets.find((entry) => entry.id === marketId);
+    if (!market) {
+      return res.status(404).json({ message: 'Marché introuvable' });
+    }
+    const locales = Array.isArray(market.locales) ? market.locales : [];
+    if (locales.length === 0) {
+      return res.status(400).json({ message: 'Aucune locale configurée pour ce marché.' });
+    }
+    const targetLocale = requestedLocaleId
+      ? locales.find((entry) => entry.id === requestedLocaleId)
+      : (locales.find((entry) => entry.isDefault) || locales[0]);
+    if (!targetLocale) {
+      return res.status(404).json({ message: 'Locale introuvable pour ce marché.' });
+    }
+
+    // 2. Chargement du produit en vérifiant qu'il appartient bien à l'account.
+    const productRows = await prisma.$queryRawUnsafe(
+      `SELECT i.id, i.title, i.descriptionhtml, i.descriptiontext, i.brand, i.sku, i.imageurl, i.url, i.price, i.currency
+       FROM "FeedItem" i
+       JOIN "Feed" f ON f.id = i.feedid
+       WHERE i.id = $1::text AND f.accountid = $2::text
+       LIMIT 1`,
+      productId,
+      accountId
+    );
+    if (!productRows || productRows.length === 0) {
+      return res.status(404).json({ message: 'Produit introuvable dans votre catalogue.' });
+    }
+    const row = productRows[0];
+    const product = {
+      id: row.id,
+      title: row.title || '',
+      descriptionText: row.descriptiontext || '',
+      descriptionHtml: row.descriptionhtml || '',
+      brand: row.brand || '',
+      sku: row.sku || '',
+      imageUrl: row.imageurl || '',
+      url: row.url || '',
+      price: row.price,
+      currency: row.currency || market.defaultCurrencyCode,
+    };
+
+    // 3. Appel du service de traduction.
+    const result = await translateProductForMarket(prisma, product, targetLocale, { forceRefresh });
+
+    res.json({
+      market: { id: market.id, code: market.code, name: market.name },
+      locale: {
+        id: targetLocale.id,
+        localeCode: targetLocale.localeCode,
+        languageCode: targetLocale.languageCode,
+        countryCode: targetLocale.countryCode,
+        translationMode: targetLocale.translationMode,
+        isDefault: !!targetLocale.isDefault,
+      },
+      product: { id: product.id, sku: product.sku, brand: product.brand, imageUrl: product.imageUrl, url: product.url, price: product.price, currency: product.currency },
+      source: { title: product.title, descriptionText: product.descriptionText },
+      translated: result.translated,
+      meta: {
+        mode: result.mode,
+        sourceLanguage: result.sourceLanguage,
+        targetLanguage: result.targetLanguage,
+        cached: result.cached,
+        provider: result.provider,
+        cost: result.cost,
+        tokensUsed: result.tokensUsed,
+      },
+      warnings: result.warnings,
+    });
+  } catch (error) {
+    console.error('GET /markets/:marketId/preview error:', error);
+    const unavailable = getMarketsUnavailableResponse(res, error);
+    if (unavailable) return unavailable;
+    res.status(500).json({ message: 'Erreur lors de la prévisualisation du marché.', error: error?.message });
+  }
+});
+
 // Google Auth - Connexion / Inscription avec Google
 const GOOGLE_AUTH_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 app.post('/api/v1/auth/google', smartAuthLimiter, async (req, res) => {

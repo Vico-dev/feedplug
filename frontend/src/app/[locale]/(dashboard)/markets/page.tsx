@@ -15,6 +15,7 @@ import {
 } from "@/components/layout";
 import { CreateMarketWizard } from "@/components/markets/create-market-wizard";
 import { MarketCard } from "@/components/markets/market-card";
+import { MarketPreviewPanel } from "@/components/markets/market-preview-panel";
 import { MarketReadinessPanel } from "@/components/markets/market-readiness-panel";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -182,6 +183,8 @@ export default function MarketsPage() {
               </div>
             )}
           </DashboardSection>
+
+          {markets.length > 0 && <MarketPreviewPanel markets={markets} />}
         </>
       )}
     </PageLayout>

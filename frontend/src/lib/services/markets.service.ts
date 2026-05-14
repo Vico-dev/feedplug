@@ -103,3 +103,59 @@ export async function createMarket(payload: CreateMarketPayload): Promise<Market
   const response = await apiClient.post<{ market?: Market }>("/markets", payload);
   return response.data?.market ?? null;
 }
+
+// ─── Translation preview ─────────────────────────────────────────────
+
+export interface MarketPreviewProduct {
+  id: string;
+  sku: string | null;
+  brand: string | null;
+  imageUrl: string | null;
+  url: string | null;
+  price: number | null;
+  currency: string | null;
+}
+
+export interface MarketPreviewLocale {
+  id: string;
+  localeCode: string;
+  languageCode: string;
+  countryCode: string;
+  translationMode: string;
+  isDefault: boolean;
+}
+
+export interface MarketPreviewResponse {
+  market: { id: string; code: string; name: string };
+  locale: MarketPreviewLocale;
+  product: MarketPreviewProduct;
+  source: { title: string; descriptionText: string };
+  translated: { title: string; descriptionText: string };
+  meta: {
+    mode: "translate" | "source" | "manual";
+    sourceLanguage: string;
+    targetLanguage: string;
+    cached: boolean;
+    provider: string | null;
+    cost: number;
+    tokensUsed: number;
+  };
+  warnings: string[];
+}
+
+export async function previewMarketProduct(
+  marketId: string,
+  productId: string,
+  options: { localeId?: string; refresh?: boolean } = {},
+): Promise<MarketPreviewResponse> {
+  const params = new URLSearchParams({ productId });
+  if (options.localeId) params.set("localeId", options.localeId);
+  if (options.refresh) params.set("refresh", "1");
+  const response = await apiClient.get<MarketPreviewResponse>(
+    `/markets/${marketId}/preview?${params.toString()}`,
+  );
+  if (!response.data) {
+    throw new Error("Réponse vide du backend pour la prévisualisation marché.");
+  }
+  return response.data;
+}
