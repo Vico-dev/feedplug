@@ -15,11 +15,16 @@ set -e
 INSTANCE="feedplug-db"
 DATABASE="feedplug_marketing"
 USER="feedplug_user"
+# Le proxy Cloud SQL peut tourner sur 5432 (par défaut) ou un autre port si
+# Postgres tourne déjà localement. Override avec PGHOST / PGPORT.
+PGHOST="${PGHOST:-localhost}"
+PGPORT="${PGPORT:-5432}"
 
 echo "🌍 Application de la migration Markets (032)"
 echo "   Instance : $INSTANCE"
 echo "   Database : $DATABASE"
 echo "   User     : $USER"
+echo "   Endpoint : $PGHOST:$PGPORT"
 echo ""
 
 if [ -z "$PGPASSWORD" ]; then
@@ -44,14 +49,14 @@ if [ ! -f "$MIGRATION_PATH" ]; then
 fi
 
 echo "📦 Application de 032_markets_market_runtime.sql ..."
-PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$USER" -d "$DATABASE" -v ON_ERROR_STOP=1 -f "$MIGRATION_PATH"
+PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$USER" -d "$DATABASE" -v ON_ERROR_STOP=1 -f "$MIGRATION_PATH"
 
 echo ""
 echo "✅ Migration Markets appliquée."
 echo ""
 echo "🧪 Vérifie les tables avec :"
-echo "    psql -h localhost -U $USER -d $DATABASE -c '\\dt \"Market*\"'"
-echo "    psql -h localhost -U $USER -d $DATABASE -c 'SELECT count(*) FROM \"Market\";'"
+echo "    psql -h $PGHOST -p $PGPORT -U $USER -d $DATABASE -c \"SELECT tablename FROM pg_tables WHERE tablename LIKE 'Market%' OR tablename IN ('PlatformAccount','Destination','ProductActivation') ORDER BY tablename;\""
+echo "    psql -h $PGHOST -p $PGPORT -U $USER -d $DATABASE -c 'SELECT count(*) FROM \"Market\";'"
 echo ""
 echo "🚀 L'API /api/v1/markets devrait maintenant répondre 200 (avec un tableau vide)"
 echo "   pour les comptes sans marché. Le bouton « Créer un marché » devient utilisable."
