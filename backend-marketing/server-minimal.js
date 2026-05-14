@@ -5799,6 +5799,29 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
       console.warn('AB test export:', e.message);
     }
 
+    // ─── Traduction par marché (v2) ────────────────────────────────────
+    // Si l'export cible une Destination liée à un marché dont la locale
+    // n'est pas la langue source du catalogue, on traduit les `title` et
+    // `descriptionText` à la volée via Gemini. Le cache AICache (déjà
+    // persistant) fait que la 2e exécution est gratuite. Best-effort : un
+    // item qui échoue garde sa version source plutôt que de planter l'export.
+    let translationStats = null;
+    try {
+      const { translateItemsForDestination } = require('./optimization/market-translation');
+      const { items: translatedItems, stats } = await translateItemsForDestination(
+        prisma,
+        items,
+        destinationContext,
+      );
+      items = translatedItems;
+      translationStats = stats;
+      if (!stats.skipped) {
+        console.log(`[market-translation] export ${platform} → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
+      }
+    } catch (translationErr) {
+      console.warn('⚠️ Traduction marché ignorée:', translationErr?.message);
+    }
+
     let headers;
     let rows;
     let filename;
@@ -14524,6 +14547,18 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
   );
   items = await filterItemsForDestinationActivation(items, destinationContext);
 
+  // Traduction par marché (v2) — best-effort.
+  try {
+    const { translateItemsForDestination } = require('./optimization/market-translation');
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    items = translated;
+    if (!stats.skipped) {
+      console.log(`[market-translation] amazon push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
+    }
+  } catch (translationErr) {
+    console.warn('⚠️ Traduction marché ignorée (amazon push):', translationErr?.message);
+  }
+
   if (!items || items.length === 0) {
     const emptyStateRows = await prisma.$queryRawUnsafe(
       `
@@ -14684,6 +14719,18 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
     feedId
   );
   items = await filterItemsForDestinationActivation(items, destinationContext);
+
+  // Traduction par marché (v2) — best-effort.
+  try {
+    const { translateItemsForDestination } = require('./optimization/market-translation');
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    items = translated;
+    if (!stats.skipped) {
+      console.log(`[market-translation] gmc push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
+    }
+  } catch (translationErr) {
+    console.warn('⚠️ Traduction marché ignorée (gmc push):', translationErr?.message);
+  }
 
   if (!items || items.length === 0) {
     return {

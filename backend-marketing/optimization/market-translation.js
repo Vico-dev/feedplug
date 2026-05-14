@@ -209,8 +209,136 @@ async function translateProductForMarket(prisma, product, marketLocale, options 
   };
 }
 
+/**
+ * Traduit un lot d'items d'un export feed pour la destination cible.
+ *
+ * Stratégie v2 (export pipeline) :
+ *   - Skip si pas de destinationContext ou si la langue cible == langue source.
+ *   - Pool parallèle limité (5 concurrent) pour tenir dans la fenêtre Cloud
+ *     Run (timeout 300s). À la première exécution sur un gros catalogue, on
+ *     traduit tout via Gemini (~100 items/sec en pratique). Aux exécutions
+ *     suivantes le cache AICache donne un hit immédiat (gratuit).
+ *   - Best-effort : si une traduction échoue (timeout, quota, JSON invalide),
+ *     on garde la version source pour CET item et on continue. On n'avorte
+ *     jamais l'export entier — mieux vaut un feed à 95% traduit qu'un export
+ *     planté.
+ *   - Garde aussi `descriptionhtml` synchronisé sur la version traduite,
+ *     puisque la plupart des canaux acceptent les deux.
+ *
+ * @param {Object}   prisma             Instance Prisma.
+ * @param {Object[]} items              FeedItems chargés (raw rows ou mappés).
+ * @param {Object}   destinationContext Sortie de getDestinationPushContext(),
+ *                                      doit contenir { localeCode, languageCode,
+ *                                      countryCode } pour activer la traduction.
+ * @param {Object}   [options]
+ * @param {number}   [options.poolSize] Concurrence Gemini (défaut 5).
+ * @param {number}   [options.itemTimeoutMs] Timeout par item (défaut 15000).
+ * @returns {Promise<{ items: Object[], stats: { translated: number, cached: number, failed: number, skipped: boolean, targetLanguage: string|null } }>}
+ */
+async function translateItemsForDestination(prisma, items, destinationContext, options = {}) {
+  const baseStats = { translated: 0, cached: 0, failed: 0, skipped: false, targetLanguage: null };
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { items: items || [], stats: { ...baseStats, skipped: true } };
+  }
+  if (!destinationContext || !destinationContext.languageCode) {
+    return { items, stats: { ...baseStats, skipped: true } };
+  }
+
+  const targetLanguage = String(destinationContext.languageCode || '').toLowerCase().split('-')[0];
+  if (!targetLanguage) {
+    return { items, stats: { ...baseStats, skipped: true } };
+  }
+  // Pour la v1 on assume FR comme langue source — voir detectSourceLanguage().
+  // Si la cible est aussi FR on n'a rien à traduire.
+  if (targetLanguage === detectSourceLanguage(null)) {
+    return { items, stats: { ...baseStats, skipped: true, targetLanguage } };
+  }
+
+  const locale = {
+    localeCode: destinationContext.localeCode,
+    languageCode: destinationContext.languageCode,
+    countryCode: destinationContext.countryCode,
+    // Pour l'export on force le mode 'translate' : même si la locale est en
+    // 'manual' côté config (futur), on a besoin de SOMETHING dans le CSV.
+    translationMode: 'translate',
+  };
+
+  const poolSize = Math.max(1, Math.min(options.poolSize || 5, 20));
+  const itemTimeoutMs = Math.max(2000, options.itemTimeoutMs || 15000);
+
+  const stats = { ...baseStats, targetLanguage };
+  const out = new Array(items.length);
+  let cursor = 0;
+
+  function withTimeout(promise, ms, fallback) {
+    let timer;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(fallback), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      const item = items[idx];
+      const sourceTitle = item?.title || '';
+      const sourceDesc = item?.descriptionText || item?.descriptiontext || '';
+      const sourceDescHtml = item?.descriptionhtml || item?.descriptionHtml || '';
+
+      try {
+        const result = await withTimeout(
+          translateProductForMarket(
+            prisma,
+            { id: item.id, title: sourceTitle, descriptionText: sourceDesc, brand: item.brand || '' },
+            locale,
+            { forceRefresh: false },
+          ),
+          itemTimeoutMs,
+          null,
+        );
+
+        if (!result) {
+          stats.failed += 1;
+          out[idx] = item;
+          continue;
+        }
+
+        if (result.cached) stats.cached += 1;
+        else stats.translated += 1;
+
+        const translatedTitle = result.translated.title || sourceTitle;
+        const translatedDesc = result.translated.descriptionText || sourceDesc;
+
+        out[idx] = {
+          ...item,
+          title: translatedTitle,
+          descriptionText: translatedDesc,
+          descriptiontext: translatedDesc,
+          // Si la source était HTML, on garde le HTML d'origine plutôt
+          // que d'injecter du texte plat (qui casserait le rendu).
+          descriptionhtml: sourceDescHtml || item.descriptionhtml,
+          descriptionHtml: sourceDescHtml || item.descriptionHtml,
+        };
+      } catch (err) {
+        stats.failed += 1;
+        out[idx] = item;
+        if (process.env.DEBUG_MARKET_TRANSLATION) {
+          // eslint-disable-next-line no-console
+          console.warn(`[market-translation] item ${item?.id} failed:`, err?.message);
+        }
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: poolSize }, () => worker()));
+  return { items: out, stats };
+}
+
 module.exports = {
   translateProductForMarket,
+  translateItemsForDestination,
   // exporté pour les tests éventuels
   safeParseTranslation,
 };
