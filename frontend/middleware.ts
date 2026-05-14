@@ -19,6 +19,7 @@ const APP_ROUTES = [
   '/admin',
   '/catalogue',
   '/flux',
+  '/markets',
   '/optimiser',
   '/ia',
   '/rapports',
