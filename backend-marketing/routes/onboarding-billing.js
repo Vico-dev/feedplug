@@ -604,15 +604,47 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
       return next;
     }
 
-    async function updateBillingSubscription(accountId, subscriptionId) {
-      if (!accountId || !prismaReady || !prisma) return;
+    // Idempotence : trace les events déjà traités pour ignorer les redéliveries
+    // Stripe (retry / timeout). Si la table 033 n'est pas encore déployée, on
+    // continue sans dédup plutôt que de bloquer tous les webhooks.
+    let stripeEventStoreAvailable = true;
+
+    async function claimStripeEvent(eventId, eventType) {
+      if (!eventId || !prismaReady || !prisma || !stripeEventStoreAvailable) return true;
       try {
-        await prisma.$executeRawUnsafe(`
-          UPDATE "Billing" SET stripe_subscription_id = $1, updatedat = NOW() WHERE accountid = $2
-        `, subscriptionId || null, accountId);
+        const inserted = await prisma.$executeRawUnsafe(
+          `INSERT INTO stripe_webhook_events (id, type) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
+          eventId, eventType || null
+        );
+        return inserted > 0; // 0 => event déjà traité
       } catch (e) {
-        console.error('Webhook billing subscription update error:', e);
+        if (e?.message && /stripe_webhook_events|42P01|does not exist/i.test(e.message)) {
+          console.warn('Stripe webhook: table d\'idempotence absente (migration 033 non appliquée?) — traitement sans dédup.');
+          stripeEventStoreAvailable = false;
+          return true;
+        }
+        throw e;
       }
+    }
+
+    async function releaseStripeEvent(eventId) {
+      // Sur échec de traitement : retire la trace pour que le retry Stripe ré-exécute.
+      if (!eventId || !prismaReady || !prisma || !stripeEventStoreAvailable) return;
+      try {
+        await prisma.$executeRawUnsafe(`DELETE FROM stripe_webhook_events WHERE id = $1`, eventId);
+      } catch (e) {
+        console.error('Stripe webhook releaseStripeEvent error:', e?.message || e);
+      }
+    }
+
+    async function updateBillingSubscription(accountId, subscriptionId) {
+      if (!accountId) return;
+      if (!prismaReady || !prisma) {
+        throw new Error('Database not ready — Stripe webhook will be retried');
+      }
+      await prisma.$executeRawUnsafe(`
+        UPDATE "Billing" SET stripe_subscription_id = $1, updatedat = NOW() WHERE accountid = $2
+      `, subscriptionId || null, accountId);
     }
 
     async function getAccountBillingWindow(accountId) {
@@ -765,83 +797,94 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
       }
     }
 
-    if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
-      await applySubscriptionState(event.data.object, {});
+    const shouldProcessEvent = await claimStripeEvent(event.id, event.type);
+    if (!shouldProcessEvent) {
+      return res.json({ received: true, duplicate: true });
     }
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const subscription = await retrieveSubscriptionFromEventObject(session);
-      if (subscription) {
-        if (session.payment_status === 'paid') {
-          await applySubscriptionState(subscription, { paymentConfirmed: true });
-        } else {
-          await applySubscriptionState(subscription, { graceUntil: addDays(new Date(), SEPA_GRACE_DAYS) });
-        }
+    try {
+      if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
+        await applySubscriptionState(event.data.object, {});
       }
-    }
 
-    if (event.type === 'checkout.session.async_payment_succeeded') {
-      const session = event.data.object;
-      const subscription = await retrieveSubscriptionFromEventObject(session);
-      if (subscription) {
-        await applySubscriptionState(subscription, { paymentConfirmed: true });
-      }
-    }
-
-    if (event.type === 'checkout.session.async_payment_failed') {
-      const session = event.data.object;
-      const subscription = await retrieveSubscriptionFromEventObject(session);
-      if (subscription) {
-        const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
-        const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : addDays(new Date(), SEPA_GRACE_DAYS);
-        await applySubscriptionState(subscription, {
-          graceUntil: currentGraceUntil,
-          paymentFailed: true,
-        });
-      }
-    }
-
-    if (event.type === 'customer.subscription.deleted') {
-      await applySubscriptionState(event.data.object, { forceInactive: true });
-    }
-
-    if (event.type === 'invoice.paid') {
-      const invoice = event.data.object;
-      if (invoice.subscription) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-          await applySubscriptionState(subscription, { paymentConfirmed: true });
-        } catch (e) {
-          console.error('Webhook invoice.paid retrieve error:', e);
-        }
-      }
-    }
-
-    if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object;
-      if (invoice.subscription) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-          const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
-          const currentStatus = String(accountWindow?.billingstatus || '').toLowerCase();
-          const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : null;
-          const graceStillActive = currentGraceUntil && currentGraceUntil.getTime() > Date.now();
-          if ((currentStatus === 'pending' || currentStatus === 'payment_failed') && graceStillActive) {
-            await applySubscriptionState(subscription, {
-              graceUntil: currentGraceUntil,
-              paymentFailed: true,
-            });
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const subscription = await retrieveSubscriptionFromEventObject(session);
+        if (subscription) {
+          if (session.payment_status === 'paid') {
+            await applySubscriptionState(subscription, { paymentConfirmed: true });
           } else {
-            await applySubscriptionState(subscription, { forceInactive: true });
+            await applySubscriptionState(subscription, { graceUntil: addDays(new Date(), SEPA_GRACE_DAYS) });
           }
-        } catch (e) {
-          console.error('Webhook invoice.payment_failed retrieve error:', e);
         }
       }
-    }
 
-    res.json({ received: true });
+      if (event.type === 'checkout.session.async_payment_succeeded') {
+        const session = event.data.object;
+        const subscription = await retrieveSubscriptionFromEventObject(session);
+        if (subscription) {
+          await applySubscriptionState(subscription, { paymentConfirmed: true });
+        }
+      }
+
+      if (event.type === 'checkout.session.async_payment_failed') {
+        const session = event.data.object;
+        const subscription = await retrieveSubscriptionFromEventObject(session);
+        if (subscription) {
+          const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
+          const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : addDays(new Date(), SEPA_GRACE_DAYS);
+          await applySubscriptionState(subscription, {
+            graceUntil: currentGraceUntil,
+            paymentFailed: true,
+          });
+        }
+      }
+
+      if (event.type === 'customer.subscription.deleted') {
+        await applySubscriptionState(event.data.object, { forceInactive: true });
+      }
+
+      if (event.type === 'invoice.paid') {
+        const invoice = event.data.object;
+        if (invoice.subscription) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+            await applySubscriptionState(subscription, { paymentConfirmed: true });
+          } catch (e) {
+            console.error('Webhook invoice.paid retrieve error:', e);
+          }
+        }
+      }
+
+      if (event.type === 'invoice.payment_failed') {
+        const invoice = event.data.object;
+        if (invoice.subscription) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+            const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
+            const currentStatus = String(accountWindow?.billingstatus || '').toLowerCase();
+            const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : null;
+            const graceStillActive = currentGraceUntil && currentGraceUntil.getTime() > Date.now();
+            if ((currentStatus === 'pending' || currentStatus === 'payment_failed') && graceStillActive) {
+              await applySubscriptionState(subscription, {
+                graceUntil: currentGraceUntil,
+                paymentFailed: true,
+              });
+            } else {
+              await applySubscriptionState(subscription, { forceInactive: true });
+            }
+          } catch (e) {
+            console.error('Webhook invoice.payment_failed retrieve error:', e);
+          }
+        }
+      }
+
+      return res.json({ received: true });
+    } catch (processingError) {
+      await releaseStripeEvent(event.id);
+      console.error('Stripe webhook processing error:', processingError?.message || processingError);
+      return res.status(500).json({ message: 'Webhook processing failed' });
+    }
   });
 }
 

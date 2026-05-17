@@ -512,12 +512,22 @@ const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-only-secret-do-not-use-in-produc
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 if (!JWT_REFRESH_SECRET) {
   if (process.env.NODE_ENV === 'production') {
-    console.warn('WARNING: JWT_REFRESH_SECRET not set in production. Falling back to JWT_SECRET until the dedicated secret is configured.');
+    console.error('FATAL: JWT_REFRESH_SECRET environment variable is required in production (must differ from JWT_SECRET). Shutting down.');
+    process.exit(1);
   } else {
     console.warn('WARNING: JWT_REFRESH_SECRET not set. Using development-only fallback. DO NOT use in production.');
   }
 }
-const EFFECTIVE_JWT_REFRESH_SECRET = JWT_REFRESH_SECRET || JWT_SECRET || 'dev-only-refresh-secret-do-not-use-in-production';
+if (JWT_REFRESH_SECRET && JWT_SECRET && JWT_REFRESH_SECRET === JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_REFRESH_SECRET must be different from JWT_SECRET in production. Shutting down.');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: JWT_REFRESH_SECRET is identical to JWT_SECRET. Use a distinct secret before production.');
+  }
+}
+// Pas de repli sur JWT_SECRET : la séparation access/refresh doit rester effective.
+const EFFECTIVE_JWT_REFRESH_SECRET = JWT_REFRESH_SECRET || 'dev-only-refresh-secret-do-not-use-in-production';
 
 // Rate limit global sur /api/v1 — ne JAMAIS compter les preflights CORS (OPTIONS ou requête avec Access-Control-Request-Method).
 // En production, beaucoup d'appels transitent via le proxy Next/Cloud Run et partagent la même IP vue côté backend.
@@ -974,8 +984,13 @@ app.use(cookieParser());
 app.use('/api/v1', chaos.chaosMiddleware);
 
 async function getAccountAccessState(accountId) {
-  if (!accountId || !prismaReady || !prisma) {
+  if (!accountId) {
+    // Pas de compte rattaché : evaluateAuthenticatedAccess autorise déjà ce cas.
     return computeAccountAccessState({});
+  }
+  if (!prismaReady || !prisma) {
+    // Base indisponible : état indéterminé => fail-closed (503) côté évaluation.
+    return computeAccountAccessState({ indeterminate: true });
   }
 
   try {
@@ -1002,10 +1017,12 @@ async function getAccountAccessState(accountId) {
         });
       } catch (fallbackErr) {
         console.warn('getAccountAccessState fallback error:', fallbackErr?.message);
+        return computeAccountAccessState({ indeterminate: true });
       }
     }
     console.warn('getAccountAccessState error:', err?.message);
-    return computeAccountAccessState({});
+    // Erreur DB non liée à un schéma obsolète : état indéterminé => fail-closed.
+    return computeAccountAccessState({ indeterminate: true });
   }
 }
 
@@ -15800,6 +15817,25 @@ app.use((err, req, res, next) => {
 // Sentry : capture des erreurs Express (après toutes les routes)
 const Sentry = require('@sentry/node');
 Sentry.setupExpressErrorHandler(app);
+
+// Gestionnaire d'erreurs terminal : réponse JSON normalisée, sans stack trace.
+// Évite que le handler par défaut d'Express ne renvoie err.stack hors production.
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  const rawStatus = Number.isInteger(err?.status)
+    ? err.status
+    : (Number.isInteger(err?.statusCode) ? err.statusCode : 500);
+  const status = rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+  const body = { message: 'Erreur interne du serveur' };
+  // Pour les erreurs client (4xx) explicitement exposables (ex. body-parser),
+  // on conserve le message ; jamais pour les 5xx.
+  if (status < 500 && err?.expose === true && typeof err?.message === 'string' && err.message) {
+    body.message = err.message;
+  }
+  res.status(status).json(body);
+});
 
 console.log(`🚀 Backend attaché (port ${port})`);
 console.log(`🌍 CORS configuré pour: ${allowedOrigins.join(', ')}`);

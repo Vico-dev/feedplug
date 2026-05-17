@@ -11,6 +11,7 @@
 
 const crypto = require('crypto');
 const { Storage } = require('@google-cloud/storage');
+const { safeFetch } = require('../lib/safe-url');
 
 /** Ids des modèles Imagen (edit = remplacement de fond). Génération texte→image = autre API. */
 const IMAGEN_EDIT_MODEL = 'imagen-3.0-capability-001';
@@ -128,10 +129,9 @@ async function downloadImageAsBase64(url, options = {}) {
     headers['Referer'] = referer.endsWith('/') ? referer : referer + '/';
     headers['Origin'] = referer.endsWith('/') ? referer.slice(0, -1) : referer;
   }
-  const response = await fetch(url, {
-    headers,
-    redirect: 'follow',
-  });
+  // safeFetch : garde anti-SSRF (schéma http/https, rejet des IP internes,
+  // redirections revalidées saut par saut).
+  const response = await safeFetch(url, { headers });
   if (!response.ok) {
     throw new Error(`Image inaccessible (${response.status}). Vérifiez que l'URL est publique ou que le serveur autorise les téléchargements.`);
   }

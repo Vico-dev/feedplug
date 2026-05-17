@@ -17,7 +17,7 @@ function parseOptionalDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function computeAccountAccessState({ trialEndsAt, billingStatus, paymentGraceUntil, now = Date.now() }) {
+function computeAccountAccessState({ trialEndsAt, billingStatus, paymentGraceUntil, indeterminate = false, now = Date.now() }) {
   const normalizedTrialEndsAt = parseOptionalDate(trialEndsAt);
   const normalizedBillingStatus = normalizeBillingStatus(billingStatus);
   const normalizedPaymentGraceUntil = parseOptionalDate(paymentGraceUntil);
@@ -32,6 +32,9 @@ function computeAccountAccessState({ trialEndsAt, billingStatus, paymentGraceUnt
     billingStatus: normalizedBillingStatus,
     paymentGraceUntil: normalizedPaymentGraceUntil,
     isBlocked,
+    // true => l'état d'abonnement n'a pas pu être déterminé (DB indisponible).
+    // On ne doit pas accorder l'accès dans ce cas (fail-closed).
+    indeterminate: !!indeterminate,
   };
 }
 
@@ -71,6 +74,18 @@ function buildBillingRequiredResponse(accessState) {
 function evaluateAuthenticatedAccess({ accountId, path, isStaff, accessState }) {
   if (!accountId || isStaff || isBillingExemptPath(path)) {
     return { allowed: true };
+  }
+  // Fail-closed : si l'état d'abonnement n'a pas pu être lu (incident DB),
+  // on refuse temporairement l'accès plutôt que de l'ouvrir à tous.
+  if (accessState?.indeterminate) {
+    return {
+      allowed: false,
+      status: 503,
+      body: {
+        message: 'Vérification de votre abonnement temporairement indisponible. Réessayez dans un instant.',
+        code: 'BILLING_CHECK_UNAVAILABLE',
+      },
+    };
   }
   if (!accessState?.isBlocked) {
     return { allowed: true };
