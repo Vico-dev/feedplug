@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FluxGuide } from "@/components/onboarding/contextual-guide";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import Link from "next/link";
-import { getFeeds, getFeedAudit, exportFeedAsCsv, exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
+import { getFeeds, getFeedAudit, updateFeedAutoPush, exportFeedAsCsv,exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
 import { getMarkets, type Market } from "@/lib/services/markets.service";
 import { CreateExportModal } from "@/components/forms/create-export-modal";
 import { usePlanCapabilities } from "@/hooks/use-plan-capabilities";
@@ -84,6 +84,7 @@ export default function FluxPage() {
   const { canAddChannel, channelsCount, maxChannels } = usePlanCapabilities();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [togglingAutoPushId, setTogglingAutoPushId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -428,6 +429,28 @@ export default function FluxPage() {
       showToast(e instanceof Error ? e.message : 'Export impossible', 'error');
     } finally {
       setExportingId(null);
+    }
+  };
+
+  const handleToggleAutoPush = async (feedId: string, current: boolean) => {
+    const next = !current;
+    setTogglingAutoPushId(feedId);
+    // Mise à jour optimiste
+    setFeeds((prev) => prev.map((f) => (f.id === feedId ? { ...f, autoPushEnabled: next } : f)));
+    try {
+      await updateFeedAutoPush(feedId, next);
+      showToast(
+        next
+          ? 'Export automatique activé : ce flux sera poussé vers vos canaux connectés une fois par jour.'
+          : 'Export automatique désactivé.',
+        'success'
+      );
+    } catch (e) {
+      // Rollback en cas d'échec
+      setFeeds((prev) => prev.map((f) => (f.id === feedId ? { ...f, autoPushEnabled: current } : f)));
+      showToast(e instanceof Error ? e.message : 'Modification impossible', 'error');
+    } finally {
+      setTogglingAutoPushId(null);
     }
   };
 
@@ -1346,6 +1369,24 @@ export default function FluxPage() {
                       <span style={{ padding: '5px 10px', borderRadius: '999px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-2)', fontSize: '12px', fontWeight: 500 }}>
                         {formatFrequency(feed.frequency)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAutoPush(feed.id, feed.autoPushEnabled === true)}
+                        disabled={togglingAutoPushId === feed.id}
+                        title="Pousse automatiquement ce flux vers vos canaux connectés (GMC / Amazon) une fois par jour."
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '999px',
+                          backgroundColor: feed.autoPushEnabled ? 'var(--success-bg)' : 'var(--paper-2)',
+                          border: `1px solid ${feed.autoPushEnabled ? '#bbf7d0' : 'var(--line)'}`,
+                          color: feed.autoPushEnabled ? 'var(--success)' : 'var(--ink-3)',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          cursor: togglingAutoPushId === feed.id ? 'wait' : 'pointer',
+                        }}
+                      >
+                        {feed.autoPushEnabled ? '✓ Synchro auto' : 'Synchro auto'}
+                      </button>
                     </div>
                   </div>
                 </div>

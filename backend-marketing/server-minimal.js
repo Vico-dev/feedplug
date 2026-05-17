@@ -2510,8 +2510,8 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
   try {
     if (await ensurePrismaReady()) {
       // Utiliser une requête raw pour éviter les problèmes d'enums
-      const feeds = await prisma.$queryRawUnsafe(`
-        SELECT 
+      const baseFeedsQuery = `
+        SELECT
           f.id,
           f.name,
           f.sourceid,
@@ -2519,6 +2519,7 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
           f.status,
           f.mappingjson,
           f.dedupstrategy,
+          f.autopush_enabled,
           f.createdat,
           f.updatedat,
           json_build_object(
@@ -2557,7 +2558,21 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
         ) ir ON TRUE
         WHERE f.accountid = $1::text
         ORDER BY f.createdat DESC
-      `, req.accountId);
+      `;
+      let feeds;
+      try {
+        feeds = await prisma.$queryRawUnsafe(baseFeedsQuery, req.accountId);
+      } catch (err) {
+        // Tolère l'absence de la colonne autopush_enabled (migration 034 non appliquée).
+        if (err?.code === 'P2010' || /autopush_enabled/i.test(err?.message || '')) {
+          feeds = await prisma.$queryRawUnsafe(
+            baseFeedsQuery.replace('f.autopush_enabled', 'false AS autopush_enabled'),
+            req.accountId
+          );
+        } else {
+          throw err;
+        }
+      }
       // Normaliser les noms de colonnes pour le frontend
       const normalizedFeeds = feeds.map(feed => ({
         id: feed.id,
@@ -2569,6 +2584,7 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
         mappingJson: feed.mappingjson,
         mappingjson: feed.mappingjson,
         dedupStrategy: feed.dedupstrategy,
+        autoPushEnabled: feed.autopush_enabled === true,
         createdAt: feed.createdat,
         updatedAt: feed.updatedat,
         latestRun: feed.latestRun?.finishedAt || feed.latestRun?.status ? feed.latestRun : null,
@@ -2812,7 +2828,7 @@ app.get('/api/v1/ingestion/fields', async (req, res) => {
 app.put('/api/v1/ingestion/feeds/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, frequency, status, mappingJson, dedupStrategy } = req.body || {};
+    const { name, frequency, status, mappingJson, dedupStrategy, autoPushEnabled } = req.body || {};
     
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
@@ -2865,7 +2881,12 @@ app.put('/api/v1/ingestion/feeds/:id', async (req, res) => {
       values.push(dedupStrategy);
       paramIndex++;
     }
-    
+    if (autoPushEnabled !== undefined) {
+      updates.push(`autopush_enabled = $${paramIndex}::boolean`);
+      values.push(!!autoPushEnabled);
+      paramIndex++;
+    }
+
     // Toujours mettre à jour updatedAt
     updates.push(`updatedat = $${paramIndex}::timestamptz`);
     values.push(now);
@@ -3623,6 +3644,99 @@ app.delete('/api/v1/ingestion/enrichment-sources/:id', async (req, res) => {
 
 // Endpoint pour exécuter automatiquement les feeds selon leur horaire programmé
 // Cet endpoint est appelé par Cloud Scheduler toutes les heures
+// Exports planifiés : pousse automatiquement vers GMC/Amazon les flux dont
+// l'auto-push est activé (opt-in `autopush_enabled`). Déclenché par le job
+// Cloud Scheduler feedplug-scheduled-exports, protégé par SCHEDULER_SECRET.
+app.post('/api/v1/exports/scheduled-runs', async (req, res) => {
+  try {
+    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
+      ? process.env.SCHEDULER_SECRET.trim()
+      : '';
+    if (!schedulerSecret) {
+      return res.status(503).json({ message: 'Scheduler non configuré' });
+    }
+    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+    const providedSecret = typeof rawProvidedSecret === 'string'
+      ? rawProvidedSecret.replace('Bearer ', '').trim()
+      : '';
+    if (providedSecret !== schedulerSecret) {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Prisma non disponible' });
+    }
+
+    // On évite de re-pousser un flux poussé il y a moins de 23 h (le job tourne
+    // toutes les heures ; cela garantit ~1 push/jour et absorbe les retards).
+    const MIN_HOURS_BETWEEN_PUSHES = 23;
+
+    let feeds;
+    try {
+      feeds = await prisma.$queryRawUnsafe(`
+        SELECT id, name, accountid
+        FROM "Feed"
+        WHERE status = 'ACTIVE' AND autopush_enabled = true
+      `);
+    } catch (err) {
+      if (err?.code === 'P2010' || /autopush_enabled/i.test(err?.message || '')) {
+        return res.status(503).json({ message: 'Migration 034 (autopush_enabled) non appliquée.' });
+      }
+      throw err;
+    }
+
+    const results = { checked: feeds.length, executed: 0, skipped: 0, errors: [] };
+
+    for (const feed of feeds) {
+      try {
+        // Plateformes connectées (actives) du compte propriétaire du flux.
+        const conns = await prisma.$queryRawUnsafe(
+          `SELECT DISTINCT platform FROM "PlatformConnection"
+           WHERE accountid = $1::text AND status = 'active'`,
+          feed.accountid
+        );
+        const targets = (conns || [])
+          .map((c) => String(c.platform || '').toLowerCase())
+          .filter((p) => p === 'gmc' || p === 'amazon');
+        if (targets.length === 0) {
+          results.skipped++;
+          continue;
+        }
+
+        for (const platform of targets) {
+          // Déduplication : dernier export de ce flux sur cette plateforme.
+          const lastRows = await prisma.$queryRawUnsafe(
+            `SELECT MAX(createdat) AS last FROM "ExportLog"
+             WHERE feedid = $1::text AND platform = $2::text`,
+            feed.id, platform
+          );
+          const lastAt = lastRows?.[0]?.last ? new Date(lastRows[0].last) : null;
+          if (lastAt && (Date.now() - lastAt.getTime()) / 3600000 < MIN_HOURS_BETWEEN_PUSHES) {
+            results.skipped++;
+            continue;
+          }
+
+          console.log(`🚀 Auto-push ${platform} du flux ${feed.name} (${feed.id})`);
+          if (platform === 'gmc') {
+            await executeGmcPush({ accountId: feed.accountid, userId: null, feedId: feed.id });
+          } else {
+            await executeAmazonPush({ accountId: feed.accountid, feedId: feed.id });
+          }
+          results.executed++;
+        }
+      } catch (err) {
+        console.error(`Auto-push échoué pour le flux ${feed.id}:`, err?.message || err);
+        results.errors.push({ feedId: feed.id, message: err?.message || String(err) });
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Scheduled exports error:', error);
+    res.status(500).json({ message: 'Erreur lors des exports planifiés' });
+  }
+});
+
 app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
   try {
     const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'

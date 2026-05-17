@@ -75,6 +75,7 @@ MIGRATIONS=(
   "031_shared_rate_limits.sql"
   "032_markets_market_runtime.sql"
   "033_stripe_webhook_events.sql"
+  "034_feed_autopush.sql"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

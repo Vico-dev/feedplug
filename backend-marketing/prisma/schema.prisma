@@ -120,6 +120,7 @@ model Feed {
   status          FeedStatus    @default(ACTIVE)
   mappingJson     Json          @map("mappingjson")
   dedupStrategy   String        @default("guid_or_url") @map("dedupstrategy")
+  autoPushEnabled Boolean       @default(false) @map("autopush_enabled")
   accountId       String        @default("default-account") @map("accountid")
   createdAt       DateTime      @default(now()) @map("createdat")
   updatedAt       DateTime      @updatedAt @map("updatedat")

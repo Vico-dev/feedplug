@@ -12,6 +12,9 @@ SCHEDULE="0 * * * *"  # Toutes les heures à la minute 0
 MARKETING_SERVICE_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/marketing/nurture-runs"
 MARKETING_JOB_NAME="feedplug-marketing-nurture"
 MARKETING_SCHEDULE="15 * * * *"  # Toutes les heures à la minute 15
+EXPORTS_SERVICE_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/exports/scheduled-runs"
+EXPORTS_JOB_NAME="feedplug-scheduled-exports"
+EXPORTS_SCHEDULE="30 * * * *"  # Toutes les heures à la minute 30
 TIMEZONE="Europe/Paris"
 SCHEDULER_SECRET_NAME="scheduler-secret"
 
@@ -90,6 +93,34 @@ else
 fi
 
 echo "✅ Job marketing configuré avec succès!"
+
+if $GCLOUD_CMD scheduler jobs describe $EXPORTS_JOB_NAME --location=$REGION --project=$PROJECT_ID &> /dev/null; then
+    echo "📝 Mise à jour du job exports planifiés existant..."
+    $GCLOUD_CMD scheduler jobs update http $EXPORTS_JOB_NAME \
+        --location=$REGION \
+        --schedule="$EXPORTS_SCHEDULE" \
+        --uri="$EXPORTS_SERVICE_URL" \
+        --http-method=POST \
+        --update-headers="Content-Type=application/json,x-scheduler-secret=$SCHEDULER_SECRET" \
+        --time-zone="$TIMEZONE" \
+        --attempt-deadline=600s \
+        --description="Push automatique quotidien des flux vers GMC/Amazon" \
+        --project=$PROJECT_ID
+else
+    echo "✨ Création du job exports planifiés..."
+    $GCLOUD_CMD scheduler jobs create http $EXPORTS_JOB_NAME \
+        --location=$REGION \
+        --schedule="$EXPORTS_SCHEDULE" \
+        --uri="$EXPORTS_SERVICE_URL" \
+        --http-method=POST \
+        --headers="Content-Type=application/json,x-scheduler-secret=$SCHEDULER_SECRET" \
+        --time-zone="$TIMEZONE" \
+        --attempt-deadline=600s \
+        --description="Push automatique quotidien des flux vers GMC/Amazon" \
+        --project=$PROJECT_ID
+fi
+
+echo "✅ Job exports planifiés configuré avec succès!"
 echo ""
 echo "📋 Détails du job:"
 echo "   - Nom: $JOB_NAME"
@@ -99,7 +130,11 @@ echo "   - URL: $SERVICE_URL"
 echo "   - Job marketing: $MARKETING_JOB_NAME"
 echo "   - Horaire marketing: $MARKETING_SCHEDULE"
 echo "   - URL marketing: $MARKETING_SERVICE_URL"
+echo "   - Job exports: $EXPORTS_JOB_NAME"
+echo "   - Horaire exports: $EXPORTS_SCHEDULE"
+echo "   - URL exports: $EXPORTS_SERVICE_URL"
 echo ""
 echo "💡 Pour tester le job manuellement:"
 echo "   $GCLOUD_CMD scheduler jobs run $JOB_NAME --location=$REGION --project=$PROJECT_ID"
 echo "   $GCLOUD_CMD scheduler jobs run $MARKETING_JOB_NAME --location=$REGION --project=$PROJECT_ID"
+echo "   $GCLOUD_CMD scheduler jobs run $EXPORTS_JOB_NAME --location=$REGION --project=$PROJECT_ID"

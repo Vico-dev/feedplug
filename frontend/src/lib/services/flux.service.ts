@@ -19,6 +19,7 @@ export interface Feed {
   sourceId: string;
   frequency: string;
   status: string;
+  autoPushEnabled?: boolean;
   mappingJson?: Record<string, string>;
   latestRun?: {
     status?: string | null;
@@ -73,6 +74,11 @@ export interface FeedAudit {
 export async function getFeeds(): Promise<Feed[]> {
   const res = await apiClient.get<Feed[]>('/ingestion/feeds');
   return res.data ?? [];
+}
+
+/** Active/désactive l'export automatique quotidien du flux vers les canaux connectés. */
+export async function updateFeedAutoPush(feedId: string, enabled: boolean): Promise<void> {
+  await apiClient.put(`/ingestion/feeds/${feedId}`, { autoPushEnabled: enabled });
 }
 
 export async function getFeedAudit(feedId: string): Promise<FeedAudit> {

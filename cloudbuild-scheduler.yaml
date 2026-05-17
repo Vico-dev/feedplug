@@ -43,5 +43,24 @@ steps:
           --time-zone='Europe/Paris' \
           --attempt-deadline=600s \
           --description='Envoi automatique des relances marketing FeedPlug'
+
+        gcloud scheduler jobs create http feedplug-scheduled-exports \
+          --location=europe-west1 \
+          --schedule='30 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/exports/scheduled-runs' \
+          --http-method=POST \
+          --headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Push automatique quotidien des flux vers GMC/Amazon' \
+          || gcloud scheduler jobs update http feedplug-scheduled-exports \
+          --location=europe-west1 \
+          --schedule='30 * * * *' \
+          --uri='https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/exports/scheduled-runs' \
+          --http-method=POST \
+          --update-headers="Content-Type=application/json,x-scheduler-secret=$$SECRET" \
+          --time-zone='Europe/Paris' \
+          --attempt-deadline=600s \
+          --description='Push automatique quotidien des flux vers GMC/Amazon'
     id: 'configure-scheduler-job'
     waitFor: ['-']
