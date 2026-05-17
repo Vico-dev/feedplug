@@ -9439,26 +9439,23 @@ app.put('/api/v1/account/company-info', authenticateToken, async (req, res) => {
     if (!accountId) return res.status(403).json({ message: 'Compte non associé' });
     const body = req.body || {};
     const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : null;
-    const phoneE164 = typeof body.phoneE164 === 'string' ? body.phoneE164.trim() : null;
-    const billingEmail = typeof body.billingEmail === 'string' ? body.billingEmail.trim() : null;
-    if (!companyName || !phoneE164 || !billingEmail) {
-      return res.status(400).json({ message: 'Nom de l\'entreprise, téléphone et email de facturation sont requis.' });
+    if (!companyName) {
+      return res.status(400).json({ message: 'Le nom de l\'entreprise est requis.' });
     }
+    // Activation : seul le nom de l'entreprise est requis à l'onboarding.
+    // Téléphone, TVA, SIREN et adresse sont optionnels ici — les informations
+    // de facturation complètes sont collectées au moment du checkout.
+    const phoneE164 = typeof body.phoneE164 === 'string' ? body.phoneE164.trim() || null : null;
+    const billingEmail = typeof body.billingEmail === 'string' ? body.billingEmail.trim() || null : null;
     const vatNumber = typeof body.vatNumber === 'string' ? body.vatNumber.trim() || null : null;
     const siren = typeof body.siren === 'string' ? body.siren.trim().replace(/\s/g, '') || null : null;
-    if (!vatNumber) {
-      return res.status(400).json({ message: 'Le numéro de TVA intracommunautaire est requis.' });
-    }
-    if (!siren || siren.length !== 9) {
-      return res.status(400).json({ message: 'Le SIREN est requis (9 chiffres).' });
+    if (siren && siren.length !== 9) {
+      return res.status(400).json({ message: 'Le SIREN doit comporter 9 chiffres.' });
     }
     const addressLine1 = typeof body.addressLine1 === 'string' ? body.addressLine1.trim() || null : null;
     const postalCode = typeof body.postalCode === 'string' ? body.postalCode.trim() || null : null;
     const city = typeof body.city === 'string' ? body.city.trim() || null : null;
     const country = typeof body.country === 'string' ? body.country.trim() || 'FR' : 'FR';
-    if (!addressLine1 || !postalCode || !city || !country) {
-      return res.status(400).json({ message: 'L\'adresse de facturation est obligatoire (adresse, code postal, ville, pays).' });
-    }
     await prisma.$executeRawUnsafe(`
       UPDATE "Account" SET companyname = $1::text, phonee164 = $2::text, billingemail = $3::text, updatedat = NOW()
       WHERE id = $4::text
