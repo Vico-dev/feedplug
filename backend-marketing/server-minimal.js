@@ -283,6 +283,7 @@ const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const { createSharedAbuseProtection } = require('./lib/shared-abuse-store');
 const { assertColumnsExist, assertTableExists } = require('./lib/schema-guards');
 const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quota');
+const { createNotification } = require('./lib/notifications');
 
 // Soft cap IA : enregistre la consommation et alerte (Sentry) à 80 % / 100 %.
 // Fire-and-forget — ne bloque jamais la réponse IA, ne lève jamais.
@@ -3662,6 +3663,85 @@ app.delete('/api/v1/ingestion/enrichment-sources/:id', async (req, res) => {
 
 // Endpoint pour exécuter automatiquement les feeds selon leur horaire programmé
 // Cet endpoint est appelé par Cloud Scheduler toutes les heures
+// ===== Centre de notifications in-app =====
+app.use('/api/v1/notifications', requireAuth);
+
+app.get('/api/v1/notifications', async (req, res) => {
+  // Dégradation douce : si la table n'existe pas encore (migration 036 non
+  // appliquée) ou erreur DB, on renvoie une liste vide plutôt qu'un 500.
+  try {
+    if (!prismaReady || !prisma) return res.json({ notifications: [], unreadCount: 0 });
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT id, type, priority, title, message, actionurl, read, createdat
+       FROM notification WHERE accountid = $1::text
+       ORDER BY createdat DESC LIMIT 50`,
+      req.accountId
+    );
+    const unread = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS c FROM notification WHERE accountid = $1::text AND read = false`,
+      req.accountId
+    );
+    res.json({
+      notifications: (rows || []).map((n) => ({
+        id: n.id,
+        type: n.type,
+        priority: n.priority,
+        title: n.title,
+        message: n.message,
+        actionUrl: n.actionurl || null,
+        read: n.read === true,
+        timestamp: n.createdat,
+      })),
+      unreadCount: unread?.[0]?.c ?? 0,
+    });
+  } catch (e) {
+    console.warn('GET notifications error (table absente?):', e?.message);
+    res.json({ notifications: [], unreadCount: 0 });
+  }
+});
+
+app.post('/api/v1/notifications/:id/read', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `UPDATE notification SET read = true WHERE id = $1::text AND accountid = $2::text`,
+      req.params.id, req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Mark notification read error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+app.post('/api/v1/notifications/read-all', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `UPDATE notification SET read = true WHERE accountid = $1::text AND read = false`,
+      req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Mark all notifications read error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+app.delete('/api/v1/notifications/:id', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM notification WHERE id = $1::text AND accountid = $2::text`,
+      req.params.id, req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Delete notification error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
 // Exports planifiés : pousse automatiquement vers GMC/Amazon les flux dont
 // l'auto-push est activé (opt-in `autopush_enabled`). Déclenché par le job
 // Cloud Scheduler feedplug-scheduled-exports, protégé par SCHEDULER_SECRET.
@@ -3745,6 +3825,21 @@ app.post('/api/v1/exports/scheduled-runs', async (req, res) => {
       } catch (err) {
         console.error(`Auto-push échoué pour le flux ${feed.id}:`, err?.message || err);
         results.errors.push({ feedId: feed.id, message: err?.message || String(err) });
+        createNotification(prisma, feed.accountid, {
+          type: 'error',
+          priority: 'high',
+          title: `Échec de l'export automatique — ${feed.name || 'flux'}`,
+          message: `Le push automatique du flux a échoué : ${err?.message || 'erreur inconnue'}.`,
+          actionUrl: '/flux',
+        }).catch(() => {});
+        // Email d'alerte échec d'export
+        try {
+          const accountEmails = await getAccountEmails(feed.accountid);
+          const context = `Export automatique — ${feed.name || feed.id}`;
+          for (const email of accountEmails.slice(0, 3)) {
+            sendErrorEmail(email, context, err?.message || String(err)).catch((e) => console.warn('Email erreur export (scheduler) non envoyé:', e.message));
+          }
+        } catch (_) {}
       }
     }
 
@@ -4065,6 +4160,14 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
           feedName: feed.feed_name,
           error: error.message
         });
+        // Notification in-app "Échec d'import planifié"
+        createNotification(prisma, feed.accountid, {
+          type: 'error',
+          priority: 'high',
+          title: `Échec de la synchronisation — ${feed.feed_name || 'flux'}`,
+          message: `L'import automatique du flux a échoué : ${error?.message || 'erreur inconnue'}.`,
+          actionUrl: '/sources',
+        }).catch(() => {});
         // Email "Erreur de sync" pour le run planifié
         const accountEmails = await getAccountEmails(feed.accountid);
         const context = `Synchronisation planifiée — ${feed.feed_name || feed.feed_id}`;

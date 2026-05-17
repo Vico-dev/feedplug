@@ -77,6 +77,7 @@ MIGRATIONS=(
   "033_stripe_webhook_events.sql"
   "034_feed_autopush.sql"
   "035_ai_usage.sql"
+  "036_notifications.sql"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
