@@ -10229,6 +10229,23 @@ app.post('/api/v1/markets/:marketId/channels', authenticateToken, async (req, re
     if (!candidate.platformKey || !MARKET_PLATFORM_OPTIONS.includes(candidate.platformKey)) {
       return res.status(400).json({ message: 'platformKey invalide pour ce marché.' });
     }
+
+    // Quota canaux : un nouveau canal de marché compte dans max_channels au
+    // même titre qu'un canal d'export (compteur unifié).
+    const existingChannelRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "MarketChannel" WHERE marketid = $1::text AND platformkey = $2::text LIMIT 1`,
+      marketId,
+      candidate.platformKey
+    );
+    const isNewChannel = !existingChannelRows?.[0];
+    if (isNewChannel) {
+      const currentChannels = await countChannelsForAccount(prisma, accountId);
+      const channelLimit = await checkChannelLimit(prisma, accountId, currentChannels);
+      if (!channelLimit.allowed) {
+        return res.status(403).json({ code: 'PLAN_LIMIT', message: channelLimit.message });
+      }
+    }
+
     const platformAccounts = await listPlatformAccountsForAccount(accountId);
     await upsertMarketChannels(marketRow, [candidate], platformAccounts);
     await syncDestinationsForMarket(accountId, marketId);
@@ -15840,5 +15857,25 @@ app.use((err, req, res, next) => {
 console.log(`🚀 Backend attaché (port ${port})`);
 console.log(`🌍 CORS configuré pour: ${allowedOrigins.join(', ')}`);
 console.log('📊 Stockage marketing persisté en base (fallback mémoire désactivé)');
+
+// Contrôle de configuration : alerter si des secrets webhook manquent. Sans eux,
+// les routes correspondantes ne sont pas enregistrées et l'app démarre "saine"
+// alors que la facturation / les webhooks Shopify ne se synchronisent plus.
+{
+  const missingWebhookSecrets = [];
+  if (!process.env.STRIPE_SECRET_KEY) missingWebhookSecrets.push('STRIPE_SECRET_KEY');
+  if (!process.env.STRIPE_WEBHOOK_SECRET) missingWebhookSecrets.push('STRIPE_WEBHOOK_SECRET');
+  if (!SHOPIFY_API_SECRET) missingWebhookSecrets.push('SHOPIFY_API_SECRET');
+  if (missingWebhookSecrets.length > 0) {
+    const detail = missingWebhookSecrets.join(', ');
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`⛔ CONFIG WEBHOOK INCOMPLÈTE en production: ${detail} manquant(s). Les webhooks associés ne sont PAS enregistrés (facturation Stripe / conformité Shopify non synchronisées).`);
+    } else {
+      console.warn(`⚠️  Secrets webhook manquants: ${detail}. Webhooks associés désactivés (attendu hors production).`);
+    }
+  } else {
+    console.log('✅ Secrets webhook (Stripe + Shopify) présents.');
+  }
+}
 
 } // fin run()

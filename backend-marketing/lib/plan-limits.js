@@ -179,16 +179,33 @@ async function getAccountMaxChannels(prisma, accountId) {
  */
 async function countChannelsForAccount(prisma, accountId) {
   if (!prisma || !accountId) return 0;
+  // Compteur unifié : canaux d'export (ExportChannel, ex. Amazon) + canaux de
+  // marché actifs (MarketChannel, ex. GMC par marché). Les deux comptent dans
+  // le même quota max_channels.
+  let exportChannels = 0;
+  let marketChannels = 0;
   try {
     const rows = await prisma.$queryRawUnsafe(
       `SELECT COUNT(*)::int AS c FROM "ExportChannel" WHERE accountid = $1::text AND isactive = true`,
       accountId
     );
-    return rows?.[0]?.c ?? 0;
+    exportChannels = rows?.[0]?.c ?? 0;
   } catch (e) {
-    console.warn('countChannelsForAccount error:', e?.message);
-    return 0;
+    console.warn('countChannelsForAccount ExportChannel error:', e?.message);
   }
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS c
+       FROM "MarketChannel" mc
+       JOIN "Market" m ON m.id = mc.marketid
+       WHERE m.accountid = $1::text AND mc.isenabled = true`,
+      accountId
+    );
+    marketChannels = rows?.[0]?.c ?? 0;
+  } catch (e) {
+    console.warn('countChannelsForAccount MarketChannel error:', e?.message);
+  }
+  return exportChannels + marketChannels;
 }
 
 /**

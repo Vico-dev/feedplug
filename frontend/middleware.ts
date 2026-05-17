@@ -148,6 +148,19 @@ export function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
+    // Gate auth côté serveur sur les routes protégées : sans cookie de session,
+    // on redirige vers /login avant de servir la page (évite l'affichage fugace
+    // d'une page protégée tant que le contrôle JS n'a pas tourné). La validation
+    // réelle du token reste faite par le backend sur chaque appel API.
+    const hasAuthCookie =
+      Boolean(request.cookies.get(ACCESS_COOKIE)?.value) ||
+      Boolean(request.cookies.get(REFRESH_COOKIE)?.value);
+    if (!hasAuthCookie) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${localePrefix}/login`;
+      return NextResponse.redirect(url, 307);
+    }
+
     return intlMiddleware(request);
   }
 
