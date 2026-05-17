@@ -294,6 +294,7 @@ export default function OptimiserPage() {
   const [creatingAbTest, setCreatingAbTest] = useState(false);
   const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ used: number; softCap: number; percent: number } | null>(null);
 
   const previewMatches = useMemo(() => previewData?.preview.filter(item => item.matches) || [], [previewData]);
   const previewedRule = useMemo(() => rules.find(rule => rule.id === previewRuleId) || null, [rules, previewRuleId]);
@@ -321,6 +322,16 @@ export default function OptimiserPage() {
       const list = await getFeeds();
       setFeeds(list.map(feed => ({ id: feed.id, name: feed.name || feed.id })));
     } catch { setFeeds([]); }
+  }, []);
+
+  // Compteur de consommation IA du mois (soft cap — informatif, non bloquant).
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{ used: number; softCap: number; percent: number }>("/enrichment/ai-usage")
+      .then((res) => { if (!cancelled) setAiUsage(res.data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const fetchMarkets = useCallback(async () => {
@@ -641,7 +652,26 @@ export default function OptimiserPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="Optimisation catalogue" subtitle="Transformez, enrichissez et testez vos produits pour chaque canal." />
+      <PageHeader
+        title="Optimisation catalogue"
+        subtitle="Transformez, enrichissez et testez vos produits pour chaque canal."
+        actions={aiUsage ? (
+          <span
+            title={`Optimisations IA utilisées ce mois-ci — plafond de référence ${aiUsage.softCap}/mois`}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '999px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: aiUsage.percent >= 100 ? 'var(--danger-bg)' : aiUsage.percent >= 80 ? 'var(--warning-soft)' : 'var(--paper-2)',
+              border: `1px solid ${aiUsage.percent >= 100 ? '#fecaca' : aiUsage.percent >= 80 ? 'var(--warning)' : 'var(--line)'}`,
+              color: aiUsage.percent >= 100 ? 'var(--danger)' : aiUsage.percent >= 80 ? 'var(--warning)' : 'var(--ink-2)',
+            }}
+          >
+            IA ce mois : {aiUsage.used} / {aiUsage.softCap}
+          </span>
+        ) : undefined}
+      />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--app-border)', paddingBottom: 0 }}>

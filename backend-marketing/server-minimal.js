@@ -282,6 +282,24 @@ const { syncMetaAdsPerformance } = require('./performance/sync-meta-ads');
 const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const { createSharedAbuseProtection } = require('./lib/shared-abuse-store');
 const { assertColumnsExist, assertTableExists } = require('./lib/schema-guards');
+const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quota');
+
+// Soft cap IA : enregistre la consommation et alerte (Sentry) à 80 % / 100 %.
+// Fire-and-forget — ne bloque jamais la réponse IA, ne lève jamais.
+function trackAiUsage(accountId, count = 1) {
+  if (!prismaReady || !prisma || !accountId) return;
+  recordAiUsage(prisma, accountId, count)
+    .then((r) => {
+      if (r && r.threshold) {
+        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence (${r.used}/${r.softCap}, période ${r.period}).`;
+        console.warn('⚠️  ' + msg);
+        try {
+          require('@sentry/node').captureMessage(msg, r.threshold >= 100 ? 'warning' : 'info');
+        } catch (_) {}
+      }
+    })
+    .catch((e) => console.warn('trackAiUsage error:', e?.message));
+}
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SECRET_ENCRYPTION_KEY = process.env.FEEDPLUG_SECRET_ENCRYPTION_KEY || process.env.SECRET_ENCRYPTION_KEY || process.env.PLATFORM_SECRET_ENCRYPTION_KEY || '';
@@ -12141,6 +12159,21 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
 });
 
 // Optimiser le titre d'un produit (optionnel: savePlatform = gmc|meta|amazon|chatgpt pour sauvegarder dans optimized[platform])
+// Compteur de consommation IA du mois courant (soft cap — affichage front).
+app.get('/api/v1/enrichment/ai-usage', async (req, res) => {
+  try {
+    const accountId = req.accountId || 'default-account';
+    if (!prismaReady || !prisma) {
+      return res.json({ used: 0, softCap: AI_SOFT_CAP_MONTHLY, percent: 0, period: null });
+    }
+    const usage = await getAiUsage(prisma, accountId);
+    res.json(usage);
+  } catch (error) {
+    console.error('Erreur ai-usage:', error);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
 app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
   try {
     const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
@@ -12202,6 +12235,7 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
       }
     }
     
+    trackAiUsage(accountId, 1);
     res.json(result);
   } catch (error) {
     console.error('Erreur optimize-title:', error);
@@ -12267,6 +12301,7 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
       }
     }
     
+    trackAiUsage(accountId, 1);
     res.json(result);
   } catch (error) {
     console.error('Erreur optimize-description:', error);
@@ -12347,6 +12382,7 @@ app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
       }
     }
 
+    trackAiUsage(accountId, 1);
     res.json(result);
   } catch (error) {
     console.error('Erreur generate-highlights:', error);
@@ -12557,6 +12593,7 @@ app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
         return res.status(500).json({ message: 'Image générée mais impossible de créer l\'URL de prévisualisation. Vérifiez la config GCS (compte de service, permissions).' });
       }
     }
+    trackAiUsage(accountId, 1);
     res.json({ url: urlToReturn, contentType: result.contentType });
   } catch (error) {
     console.error('Erreur generate-lifestyle-image:', error);
@@ -12808,7 +12845,8 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
     }
     
     results.saved = savedCount;
-    
+
+    trackAiUsage(accountId, products.length * Math.max(1, normalizedPlatforms.length));
     res.json(results);
   } catch (error) {
     console.error('Erreur batch:', error);
