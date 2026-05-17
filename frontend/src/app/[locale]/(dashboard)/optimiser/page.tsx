@@ -134,7 +134,7 @@ interface ABTestConfig {
   step: number;
   name: string;
   platform: Platform;
-  products: { filter: any; selectedIds: string[] };
+  products: { filter: Record<string, unknown>; selectedIds: string[] };
   modifications: { field: 'title' | 'description' | 'image'; changes: { type: FieldChangeType; value?: string }[] }[];
   customTransformations: CustomTransformation[];
   durationDays: number;
@@ -597,9 +597,9 @@ export default function OptimiserPage() {
     if (abConfig.products.selectedIds.length === 0) return;
     setLoadingPreview(true);
     try {
-      const res = await apiClient.get<{ items: any[] }>(`/ingestion/items?ids=${abConfig.products.selectedIds.slice(0, 10).join(',')}`);
+      const res = await apiClient.get<{ items: Array<{ id: string; title?: string; description?: string; descriptiontext?: string; brand?: string; price?: string }> }>(`/ingestion/items?ids=${abConfig.products.selectedIds.slice(0, 10).join(',')}`);
       if (res.data?.items) {
-        setPreviewProducts(res.data.items.map((item: any) => ({
+        setPreviewProducts(res.data.items.map((item) => ({
           id: item.id,
           title: item.title || '',
           description: item.description || item.descriptiontext || '',
@@ -965,7 +965,7 @@ export default function OptimiserPage() {
                       <div className="space-y-2">
                         {abConfig.customTransformations.filter(t => t.field === 'title').map((t, i) => (
                           <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                            <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as any })} className="px-2 py-1 border rounded text-sm">
+                            <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                               <option value="replace">Remplacer</option>
                               <option value="prepend">Ajouter au début</option>
                               <option value="append">Ajouter à la fin</option>
@@ -1000,7 +1000,7 @@ export default function OptimiserPage() {
                           const realIndex = abConfig.customTransformations.findIndex((x, idx) => x.field === 'description' && idx === i);
                           return (
                             <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                              <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as any })} className="px-2 py-1 border rounded text-sm">
+                              <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                                 <option value="replace">Remplacer</option>
                                 <option value="prepend">Ajouter au début</option>
                                 <option value="append">Ajouter à la fin</option>
