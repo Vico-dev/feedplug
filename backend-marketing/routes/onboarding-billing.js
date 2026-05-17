@@ -672,7 +672,10 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
       billingStatus,
       paymentGraceUntil,
     }) {
-      if (!accountId || !prismaReady || !prisma) return;
+      if (!accountId) return;
+      if (!prismaReady || !prisma) {
+        throw new Error('Database not ready — Stripe webhook will be retried');
+      }
       const normalizedTrialEndsAt = trialEndsAt instanceof Date ? trialEndsAt : (trialEndsAt ? new Date(trialEndsAt) : null);
       const normalizedPaymentGraceUntil = paymentGraceUntil instanceof Date ? paymentGraceUntil : (paymentGraceUntil ? new Date(paymentGraceUntil) : null);
 
@@ -728,17 +731,20 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
       if (object.object === 'subscription') return object;
       const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id;
       if (!subscriptionId) return null;
-      try {
-        return await stripe.subscriptions.retrieve(subscriptionId);
-      } catch (e) {
-        console.error('Webhook subscription retrieve error:', e);
-        return null;
-      }
+      // Une erreur de retrieve (Stripe indisponible) doit remonter : le webhook
+      // renverra 500 et Stripe redélivrera plutôt que de perdre la confirmation.
+      return await stripe.subscriptions.retrieve(subscriptionId);
     }
 
     async function applySubscriptionState(sub, options = {}) {
       const accountId = sub.metadata?.accountId;
-      if (!accountId || !prismaReady || !prisma) return;
+      if (!accountId) {
+        console.warn('Stripe webhook: subscription sans accountId metadata, ignorée:', sub.id);
+        return;
+      }
+      if (!prismaReady || !prisma) {
+        throw new Error('Database not ready — Stripe webhook will be retried');
+      }
 
       const plan = sub.metadata?.plan || 'STARTER';
       const addonIA = sub.metadata?.addonIA === 'true';
@@ -793,7 +799,10 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
 
         await updateBillingSubscription(accountId, sub.id);
       } catch (e) {
-        console.error('Webhook update error:', e);
+        // On relaie l'erreur : le handler renverra 500 et Stripe redélivrera
+        // l'event — l'état d'abonnement ne doit jamais être perdu silencieusement.
+        console.error('Stripe webhook applySubscriptionState error:', e?.message || e);
+        throw e;
       }
     }
 
@@ -847,34 +856,26 @@ function registerStripeWebhook(app, { getPrisma, getPrismaReady }) {
       if (event.type === 'invoice.paid') {
         const invoice = event.data.object;
         if (invoice.subscription) {
-          try {
-            const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-            await applySubscriptionState(subscription, { paymentConfirmed: true });
-          } catch (e) {
-            console.error('Webhook invoice.paid retrieve error:', e);
-          }
+          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+          await applySubscriptionState(subscription, { paymentConfirmed: true });
         }
       }
 
       if (event.type === 'invoice.payment_failed') {
         const invoice = event.data.object;
         if (invoice.subscription) {
-          try {
-            const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-            const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
-            const currentStatus = String(accountWindow?.billingstatus || '').toLowerCase();
-            const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : null;
-            const graceStillActive = currentGraceUntil && currentGraceUntil.getTime() > Date.now();
-            if ((currentStatus === 'pending' || currentStatus === 'payment_failed') && graceStillActive) {
-              await applySubscriptionState(subscription, {
-                graceUntil: currentGraceUntil,
-                paymentFailed: true,
-              });
-            } else {
-              await applySubscriptionState(subscription, { forceInactive: true });
-            }
-          } catch (e) {
-            console.error('Webhook invoice.payment_failed retrieve error:', e);
+          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+          const accountWindow = await getAccountBillingWindow(subscription.metadata?.accountId);
+          const currentStatus = String(accountWindow?.billingstatus || '').toLowerCase();
+          const currentGraceUntil = accountWindow?.paymentgraceuntil ? new Date(accountWindow.paymentgraceuntil) : null;
+          const graceStillActive = currentGraceUntil && currentGraceUntil.getTime() > Date.now();
+          if ((currentStatus === 'pending' || currentStatus === 'payment_failed') && graceStillActive) {
+            await applySubscriptionState(subscription, {
+              graceUntil: currentGraceUntil,
+              paymentFailed: true,
+            });
+          } else {
+            await applySubscriptionState(subscription, { forceInactive: true });
           }
         }
       }
