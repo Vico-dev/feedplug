@@ -126,9 +126,14 @@ ne doit pas seulement comprendre que son flux est faible — il doit comprendre
 
 ## Segment B — audit seen, not converted (4 emails)
 
-### B1 — D+1
+Through-line: each email starts from the **audit result** (the pain), then shows
+**what FeedPlug concretely does** to turn it into a gain. The prospect must not
+only understand their feed is weak — they must understand *why FeedPlug is the
+answer*.
+
+### B1 — D+1 — *"you have the diagnosis, here's the worklist"*
 **Subject:** `{{score}}/100: the 3 issues holding your feed back`
-**Preview:** Your {{societe}} audit is ready — here's what's capping it.
+**Preview:** Your {{societe}} audit is ready — and here's what to do with it.
 
 > {{prenom}}, your product feed scored **{{score}}/100**. With the same catalog, the reachable potential is **{{scorePotentiel}}/100**.
 >
@@ -137,43 +142,46 @@ ne doit pas seulement comprendre que son flux est faible — il doit comprendre
 > - {{blocage2}}
 > - {{blocage3}}
 >
-> The audit gives the aggregate diagnostic. The detail — exactly which products, and what to fix on each — is in your FeedPlug workspace.
+> A score on its own moves nothing. What FeedPlug adds: the **exact list of products to fix**, ranked by impact, with the proposed fix on each. You stop hunting for the problem — you get a prioritized worklist, ready to run.
 >
-> **[See the affected products]** → /register
+> **[See my products to fix]** → /register
 >
 > Your audit stays available here: {{lienAudit}}
 
-### B2 — D+3
+### B2 — D+3 — *"the gain is real, and reachable without the manual grind"*
 **Subject:** `{{produitsRecuperables}} products you're leaving on the table`
-**Preview:** The diagnostic is one thing. The numbers are clearer.
+**Preview:** The diagnostic is one thing. Capturing it is better.
 
 > Your audit estimates **{{produitsRecuperables}} products** that could be put back into circulation and a potential visibility gain of **+{{gainVisibilite}}%**.
 >
-> Concretely: every week without fixes, impressions and clicks go to better-structured competitor catalogs — same queries, same products.
+> The usual way to chase that gain: rework products one by one, or hand it to an agency. Slow, costly — and to redo on every catalog update.
 >
-> This isn't about turning on one more channel. It's about making what you already have actually distributable.
+> FeedPlug does this work differently: **enrichment rules + AI fix the whole catalog at once**, then the corrected feed is pushed and **kept in sync automatically** across every channel. The gain becomes reachable without burning weeks on it.
 >
-> **[Fix my feed]** → /register
+> **[Recover these products]** → /register
 
-### B3 — D+7
-**Subject:** `How to fix: {{blocage1}}`
-**Preview:** A concrete before/after on your main issue.
+### B3 — D+7 — *"here, concretely, is what FeedPlug does"*
+**Subject:** `From {{score}} to {{scorePotentiel}}/100: how FeedPlug does it`
+**Preview:** The mechanism, step by step — on your top issue.
 
-> Let's take your #1 issue — {{blocage1}}.
+> Let's take your main issue — {{blocage1}}. Here's how FeedPlug handles it, and the rest of the catalog with it:
 >
-> Here's what the fix looks like on a typical product *(before → after)*.
+> 1. **You connect your source once** (Shopify, CSV, PrestaShop…).
+> 2. **FeedPlug optimizes the whole catalog** — titles, descriptions, attributes — *tailored to each channel*, via rules + AI.
+> 3. **You review** the changes: the before/after is visible product by product.
+> 4. **The feed goes out to Google, Amazon, Meta, marketplaces…** and stays in sync on every product update.
 >
-> Across a full catalog, this isn't done item by item: FeedPlug applies enrichment rules and AI to the whole catalog at once, then you review.
+> The result isn't a file fixed once. It's a catalog that's distributable everywhere and **doesn't degrade again** on the next update.
 >
-> **[Start the fix]** → /register
+> **[See FeedPlug on my catalog]** → /register
 
 ### B4 — D+12 (switch to a call)
 **Subject:** `Want to look at your {{societe}} feed together?`
 **Preview:** Last follow-up — and an offer.
 
-> {{prenom}}, you ran the audit two weeks ago. If the fixes haven't moved forward, it's rarely about willingness — it's about priorities.
+> {{prenom}}, your audit put a number on the potential: **{{scorePotentiel}}/100 reachable**. FeedPlug exists precisely to close that gap — without burning weeks, and without the feed degrading afterward.
 >
-> If you'd like, let's take 20 minutes: we look at your feed and set the order of the highest-impact fixes together. No commitment.
+> If you'd like, let's take 20 minutes: we look at your feed together and set the order of the highest-impact fixes. No commitment.
 >
 > And if you'd rather move on your own, your account takes 2 minutes to create.
 >
@@ -208,9 +216,14 @@ ne doit pas seulement comprendre que son flux est faible — il doit comprendre
 
 ## Segmento B — auditoría vista, sin conversión (4 correos)
 
-### B1 — D+1
+Hilo conductor: cada correo parte del **resultado de la auditoría** (el dolor) y
+luego muestra **lo que FeedPlug hace concretamente** para convertirlo en
+ganancia. El prospecto no solo debe entender que su feed es débil — debe
+entender *por qué FeedPlug es la respuesta*.
+
+### B1 — D+1 — *«tienes el diagnóstico, aquí está el plan de trabajo»*
 **Asunto:** `{{score}}/100: los 3 bloqueos que limitan tu feed`
-**Preview:** Tu auditoría {{societe}} está lista — esto es lo que la frena.
+**Preview:** Tu auditoría {{societe}} está lista — y esto es qué hacer con ella.
 
 > {{prenom}}, tu feed de productos obtuvo **{{score}}/100**. Con el mismo catálogo, el potencial alcanzable es de **{{scorePotentiel}}/100**.
 >
@@ -219,43 +232,46 @@ ne doit pas seulement comprendre que son flux est faible — il doit comprendre
 > - {{blocage2}}
 > - {{blocage3}}
 >
-> La auditoría da el diagnóstico agregado. El detalle — qué fichas exactamente y qué corregir en cada una — está en tu espacio FeedPlug.
+> Una puntuación, por sí sola, no hace avanzar nada. Lo que FeedPlug añade: la **lista exacta de fichas a corregir**, ordenadas por impacto, con la corrección propuesta en cada una. Dejas de buscar dónde está el problema — tienes un plan de trabajo priorizado, listo para ejecutar.
 >
-> **[Ver los productos afectados]** → /register
+> **[Ver mis fichas a corregir]** → /register
 >
 > Tu auditoría sigue disponible aquí: {{lienAudit}}
 
-### B2 — D+3
+### B2 — D+3 — *«la ganancia es real, y alcanzable sin el trabajo manual»*
 **Asunto:** `{{produitsRecuperables}} productos que no estás aprovechando`
-**Preview:** El diagnóstico está bien. Las cifras son más claras.
+**Preview:** El diagnóstico está bien. Recuperarlo es mejor.
 
 > Tu auditoría estima **{{produitsRecuperables}} productos** que podrían volver a difundirse y una ganancia de visibilidad potencial del **+{{gainVisibilite}}%**.
 >
-> En concreto: cada semana sin correcciones, impresiones y clics se van a catálogos de la competencia mejor estructurados — mismas búsquedas, mismos productos.
+> La forma habitual de ir a buscar esa ganancia: rehacer las fichas una por una, o encargárselo a una agencia. Lento, costoso — y a repetir en cada actualización del catálogo.
 >
-> No se trata de activar un canal más. Se trata de hacer realmente difundible lo que ya tienes.
+> FeedPlug hace este trabajo de otra manera: **reglas de enriquecimiento + IA corrigen todo el catálogo de una vez**, y luego el feed corregido se publica y se **mantiene actualizado automáticamente** en cada uno de tus canales. La ganancia se vuelve alcanzable sin dedicarle semanas.
 >
-> **[Corregir mi feed]** → /register
+> **[Recuperar estos productos]** → /register
 
-### B3 — D+7
-**Asunto:** `Cómo se corrige: {{blocage1}}`
-**Preview:** Un antes/después concreto sobre tu bloqueo principal.
+### B3 — D+7 — *«esto es, concretamente, lo que hace FeedPlug»*
+**Asunto:** `De {{score}} a {{scorePotentiel}}/100: cómo lo hace FeedPlug`
+**Preview:** El mecanismo, paso a paso — sobre tu bloqueo principal.
 
-> Tomemos tu bloqueo n.º 1 — {{blocage1}}.
+> Tomemos tu bloqueo principal — {{blocage1}}. Así es como FeedPlug lo trata, y el resto del catálogo con él:
 >
-> Así se ve la corrección en una ficha tipo *(antes → después)*.
+> 1. **Conectas tu fuente una vez** (Shopify, CSV, PrestaShop…).
+> 2. **FeedPlug optimiza todo el catálogo** — títulos, descripciones, atributos — *adaptados a cada canal*, mediante reglas + IA.
+> 3. **Tú validas** los cambios: el antes/después es visible ficha por ficha.
+> 4. **El feed sale hacia Google, Amazon, Meta, marketplaces…** y se mantiene sincronizado en cada actualización de producto.
 >
-> En un catálogo completo no se hace ficha por ficha: FeedPlug aplica reglas de enriquecimiento e IA a todo el catálogo de una vez, y luego tú validas.
+> El resultado no es un archivo corregido una sola vez. Es un catálogo difundible en todas partes, que **no vuelve a degradarse** en la próxima actualización.
 >
-> **[Iniciar la corrección]** → /register
+> **[Ver FeedPlug sobre mi catálogo]** → /register
 
 ### B4 — D+12 (cambio a llamada)
 **Asunto:** `¿Revisamos juntos tu feed {{societe}}?`
 **Preview:** Último recordatorio — y una propuesta.
 
-> {{prenom}}, hiciste la auditoría hace dos semanas. Si las correcciones no han avanzado, rara vez es por falta de ganas — es cuestión de prioridades.
+> {{prenom}}, tu auditoría puso una cifra al potencial: **{{scorePotentiel}}/100 alcanzable**. FeedPlug existe precisamente para cerrar esa diferencia — sin dedicarle semanas, y sin que el feed se degrade después.
 >
-> Si quieres, dedicamos 20 minutos: revisamos tu feed y definimos juntos el orden de las correcciones de mayor impacto. Sin compromiso.
+> Si quieres, dedicamos 20 minutos: revisamos tu feed juntos y definimos el orden de las correcciones de mayor impacto. Sin compromiso.
 >
 > Y si prefieres avanzar por tu cuenta, tu cuenta se crea en 2 minutos.
 >
@@ -294,5 +310,5 @@ ne doit pas seulement comprendre que son flux est faible — il doit comprendre
   (score, blocages, etc.) et interpoler les variables.
 - Handler `nurture-runs` : joindre le lead à son `marketing_audits` le plus
   récent, déterminer le segment (A / B / C) et passer le contexte.
-- `{{lienRdv}}` : URL de prise de rendez-vous à fournir (Calendly ou autre).
+- `{{lienRdv}}` : `https://calendly.com/victorsoldet/30min`.
 - Cadence : A = J+1, J+4 ; B = J+1, J+3, J+7, J+12.
