@@ -80,11 +80,13 @@ const {
   sendPasswordResetEmail,
   sendInvitationEmail,
   sendMarketingNurtureEmail,
+  sendMarketingAuditNurtureEmail,
   sendMarketingAuditEmail,
   notifyInternalMarketingFormSubmission,
   syncMarketingContact,
   verifyMarketingClickToken,
   verifyMarketingUnsubscribeToken,
+  getEmailLocale,
 } = require('./email/email-service');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
@@ -7820,6 +7822,165 @@ function resolveMarketingOutboundStage(nurtureStage) {
   return 'j0';
 }
 
+// ── Nurture post-audit de flux (segments A / B) ──────────────────────────────
+// Le lead d'un audit suit une séquence dédiée. Le segment réel (A = audit non
+// terminé, B = audit vu) est déterminé au moment de l'envoi à partir du statut
+// de l'audit ; seul le numéro d'étape est stocké dans `nurturestage`.
+const MARKETING_STAGE_AUDIT_1 = 'audit_step_1';
+
+function auditStepFromStage(stage) {
+  const match = /^audit_step_([1-4])$/.exec(String(stage || ''));
+  return match ? Number(match[1]) : null;
+}
+
+const AUDIT_NURTURE_ISSUE_LABELS = {
+  fr: {
+    title: 'Titres produit', description: 'Descriptions', image: 'Images principales',
+    brand: 'Marque', category: 'Catégorisation',
+    identifier: 'Identifiants produits (GTIN/MPN)', link: 'URLs produit',
+  },
+  en: {
+    title: 'Product titles', description: 'Descriptions', image: 'Main images',
+    brand: 'Brand', category: 'Categorization',
+    identifier: 'Product identifiers (GTIN/MPN)', link: 'Product URLs',
+  },
+  es: {
+    title: 'Títulos de producto', description: 'Descripciones', image: 'Imágenes principales',
+    brand: 'Marca', category: 'Categorización',
+    identifier: 'Identificadores de producto (GTIN/MPN)', link: 'URLs de producto',
+  },
+};
+
+const AUDIT_NURTURE_BLOCAGE_FALLBACK = {
+  fr: 'Attributs catalogue à compléter sur une partie des fiches',
+  en: 'Catalog attributes to complete on part of the catalog',
+  es: 'Atributos de catálogo por completar en parte del catálogo',
+};
+
+function formatAuditBlocage(issue, loc) {
+  const labels = AUDIT_NURTURE_ISSUE_LABELS[loc] || AUDIT_NURTURE_ISSUE_LABELS.fr;
+  const label = labels[issue?.key] || issue?.label || AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr;
+  const count = Number(issue?.affectedProducts || 0);
+  const rate = Number(issue?.affectedRate || 0);
+  if (!count) return label;
+  if (loc === 'en') return `${label} — ${count} products affected (${rate}%)`;
+  if (loc === 'es') return `${label} — ${count} fichas afectadas (${rate}%)`;
+  return `${label} — ${count} fiches concernées (${rate}%)`;
+}
+
+function buildAuditNurtureContext(lead, audit) {
+  const loc = getEmailLocale(audit?.locale || lead?.locale || 'fr');
+  const report = typeof audit?.reportjson === 'string'
+    ? JSON.parse(audit.reportjson || '{}')
+    : (audit?.reportjson || {});
+  let input = {};
+  try {
+    input = typeof audit?.inputjson === 'string'
+      ? JSON.parse(audit.inputjson || '{}')
+      : (audit?.inputjson || {});
+  } catch { input = {}; }
+
+  const issues = Array.isArray(report.topIssues) ? report.topIssues : [];
+  const blocages = issues.slice(0, 3).map((issue) => formatAuditBlocage(issue, loc));
+  while (blocages.length < 3) blocages.push(AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr);
+
+  const publicBaseUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
+
+  return {
+    prenom: lead?.firstName || '',
+    societe: audit?.company || lead?.company || '',
+    score: report.score ?? '',
+    scorePotentiel: report.potentialScore ?? '',
+    blocage1: blocages[0],
+    blocage2: blocages[1],
+    blocage3: blocages[2],
+    produitsRecuperables: report.estimatedAdditionalApprovedProducts ?? '',
+    gainVisibilite: report.estimatedVisibilityLiftPct ?? '',
+    cms: input.cmsUsed || audit?.connectortype || '',
+    lienAudit: `${publicBaseUrl}/${audit?.locale || 'fr'}/audit-flux/${audit?.sharetoken || ''}`,
+    lienRdv: process.env.MARKETING_RDV_URL || 'https://calendly.com/victorsoldet/30min',
+  };
+}
+
+// Envoie l'étape de nurture post-audit pour un lead donné, puis programme la suivante.
+async function sendAuditNurtureForLead(lead, step) {
+  const auditRows = await prisma.$queryRawUnsafe(`
+    SELECT *
+    FROM marketing_audits
+    WHERE leadid = $1::text OR LOWER(email) = LOWER($2::text)
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  `, lead.id, lead.email);
+  let audit = auditRows?.[0] || null;
+
+  if (!audit) {
+    // Lead marqué "audit" sans audit retrouvé : on clôture pour éviter une boucle.
+    await markLeadMarketingProgress(lead.id, {
+      nurtureStage: MARKETING_STAGE_DONE,
+      nextMarketingEmailAt: null,
+    });
+    return;
+  }
+
+  // Si la source est connectée mais le rapport pas encore généré, on tente.
+  try {
+    audit = await maybeGenerateMarketingAuditReport(audit);
+  } catch (genError) {
+    console.warn('Audit nurture: génération rapport échouée:', genError.message);
+  }
+
+  const report = typeof audit.reportjson === 'string'
+    ? JSON.parse(audit.reportjson || '{}')
+    : (audit.reportjson || {});
+  const hasReport = report && Number.isFinite(Number(report.score));
+  const segment = (audit.status === 'pending_connection' || !hasReport) ? 'A' : 'B';
+
+  // Le segment A ne compte que 2 mails.
+  if (segment === 'A' && step > 2) {
+    await markLeadMarketingProgress(lead.id, {
+      nurtureStage: MARKETING_STAGE_DONE,
+      nextMarketingEmailAt: null,
+    });
+    return;
+  }
+
+  const context = buildAuditNurtureContext(lead, audit);
+
+  const resendContactId = await registerLeadInResend(lead);
+  if (resendContactId) {
+    await markLeadMarketingProgress(lead.id, { resendContactId });
+  }
+
+  await sendMarketingAuditNurtureEmail({
+    email: lead.email,
+    locale: audit.locale || lead.locale || 'fr',
+    segment,
+    step,
+    context,
+  });
+
+  const now = new Date();
+  let nextStage = MARKETING_STAGE_DONE;
+  let nextAt = null;
+  if (segment === 'A') {
+    if (step === 1) { nextStage = 'audit_step_2'; nextAt = addDays(now, 3).toISOString(); }
+  } else if (step === 1) {
+    nextStage = 'audit_step_2'; nextAt = addDays(now, 2).toISOString();
+  } else if (step === 2) {
+    nextStage = 'audit_step_3'; nextAt = addDays(now, 4).toISOString();
+  } else if (step === 3) {
+    nextStage = 'audit_step_4'; nextAt = addDays(now, 5).toISOString();
+  }
+
+  await markLeadMarketingProgress(lead.id, {
+    nurtureStage: nextStage,
+    nextMarketingEmailAt: nextAt,
+    lastMarketingEmailAt: now.toISOString(),
+    marketingOptIn: true,
+    unsubscribedAt: null,
+  });
+}
+
 function buildLeadTrimmedInput(body = {}) {
   return {
     firstName: typeof body.firstName === 'string' ? body.firstName.trim() : '',
@@ -8392,7 +8553,12 @@ function computeMarketingAuditReport(input = {}) {
 
 async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, userAgent }) {
   const emailNormalized = String(email || '').trim().toLowerCase();
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  // Le lead d'un audit entre dans la séquence post-audit (segment A/B),
+  // 1er mail à J+1. On force l'étape même pour un lead déjà connu (ex.
+  // early-access) : l'intention "audit" prime sur la séquence générique.
+  const firstAuditEmailIso = addDays(now, 1).toISOString();
   if (!emailNormalized) return null;
 
   const prismaClient = await getPrismaClientOrThrow('Base marketing indisponible pour l’audit');
@@ -8410,11 +8576,12 @@ async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, 
           locale = COALESCE($7::text, locale),
           source = 'audit_flux_marketing',
           marketingoptin = true,
-          nurturestage = COALESCE(nurturestage, $8::text),
-          nextmarketingemailat = COALESCE(nextmarketingemailat, $9::timestamptz),
-          "updatedAt" = $9::timestamptz
+          nurturestage = $8::text,
+          nextmarketingemailat = $9::timestamptz,
+          "updatedAt" = $10::timestamptz
       WHERE email = $1::text
-    `, emailNormalized, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, trimmed.company, locale, MARKETING_STAGE_J0, nowIso);
+        AND COALESCE("status", '') <> 'converted'
+    `, emailNormalized, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, trimmed.company, locale, MARKETING_STAGE_AUDIT_1, firstAuditEmailIso, nowIso);
     const refreshed = await prismaClient.$queryRawUnsafe(`SELECT * FROM marketing_leads WHERE email = $1::text LIMIT 1`, emailNormalized);
     return refreshed?.[0] || existing[0];
   }
@@ -8431,9 +8598,9 @@ async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, 
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text,
       $8::text, $9::text, $10::text, 'audit_flux_marketing', 'new',
       true, $11::text, $12::timestamptz,
-      $12::timestamptz, $12::timestamptz
+      $13::timestamptz, $13::timestamptz
     )
-  `, leadId, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, emailNormalized, trimmed.company, ipAddress, userAgent, locale, MARKETING_STAGE_J0, nowIso);
+  `, leadId, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, emailNormalized, trimmed.company, ipAddress, userAgent, locale, MARKETING_STAGE_AUDIT_1, firstAuditEmailIso, nowIso);
   const created = await prismaClient.$queryRawUnsafe(`SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1`, leadId);
   return created?.[0] || null;
 }
@@ -9047,10 +9214,11 @@ app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
           FROM "User" u
           WHERE LOWER(u.email) = LOWER(marketing_leads.email)
         )
-        AND nurturestage IN ($1::text, $2::text, $3::text, $4::text, $5::text)
+        AND nurturestage IS NOT NULL
+        AND nurturestage <> $1::text
       ORDER BY nextmarketingemailat ASC
       LIMIT 100
-    `, MARKETING_STAGE_J0, MARKETING_STAGE_J1, MARKETING_STAGE_J3, MARKETING_STAGE_J6, MARKETING_STAGE_J10);
+    `, MARKETING_STAGE_DONE);
 
     const results = {
       checked: dueLeads.length,
@@ -9061,14 +9229,19 @@ app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
 
     for (const lead of dueLeads) {
       try {
-        const stage = resolveMarketingOutboundStage(lead.nurturestage);
-
-        const resendContactId = await registerLeadInResend(lead);
-        if (resendContactId) {
-          await markLeadMarketingProgress(lead.id, { resendContactId });
+        const auditStep = auditStepFromStage(lead.nurturestage);
+        if (auditStep) {
+          // Lead issu d'un audit de flux → séquence post-audit (segment A/B).
+          await sendAuditNurtureForLead(lead, auditStep);
+        } else {
+          // Lead générique (segment C) → séquence existante.
+          const stage = resolveMarketingOutboundStage(lead.nurturestage);
+          const resendContactId = await registerLeadInResend(lead);
+          if (resendContactId) {
+            await markLeadMarketingProgress(lead.id, { resendContactId });
+          }
+          await sendLeadNurtureStage(lead, stage);
         }
-
-        await sendLeadNurtureStage(lead, stage);
         results.sent += 1;
       } catch (error) {
         results.failed += 1;
@@ -9088,6 +9261,79 @@ app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
   } catch (error) {
     console.error('Marketing nurture run error:', error);
     res.status(500).json({ message: 'Erreur lors de l’exécution du nurture marketing' });
+  }
+});
+
+// Envoi de test des mails post-audit (revue interne avant lancement).
+// Protégé par SCHEDULER_SECRET. Envoie A1, A2, B1→B4 avec des données d'exemple.
+app.post('/api/v1/marketing/nurture-test', async (req, res) => {
+  try {
+    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
+      ? process.env.SCHEDULER_SECRET.trim()
+      : '';
+    if (!schedulerSecret) {
+      return res.status(503).json({ message: 'Scheduler non configuré' });
+    }
+    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+    const providedSecret = typeof rawProvidedSecret === 'string'
+      ? rawProvidedSecret.replace('Bearer ', '').trim()
+      : '';
+    if (providedSecret !== schedulerSecret) {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Email valide requis' });
+    }
+    const locale = getEmailLocale(typeof req.body?.locale === 'string' ? req.body.locale.trim() : 'fr');
+
+    const sampleIssues = [
+      { key: 'identifier', affectedProducts: 142, affectedRate: 34 },
+      { key: 'description', affectedProducts: 98, affectedRate: 23 },
+      { key: 'image', affectedProducts: 61, affectedRate: 15 },
+    ];
+    const publicBaseUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
+    const context = {
+      prenom: 'Victor',
+      societe: 'Agence Inconnu',
+      score: 58,
+      scorePotentiel: 86,
+      blocage1: formatAuditBlocage(sampleIssues[0], locale),
+      blocage2: formatAuditBlocage(sampleIssues[1], locale),
+      blocage3: formatAuditBlocage(sampleIssues[2], locale),
+      produitsRecuperables: 120,
+      gainVisibilite: 28,
+      cms: 'Shopify',
+      lienAudit: `${publicBaseUrl}/${locale}/audit-flux/exemple-token-demo`,
+      lienRdv: process.env.MARKETING_RDV_URL || 'https://calendly.com/victorsoldet/30min',
+    };
+
+    const plan = [
+      { segment: 'A', step: 1 },
+      { segment: 'A', step: 2 },
+      { segment: 'B', step: 1 },
+      { segment: 'B', step: 2 },
+      { segment: 'B', step: 3 },
+      { segment: 'B', step: 4 },
+    ];
+    const sent = [];
+    const errors = [];
+    for (const item of plan) {
+      try {
+        await sendMarketingAuditNurtureEmail({ email, locale, segment: item.segment, step: item.step, context });
+        sent.push(`${item.segment}${item.step}`);
+      } catch (sendError) {
+        errors.push({ mail: `${item.segment}${item.step}`, error: sendError.message });
+      }
+    }
+
+    res.json({ success: errors.length === 0, email, locale, sent, errors });
+  } catch (error) {
+    console.error('Marketing nurture test error:', error);
+    res.status(500).json({ message: 'Erreur lors de l’envoi de test' });
   }
 });
 
