@@ -36,9 +36,14 @@ prise de rendez-vous sur le dernier.
 
 ## Segment B — audit vu, non converti (4 mails)
 
-### B1 — J+1
+Fil rouge : chaque mail part du **résultat de l'audit** (la douleur) puis montre
+**ce que FeedPlug fait concrètement** pour le transformer en gain. Le prospect
+ne doit pas seulement comprendre que son flux est faible — il doit comprendre
+*pourquoi FeedPlug est la réponse*.
+
+### B1 — J+1 — *« vous avez le diagnostic, voici le plan de travail »*
 **Objet :** `{{score}}/100 : les 3 blocages qui plafonnent votre flux`
-**Preview :** Votre audit {{societe}} est prêt — voici ce qui le freine.
+**Preview :** Votre audit {{societe}} est prêt — et voici quoi en faire.
 
 > {{prenom}}, votre flux produit a obtenu **{{score}}/100**. À catalogue constant, le potentiel atteignable est de **{{scorePotentiel}}/100**.
 >
@@ -47,43 +52,46 @@ prise de rendez-vous sur le dernier.
 > - {{blocage2}}
 > - {{blocage3}}
 >
-> L'audit donne le diagnostic agrégé. Le détail — quelles fiches exactement, et quoi corriger sur chacune — est dans votre espace FeedPlug.
+> Un score, seul, ne fait rien avancer. Ce que FeedPlug ajoute : la **liste exacte des fiches à corriger**, classées par impact, avec le correctif proposé sur chacune. Vous ne cherchez plus où est le problème — vous avez un plan de travail priorisé, prêt à exécuter.
 >
-> **[Voir les fiches concernées]** → /register
+> **[Voir mes fiches à corriger]** → /register
 >
 > Votre audit reste accessible ici : {{lienAudit}}
 
-### B2 — J+3
+### B2 — J+3 — *« le gain est réel, et atteignable sans le chantier manuel »*
 **Objet :** `{{produitsRecuperables}} produits que vous n'exploitez pas`
-**Preview :** Le diagnostic, c'est bien. Le chiffrage, c'est plus parlant.
+**Preview :** Le diagnostic, c'est bien. Le récupérer, c'est mieux.
 
 > Votre audit estime **{{produitsRecuperables}} produits** remettables en diffusion et un gain de visibilité potentiel de **+{{gainVisibilite}}%**.
 >
-> Concrètement : chaque semaine sans correction, ce sont des impressions et des clics qui partent vers des catalogues concurrents mieux structurés — sur les mêmes requêtes, pour les mêmes produits.
+> La façon habituelle d'aller chercher ce gain : reprendre les fiches une par une, ou confier ça à une agence. Lent, coûteux — et à refaire à chaque mise à jour du catalogue.
 >
-> Le sujet n'est pas d'activer un canal de plus. C'est de rendre diffusable ce que vous avez déjà.
+> FeedPlug fait ce travail autrement : des **règles d'enrichissement + de l'IA corrigent tout le catalogue d'un coup**, puis le flux corrigé est poussé et **maintenu à jour automatiquement** sur chacun de vos canaux. Le gain devient atteignable sans y passer vos semaines.
 >
-> **[Corriger mon flux]** → /register
+> **[Récupérer ces produits]** → /register
 
-### B3 — J+7
-**Objet :** `Comment se corrige : {{blocage1}}`
-**Preview :** Un avant/après concret sur votre blocage principal.
+### B3 — J+7 — *« voici, concrètement, ce que fait FeedPlug »*
+**Objet :** `De {{score}} à {{scorePotentiel}}/100 : comment FeedPlug s'y prend`
+**Preview :** Le mécanisme, étape par étape — sur votre blocage n°1.
 
-> Reprenons votre blocage n°1 — {{blocage1}}.
+> Reprenons votre blocage principal — {{blocage1}}. Voici comment FeedPlug le traite, et le reste du catalogue avec :
 >
-> Voici à quoi ressemble la correction sur une fiche type *(avant → après)*.
+> 1. **Vous connectez votre source une fois** (Shopify, CSV, PrestaShop…).
+> 2. **FeedPlug optimise tout le catalogue** — titres, descriptions, attributs — *adaptés à chaque canal*, via règles + IA.
+> 3. **Vous validez** les changements : l'avant/après est visible fiche par fiche.
+> 4. **Le flux part vers Google, Amazon, Meta, marketplaces…** et reste synchronisé à chaque mise à jour produit.
 >
-> Sur un catalogue entier, ça ne se traite pas fiche par fiche : FeedPlug applique des règles d'enrichissement et de l'IA sur tout le catalogue d'un coup, puis vous validez.
+> Le résultat n'est pas un fichier corrigé une fois. C'est un catalogue diffusable partout, qui **ne se redégrade pas** à la prochaine update.
 >
-> **[Lancer la correction]** → /register
+> **[Voir FeedPlug sur mon catalogue]** → /register
 
-### B4 — J+12 (bascule rendez-vous)
+### B4 — J+12 — bascule rendez-vous
 **Objet :** `On regarde votre flux {{societe}} ensemble ?`
 **Preview :** Dernière relance — et une proposition.
 
-> {{prenom}}, vous avez fait l'audit il y a deux semaines. Si la correction n'a pas avancé, c'est rarement une question de volonté — c'est une question de priorités.
+> {{prenom}}, votre audit a chiffré le potentiel : **{{scorePotentiel}}/100 atteignable**. FeedPlug existe précisément pour fermer cet écart — sans y passer vos semaines, et sans que le flux se redégrade ensuite.
 >
-> Si vous voulez, on prend 20 minutes : on regarde votre flux et on définit ensemble l'ordre des corrections à plus fort impact. Sans engagement.
+> Si vous voulez, on prend 20 minutes : on regarde votre flux ensemble et on définit l'ordre des corrections à plus fort impact. Sans engagement.
 >
 > Et si vous préférez avancer seul, votre compte se crée en 2 minutes.
 >
