@@ -7857,15 +7857,32 @@ const AUDIT_NURTURE_BLOCAGE_FALLBACK = {
   es: 'Atributos de catálogo por completar en parte del catálogo',
 };
 
-function formatAuditBlocage(issue, loc) {
+function auditIssueLabel(issue, loc) {
   const labels = AUDIT_NURTURE_ISSUE_LABELS[loc] || AUDIT_NURTURE_ISSUE_LABELS.fr;
-  const label = labels[issue?.key] || issue?.label || AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr;
+  return labels[issue?.key] || issue?.label || AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr;
+}
+
+function formatAuditIssueDetail(issue, loc) {
   const count = Number(issue?.affectedProducts || 0);
   const rate = Number(issue?.affectedRate || 0);
-  if (!count) return label;
-  if (loc === 'en') return `${label} — ${count} products affected (${rate}%)`;
-  if (loc === 'es') return `${label} — ${count} fichas afectadas (${rate}%)`;
-  return `${label} — ${count} fiches concernées (${rate}%)`;
+  if (!count) return '';
+  if (loc === 'en') return `${count} products affected · ${rate}% of the catalog`;
+  if (loc === 'es') return `${count} fichas afectadas · ${rate}% del catálogo`;
+  return `${count} fiches concernées · ${rate}% du catalogue`;
+}
+
+function formatAuditBlocage(issue, loc) {
+  const label = auditIssueLabel(issue, loc);
+  const detail = formatAuditIssueDetail(issue, loc);
+  return detail ? `${label} — ${detail}` : label;
+}
+
+function buildAuditIssuesList(issues, loc) {
+  return (Array.isArray(issues) ? issues : []).slice(0, 3).map((issue) => ({
+    label: auditIssueLabel(issue, loc),
+    detail: formatAuditIssueDetail(issue, loc),
+    severity: issue?.severity || 'low',
+  }));
 }
 
 function buildAuditNurtureContext(lead, audit) {
@@ -7894,6 +7911,7 @@ function buildAuditNurtureContext(lead, audit) {
     blocage1: blocages[0],
     blocage2: blocages[1],
     blocage3: blocages[2],
+    issuesList: buildAuditIssuesList(issues, loc),
     produitsRecuperables: report.estimatedAdditionalApprovedProducts ?? '',
     gainVisibilite: report.estimatedVisibilityLiftPct ?? '',
     cms: input.cmsUsed || audit?.connectortype || '',
@@ -9180,6 +9198,42 @@ app.get('/api/v1/marketing/unsubscribe', async (req, res) => {
   }
 });
 
+// Désinscription "one-click" RFC 8058 : la messagerie (Gmail/Yahoo) POSTe
+// directement sur l'URL List-Unsubscribe. On traite et on répond 200.
+app.post('/api/v1/marketing/unsubscribe', async (req, res) => {
+  try {
+    const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+
+    if (!email || !token || !verifyMarketingUnsubscribeToken(email, token)) {
+      return res.status(400).json({ message: 'Lien de désinscription invalide.' });
+    }
+
+    const prismaClient = await getPrismaClientOrThrow('Base marketing indisponible pour la désinscription');
+    const nowIso = new Date().toISOString();
+    await prismaClient.$executeRawUnsafe(`
+      UPDATE marketing_leads
+      SET marketingoptin = FALSE,
+          nurturestage = $2::text,
+          nextmarketingemailat = NULL,
+          unsubscribedat = $3::timestamptz,
+          "updatedAt" = $3::timestamptz
+      WHERE email = $1::text
+    `, email, MARKETING_STAGE_DONE, nowIso);
+
+    setImmediate(() => {
+      syncMarketingContact({ email, unsubscribed: true }).catch((syncError) => {
+        console.warn('Sync désinscription Resend échouée:', syncError.message);
+      });
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Marketing unsubscribe (one-click) error:', error);
+    return res.status(500).json({ message: 'Erreur lors de la désinscription.' });
+  }
+});
+
 app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
   try {
     const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
@@ -9291,9 +9345,9 @@ app.post('/api/v1/marketing/nurture-test', async (req, res) => {
     const locale = getEmailLocale(typeof req.body?.locale === 'string' ? req.body.locale.trim() : 'fr');
 
     const sampleIssues = [
-      { key: 'identifier', affectedProducts: 142, affectedRate: 34 },
-      { key: 'description', affectedProducts: 98, affectedRate: 23 },
-      { key: 'image', affectedProducts: 61, affectedRate: 15 },
+      { key: 'identifier', affectedProducts: 142, affectedRate: 34, severity: 'high' },
+      { key: 'description', affectedProducts: 98, affectedRate: 23, severity: 'medium' },
+      { key: 'image', affectedProducts: 61, affectedRate: 15, severity: 'medium' },
     ];
     const publicBaseUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
     const context = {
@@ -9304,6 +9358,7 @@ app.post('/api/v1/marketing/nurture-test', async (req, res) => {
       blocage1: formatAuditBlocage(sampleIssues[0], locale),
       blocage2: formatAuditBlocage(sampleIssues[1], locale),
       blocage3: formatAuditBlocage(sampleIssues[2], locale),
+      issuesList: buildAuditIssuesList(sampleIssues, locale),
       produitsRecuperables: 120,
       gainVisibilite: 28,
       cms: 'Shopify',
