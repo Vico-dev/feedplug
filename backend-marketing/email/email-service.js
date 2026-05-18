@@ -473,10 +473,10 @@ function baseTemplate(content, options = {}) {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eceff4;">
     <tr><td align="center" style="padding: 30px 12px 38px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8f0;">
-        <tr><td style="background:#0b1120;padding:22px 32px;">
-          <span style="font-size:19px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">Feed<span style="color:#60a5fa;">Plug</span></span>
+        <tr><td style="background:#ffffff;padding:24px 32px 18px;border-bottom:1px solid #eef1f5;">
+          <span style="font-size:20px;font-weight:600;color:#0a0a0a;letter-spacing:-0.02em;">FeedPlug</span>
         </td></tr>
-        <tr><td style="padding:30px 32px 10px;">
+        <tr><td style="padding:28px 32px 10px;">
           ${content}
         </td></tr>
         ${marketingFooter}
