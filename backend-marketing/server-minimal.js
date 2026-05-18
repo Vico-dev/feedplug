@@ -8815,56 +8815,63 @@ function auditPdfEscape(value) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function auditPdfScoreColor(score) {
-  if (score < 50) return '#dc2626';
-  if (score < 70) return '#d97706';
-  return '#16a34a';
-}
+// Style d'un blocage selon la sévérité — calqué sur getIssueStyle() du front.
+const AUDIT_PDF_SEVERITY = {
+  high: { border: '#FECACA', bg: '#FEF1F1', text: '#B42318', label: 'Priorité haute' },
+  medium: { border: '#FDE68A', bg: '#FEF6E7', text: '#B45309', label: 'Priorité moyenne' },
+  low: { border: '#CFCFCF', bg: '#F2F2F2', text: '#2A2A2A', label: 'Priorité basse' },
+};
 
 // Construit le document HTML (print A4) du rapport d'audit.
+// Aligné sur le design system FeedPlug ("Tesla mineral") : surface off-white,
+// encre near-black, accent bleu acier #2A6FE8, typo Bricolage / Hanken Grotesk.
 function buildAuditReportHtml(audit) {
   const esc = auditPdfEscape;
   const report = audit.report || {};
   const score = Math.max(0, Math.min(100, Math.round(Number(report.score) || 0)));
   const potential = Math.max(0, Math.min(100, Math.round(Number(report.potentialScore) || 0)));
-  const scoreColor = auditPdfScoreColor(score);
   const band = report.scoreBand || {};
   const pillars = Array.isArray(report.auditPillars) ? report.auditPillars : [];
   const issues = Array.isArray(report.topIssues) ? report.topIssues : [];
   const samples = Array.isArray(report.sampleProducts) ? report.sampleProducts : [];
   const createdAt = audit.createdAt ? new Date(audit.createdAt) : new Date();
   const dateStr = createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const sevColor = { high: '#dc2626', medium: '#d97706', low: '#64748b' };
-  const sevLabel = { high: 'Critique', medium: 'Important', low: 'À surveiller' };
 
   const pillarsHtml = pillars.map((p) => {
     const v = Math.max(0, Math.min(100, Math.round(Number(p.score) || 0)));
     return `
     <tr>
-      <td style="padding:9px 0;font-size:12.5px;color:#334155;width:165px;vertical-align:middle;">${esc(p.label)}</td>
-      <td style="padding:9px 0;vertical-align:middle;">
+      <td style="padding:10px 0;font-size:13px;font-weight:600;color:#2A2A2A;width:170px;vertical-align:middle;">${esc(p.label)}</td>
+      <td style="padding:10px 0;vertical-align:middle;">
         <table width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="background:#e7ecf3;border-radius:999px;font-size:0;">
+          <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
             <table width="${Math.max(4, v)}%" cellpadding="0" cellspacing="0"><tr>
-              <td style="background:${auditPdfScoreColor(v)};height:8px;border-radius:999px;font-size:0;">&nbsp;</td>
+              <td style="background:#2A6FE8;height:9px;border-radius:999px;font-size:0;">&nbsp;</td>
             </tr></table>
           </td>
         </tr></table>
       </td>
-      <td style="padding:9px 0 9px 12px;font-size:12.5px;font-weight:700;color:#0b1120;width:46px;text-align:right;vertical-align:middle;">${v}/100</td>
+      <td style="padding:10px 0 10px 14px;font-size:14px;font-weight:700;color:#2A6FE8;width:52px;text-align:right;vertical-align:middle;">${v}/100</td>
     </tr>`;
   }).join('');
 
-  const issuesHtml = issues.slice(0, 5).map((it, idx) => `
-    <div class="card" style="border-left:3px solid ${sevColor[it.severity] || sevColor.low};">
+  const issuesHtml = issues.slice(0, 5).map((it, idx) => {
+    const sev = AUDIT_PDF_SEVERITY[it.severity] || AUDIT_PDF_SEVERITY.low;
+    return `
+    <div class="issue" style="background:${sev.bg};border:1px solid ${sev.border};">
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="font-size:14px;font-weight:700;color:#0b1120;">${idx + 1}. ${esc(it.label)}</td>
-        <td style="text-align:right;font-size:11px;font-weight:700;color:${sevColor[it.severity] || sevColor.low};text-transform:uppercase;letter-spacing:0.04em;">${esc(sevLabel[it.severity] || '')}</td>
+        <td style="vertical-align:top;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:${sev.text};">${esc(sev.label)}</div>
+          <div style="font-size:15px;font-weight:700;color:#0A0A0A;margin-top:6px;">${idx + 1}. ${esc(it.label)}</div>
+        </td>
+        <td style="vertical-align:top;text-align:right;width:60px;">
+          <span style="display:inline-block;background:#fff;border:1px solid ${sev.border};color:${sev.text};font-size:12px;font-weight:700;border-radius:999px;padding:4px 9px;">${esc(it.affectedRate || 0)}%</span>
+        </td>
       </tr></table>
-      <div style="font-size:12px;color:#64748b;margin-top:4px;">${esc(it.affectedProducts || 0)} fiches concernées · ${esc(it.affectedRate || 0)}% du catalogue</div>
-      ${it.impact ? `<div style="font-size:12.5px;color:#46546b;margin-top:8px;"><strong style="color:#0b1120;">Impact :</strong> ${esc(it.impact)}</div>` : ''}
-      ${it.recommendation ? `<div style="font-size:12.5px;color:#46546b;margin-top:4px;"><strong style="color:#0b1120;">Correctif :</strong> ${esc(it.recommendation)}</div>` : ''}
-    </div>`).join('');
+      <div style="font-size:12.5px;line-height:1.65;color:#2A2A2A;margin-top:10px;">${esc(it.affectedProducts || 0)} produits concernés. ${esc(it.impact || '')}</div>
+      ${it.recommendation ? `<div style="font-size:12.5px;line-height:1.65;color:#2A2A2A;margin-top:5px;"><strong style="color:#0A0A0A;">Action recommandée :</strong> ${esc(it.recommendation)}</div>` : ''}
+    </div>`;
+  }).join('');
 
   const samplesHtml = samples.map((s, idx) => {
     const before = s.before || {};
@@ -8875,24 +8882,24 @@ function buildAuditReportHtml(audit) {
     const afterAttrs = after && Array.isArray(after.attributes) ? after.attributes : [];
     return `
     <div class="ba-block">
-      <div style="font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Fiche ${idx + 1}</div>
+      <div class="eyebrow" style="margin-bottom:9px;">Fiche produit ${idx + 1}</div>
       <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
         <td style="width:50%;vertical-align:top;padding-right:8px;">
-          <div class="ba-card ba-before">
-            <div class="ba-tag" style="color:#dc2626;">Avant</div>
-            <div class="ba-title">${esc(before.title) || '<span style="color:#cbd5e1;">(titre vide)</span>'}</div>
-            <div class="ba-desc">${esc(before.description) || '<span style="color:#cbd5e1;">(description vide)</span>'}</div>
-            ${beforeIssues.length ? `<div class="ba-issues">${beforeIssues.map((i) => `<span class="ba-chip">✕ ${esc(i)}</span>`).join('')}</div>` : ''}
+          <div class="ba-card" style="background:#FEF1F1;border:1px solid #FECACA;">
+            <div class="ba-tag" style="color:#B42318;">Avant</div>
+            <div class="ba-title">${esc(before.title) || '<span style="color:#B0B0B0;">(titre vide)</span>'}</div>
+            <div class="ba-desc">${esc(before.description) || '<span style="color:#B0B0B0;">(description vide)</span>'}</div>
+            ${beforeIssues.length ? `<div style="margin-top:10px;">${beforeIssues.map((i) => `<span class="chip" style="background:#fff;border:1px solid #FECACA;color:#B42318;">✕ ${esc(i)}</span>`).join('')}</div>` : ''}
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding-left:8px;">
-          <div class="ba-card ba-after">
-            <div class="ba-tag" style="color:#16a34a;">Après — corrigé par FeedPlug</div>
+          <div class="ba-card" style="background:#ECFDF3;border:1px solid #BBF7D0;">
+            <div class="ba-tag" style="color:#15803D;">Après — corrigé par FeedPlug</div>
             ${after ? `
             <div class="ba-title">${esc(after.title)}</div>
             <div class="ba-desc">${esc(after.description)}</div>
-            ${afterAttrs.length ? `<div class="ba-attrs">${afterAttrs.map((a) => `<div class="ba-attr"><span>${esc(a.label)}</span> ${esc(a.value)}</div>`).join('')}</div>` : ''}
-            ` : '<div class="ba-desc" style="color:#94a3b8;">Version optimisée générée dans votre espace FeedPlug.</div>'}
+            ${afterAttrs.length ? `<div style="margin-top:10px;">${afterAttrs.map((a) => `<div style="font-size:11.5px;color:#0A0A0A;margin-bottom:3px;"><strong style="color:#15803D;">${esc(a.label)} :</strong> ${esc(a.value)}</div>`).join('')}</div>` : ''}
+            ` : '<div class="ba-desc" style="color:#6F6F6F;">Version optimisée générée dans votre espace FeedPlug.</div>'}
           </div>
         </td>
       </tr></table>
@@ -8903,81 +8910,90 @@ function buildAuditReportHtml(audit) {
   planSteps.push('Brancher FeedPlug pour appliquer et maintenir ces corrections automatiquement sur tous les canaux.');
   const planHtml = planSteps.map((step, idx) => `
     <tr>
-      <td style="width:30px;vertical-align:top;padding:6px 0;">
-        <div style="width:24px;height:24px;line-height:24px;text-align:center;background:#eef4ff;border-radius:999px;color:#2563eb;font-size:12px;font-weight:800;">${idx + 1}</div>
+      <td style="width:32px;vertical-align:top;padding:7px 0;">
+        <div style="width:26px;height:26px;line-height:26px;text-align:center;background:#E8EFFB;border-radius:999px;color:#2A6FE8;font-size:12px;font-weight:700;">${idx + 1}</div>
       </td>
-      <td style="padding:6px 0 6px 10px;font-size:13px;line-height:1.55;color:#334155;">${esc(step)}</td>
+      <td style="padding:7px 0 7px 12px;font-size:13.5px;line-height:1.6;color:#2A2A2A;">${esc(step)}</td>
     </tr>`).join('');
+
+  const statCell = (value, label, color) => `
+    <div class="stat">
+      <div class="stat-v" style="color:${color};">${esc(value)}</div>
+      <div class="stat-l">${esc(label)}</div>
+    </div>`;
 
   return `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#0b1120; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .cover { background:#0b1120; color:#fff; padding:44px 48px; }
-  .wrap { padding:34px 48px; }
-  h2 { font-size:17px; font-weight:800; color:#0b1120; margin:0 0 14px; letter-spacing:-0.01em; }
-  .section { margin-bottom:30px; }
-  .card { background:#fff; border:1px solid #e7ecf3; border-radius:10px; padding:14px 16px; margin-bottom:10px; page-break-inside:avoid; }
-  .ba-block { margin-bottom:18px; page-break-inside:avoid; }
-  .ba-card { border:1px solid #e7ecf3; border-radius:10px; padding:13px 14px; min-height:140px; }
-  .ba-before { background:#fdf6f6; border-color:#f3d9d9; }
-  .ba-after { background:#f3faf5; border-color:#cce9d6; }
-  .ba-tag { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:7px; }
-  .ba-title { font-size:13px; font-weight:700; color:#0b1120; line-height:1.4; margin-bottom:6px; }
-  .ba-desc { font-size:11.5px; color:#46546b; line-height:1.55; }
-  .ba-issues { margin-top:9px; }
-  .ba-chip { display:inline-block; background:#fff; border:1px solid #f0cccc; color:#b91c1c; font-size:10px; font-weight:600; border-radius:6px; padding:3px 7px; margin:0 4px 4px 0; }
-  .ba-attrs { margin-top:9px; }
-  .ba-attr { font-size:11px; color:#0b1120; margin-bottom:3px; }
-  .ba-attr span { color:#16a34a; font-weight:700; }
-  .stat { background:#f7f9fc; border:1px solid #e7ecf3; border-radius:10px; padding:16px; text-align:center; }
-  .stat-v { font-size:24px; font-weight:800; color:#2563eb; }
-  .stat-l { font-size:11px; color:#64748b; margin-top:3px; line-height:1.4; }
+  body { margin:0; background:#FAFAFA; color:#0A0A0A;
+    font-family:'Hanken Grotesk',ui-sans-serif,system-ui,-apple-system,sans-serif;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .display { font-family:'Bricolage Grotesque','Hanken Grotesk',sans-serif; }
+  .cover { padding:46px 48px 30px; border-bottom:1px solid #E5E5E5; }
+  .wrap { padding:32px 48px 44px; }
+  .eyebrow { font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#2A6FE8; }
+  h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:19px; font-weight:700; color:#0A0A0A; margin:0 0 14px; letter-spacing:-0.01em; }
+  .section { margin-bottom:28px; }
+  .card { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:22px; }
+  .issue { border-radius:20px; padding:18px 20px; margin-bottom:12px; page-break-inside:avoid; }
+  .ba-block { margin-bottom:16px; page-break-inside:avoid; }
+  .ba-card { border-radius:20px; padding:16px 17px; min-height:148px; }
+  .ba-tag { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:9px; }
+  .ba-title { font-size:13px; font-weight:700; color:#0A0A0A; line-height:1.42; margin-bottom:7px; }
+  .ba-desc { font-size:11.5px; color:#2A2A2A; line-height:1.6; }
+  .chip { display:inline-block; font-size:10px; font-weight:600; border-radius:6px; padding:3px 8px; margin:0 5px 5px 0; }
+  .stat { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:20px 18px; }
+  .stat-v { font-family:'Bricolage Grotesque',sans-serif; font-size:32px; font-weight:700; line-height:1; letter-spacing:-0.04em; }
+  .stat-l { font-size:12.5px; color:#6F6F6F; margin-top:9px; line-height:1.45; }
 </style></head>
 <body>
   <div class="cover">
-    <div style="font-size:21px;font-weight:600;letter-spacing:-0.02em;">FeedPlug</div>
-    <div style="font-size:28px;font-weight:800;margin-top:24px;letter-spacing:-0.01em;">Audit de flux produit</div>
-    <div style="font-size:13px;color:#94a3b8;margin-top:8px;">
-      ${esc(audit.company || 'Votre catalogue')} · ${esc(audit.cmsUsed || audit.connectorType || 'Source')} · ${esc((report.summary && report.summary.totalProducts) || audit.catalogSize || 0)} produits · ${esc(dateStr)}
+    <div class="display" style="font-size:18px;font-weight:700;color:#0A0A0A;letter-spacing:-0.02em;">FeedPlug</div>
+    <div class="eyebrow" style="margin-top:34px;">Rapport d'audit · ${esc(dateStr)}</div>
+    <div class="display" style="font-size:34px;font-weight:700;color:#0A0A0A;letter-spacing:-0.02em;margin-top:10px;">Audit de flux produit</div>
+    <div style="font-size:14px;color:#6F6F6F;margin-top:10px;">
+      ${esc(audit.company || 'Votre catalogue')} &nbsp;·&nbsp; ${esc(audit.cmsUsed || audit.connectorType || 'Source')} &nbsp;·&nbsp; ${esc((report.summary && report.summary.totalProducts) || audit.catalogSize || 0)} produits
     </div>
   </div>
   <div class="wrap">
 
     <div class="section">
       <h2>Synthèse</h2>
-      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f7f9fc;border:1px solid #e7ecf3;border-radius:12px;padding:22px 24px;">
+      <div class="card">
         <table width="100%" cellpadding="0" cellspacing="0"><tr>
           <td style="vertical-align:middle;">
-            <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Score actuel du flux</div>
-            <div style="font-size:46px;font-weight:800;line-height:1.05;color:${scoreColor};">${score}<span style="font-size:18px;color:#cbd5e1;">/100</span></div>
+            <div style="font-size:12.5px;font-weight:600;color:#6F6F6F;">Score actuel du flux</div>
+            <div class="display" style="font-size:52px;font-weight:700;line-height:1;letter-spacing:-0.04em;color:#2A6FE8;margin-top:6px;">${score}<span style="font-size:20px;color:#B0B0B0;">/100</span></div>
           </td>
           <td style="text-align:right;vertical-align:middle;">
-            <div style="display:inline-block;background:#eef4ff;border:1px solid #d6e4ff;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700;color:#2563eb;">Potentiel atteignable : ${potential}/100</div>
+            <span style="display:inline-block;background:#E8EFFB;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700;color:#1F58C0;">Potentiel atteignable&nbsp;: ${potential}/100</span>
           </td>
         </tr></table>
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;"><tr>
-          <td style="background:#e7ecf3;border-radius:999px;font-size:0;">
-            <table width="${Math.max(4, score)}%" cellpadding="0" cellspacing="0"><tr><td style="background:#2563eb;height:10px;border-radius:999px;font-size:0;">&nbsp;</td></tr></table>
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;"><tr>
+          <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
+            <table width="${Math.max(4, score)}%" cellpadding="0" cellspacing="0"><tr><td style="background:#2A6FE8;height:10px;border-radius:999px;font-size:0;">&nbsp;</td></tr></table>
           </td>
         </tr></table>
-        ${band.label ? `<div style="margin-top:14px;font-size:12.5px;color:#46546b;"><strong style="color:#0b1120;">Niveau ${esc(band.label)}.</strong> ${esc(band.description || '')}</div>` : ''}
-      </td></tr></table>
+        ${band.label ? `<div style="margin-top:16px;padding-top:15px;border-top:1px solid #E5E5E5;font-size:13px;line-height:1.65;color:#2A2A2A;"><strong class="display" style="color:#0A0A0A;">Niveau ${esc(band.label)}.</strong> ${esc(band.description || '')}</div>` : ''}
+      </div>
     </div>
 
     <div class="section">
       <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
-        <td style="width:33.33%;padding-right:7px;"><div class="stat"><div class="stat-v">${esc(report.estimatedAdditionalApprovedProducts || 0)}</div><div class="stat-l">produits récupérables</div></div></td>
-        <td style="width:33.33%;padding:0 7px;"><div class="stat"><div class="stat-v">+${esc(report.estimatedVisibilityLiftPct || 0)}%</div><div class="stat-l">de visibilité estimée</div></div></td>
-        <td style="width:33.33%;padding-left:7px;"><div class="stat"><div class="stat-v">${esc((report.summary && report.summary.approvalReadyRate) || 0)}%</div><div class="stat-l">produits déjà prêts</div></div></td>
+        <td style="width:33.33%;padding-right:7px;vertical-align:top;">${statCell(report.estimatedAdditionalApprovedProducts || 0, 'produits récupérables', '#15803D')}</td>
+        <td style="width:33.33%;padding:0 7px;vertical-align:top;">${statCell(`+${report.estimatedVisibilityLiftPct || 0}%`, 'de visibilité estimée', '#2A6FE8')}</td>
+        <td style="width:33.33%;padding-left:7px;vertical-align:top;">${statCell(`${(report.summary && report.summary.approvalReadyRate) || 0}%`, 'produits déjà prêts', '#2A6FE8')}</td>
       </tr></table>
     </div>
 
     ${pillars.length ? `<div class="section">
-      <h2>Les 4 piliers du flux</h2>
-      <table width="100%" cellpadding="0" cellspacing="0">${pillarsHtml}</table>
+      <h2>Les 4 leviers de valeur</h2>
+      <div class="card"><table width="100%" cellpadding="0" cellspacing="0">${pillarsHtml}</table></div>
     </div>` : ''}
 
     <div class="section">
@@ -8985,20 +9001,20 @@ function buildAuditReportHtml(audit) {
       ${issuesHtml || '<div class="card">Aucun blocage majeur détecté.</div>'}
     </div>
 
-    ${samples.length ? `<div class="section" style="page-break-before:always;padding-top:8px;">
+    ${samples.length ? `<div class="section" style="page-break-before:always;padding-top:6px;">
       <h2>Avant / Après sur votre catalogue</h2>
-      <p style="font-size:12.5px;color:#64748b;margin:0 0 16px;">Un échantillon de vos fiches, corrigées par FeedPlug — titres, descriptions et attributs.</p>
+      <p style="font-size:13px;color:#6F6F6F;margin:0 0 16px;line-height:1.6;">Un échantillon de vos fiches, corrigées par FeedPlug — titres, descriptions et attributs.</p>
       ${samplesHtml}
     </div>` : ''}
 
     <div class="section">
       <h2>Plan d'action</h2>
-      <table width="100%" cellpadding="0" cellspacing="0">${planHtml}</table>
+      <div class="card"><table width="100%" cellpadding="0" cellspacing="0">${planHtml}</table></div>
     </div>
 
-    <div class="section" style="border-top:1px solid #e7ecf3;padding-top:18px;">
-      ${report.methodology ? `<div style="font-size:10.5px;color:#94a3b8;line-height:1.6;">${esc(report.methodology.scoring || '')} ${esc(report.methodology.estimation || '')}</div>` : ''}
-      <div style="margin-top:14px;font-size:12px;color:#46546b;">Audit complet et version optimisée de votre catalogue : <strong style="color:#2563eb;">${esc(audit.shareUrl || 'feedplug.com')}</strong></div>
+    <div style="border-top:1px solid #E5E5E5;padding-top:18px;">
+      ${report.methodology ? `<div style="font-size:10.5px;color:#B0B0B0;line-height:1.65;">${esc(report.methodology.scoring || '')} ${esc(report.methodology.estimation || '')}</div>` : ''}
+      <div style="margin-top:13px;font-size:12px;color:#6F6F6F;">Audit complet et version optimisée du catalogue&nbsp;: <strong style="color:#2A6FE8;">${esc(audit.shareUrl || 'feedplug.com')}</strong></div>
     </div>
 
   </div>
