@@ -1,7 +1,8 @@
 FROM node:20-slim
 
 # OpenSSL pour Prisma + Chromium (rendu PDF de l'audit via puppeteer-core).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Chromium est installé AVEC ses recommends pour garantir toutes ses libs runtime.
+RUN apt-get update && apt-get install -y \
     openssl \
     chromium \
     fonts-liberation \

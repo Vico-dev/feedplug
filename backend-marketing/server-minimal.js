@@ -9007,6 +9007,23 @@ function buildAuditReportHtml(audit) {
 
 let auditPdfBrowserPromise = null;
 
+// Résout le chemin du binaire Chromium parmi les emplacements connus.
+function resolveChromiumPath() {
+  const fs = require('fs');
+  const candidates = [
+    process.env.CHROMIUM_PATH,
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch { /* ignore */ }
+  }
+  return candidates[0] || '/usr/bin/chromium';
+}
+
 // Lance (ou réutilise) un Chromium headless adapté à Cloud Run.
 async function getAuditPdfBrowser() {
   const puppeteer = require('puppeteer-core');
@@ -9020,16 +9037,17 @@ async function getAuditPdfBrowser() {
       auditPdfBrowserPromise = null;
     }
   }
-  const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
+  const executablePath = resolveChromiumPath();
+  console.log(`🖨️  Lancement Chromium pour PDF audit: ${executablePath}`);
   auditPdfBrowserPromise = puppeteer.launch({
     executablePath,
     headless: true,
+    dumpio: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--no-zygote',
     ],
   });
   return auditPdfBrowserPromise;
@@ -9530,7 +9548,7 @@ app.get('/api/v1/marketing/audits/:shareToken/pdf', async (req, res) => {
       try {
         buffer = await renderAuditReportPdf(buildAuditReportHtml(serialized));
       } catch (renderError) {
-        console.warn('Rendu PDF premium échoué, fallback pdfkit:', renderError.message);
+        console.warn('Rendu PDF premium échoué, fallback pdfkit:', renderError && (renderError.stack || renderError.message || renderError));
       }
     }
     if (!buffer) {
