@@ -8822,6 +8822,58 @@ const AUDIT_PDF_SEVERITY = {
   low: { border: '#CFCFCF', bg: '#F2F2F2', text: '#2A2A2A', label: 'Priorité basse' },
 };
 
+// Radar / "araignée" SVG des piliers du flux — lecture instantanée des points faibles.
+function buildAuditRadarSvg(pillars) {
+  const list = (Array.isArray(pillars) ? pillars : []).slice(0, 6);
+  const n = list.length;
+  if (n < 3) return '';
+  const cx = 230;
+  const cy = 152;
+  const R = 84;
+  const angle = (i) => (-90 + i * (360 / n)) * Math.PI / 180;
+  const point = (i, radius) => {
+    const a = angle(i);
+    return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+  };
+  const clampScore = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  const polyPoints = (radiusFor) => list
+    .map((_, i) => point(i, radiusFor(i)).map((v) => v.toFixed(1)).join(','))
+    .join(' ');
+
+  const rings = [0.25, 0.5, 0.75, 1]
+    .map((lvl) => `<polygon points="${polyPoints(() => R * lvl)}" fill="none" stroke="#E5E5E5" stroke-width="1"/>`)
+    .join('');
+  const axes = list
+    .map((_, i) => {
+      const [x, y] = point(i, R);
+      return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#E5E5E5" stroke-width="1"/>`;
+    })
+    .join('');
+  const dataPoints = polyPoints((i) => (R * clampScore(list[i].score)) / 100);
+  const dots = list
+    .map((_, i) => {
+      const [x, y] = point(i, (R * clampScore(list[i].score)) / 100);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#2A6FE8"/>`;
+    })
+    .join('');
+  const labels = list
+    .map((p, i) => {
+      const [lx, ly] = point(i, R + 15);
+      const anchor = lx > cx + 6 ? 'start' : lx < cx - 6 ? 'end' : 'middle';
+      const dy = ly < cy - 6 ? -3 : ly > cy + 6 ? 11 : 4;
+      const v = Math.round(clampScore(p.score));
+      return `<text x="${lx.toFixed(1)}" y="${(ly + dy).toFixed(1)}" text-anchor="${anchor}" font-size="9.5" font-weight="600" fill="#2A2A2A">${auditPdfEscape(p.label)}</text>`
+        + `<text x="${lx.toFixed(1)}" y="${(ly + dy + 12).toFixed(1)}" text-anchor="${anchor}" font-size="11" font-weight="700" fill="#2A6FE8">${v}/100</text>`;
+    })
+    .join('');
+
+  return `<svg viewBox="0 0 460 312" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Hanken Grotesk',sans-serif">
+    ${rings}${axes}
+    <polygon points="${dataPoints}" fill="rgba(42,111,232,0.14)" stroke="#2A6FE8" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
 // Construit le document HTML (print A4) du rapport d'audit.
 // Aligné sur le design system FeedPlug ("Tesla mineral") : surface off-white,
 // encre near-black, accent bleu acier #2A6FE8, typo Bricolage / Hanken Grotesk.
@@ -8837,22 +8889,23 @@ function buildAuditReportHtml(audit) {
   const createdAt = audit.createdAt ? new Date(audit.createdAt) : new Date();
   const dateStr = createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  const radarSvg = buildAuditRadarSvg(pillars);
   const pillarsHtml = pillars.map((p) => {
     const v = Math.max(0, Math.min(100, Math.round(Number(p.score) || 0)));
     return `
-    <tr>
-      <td style="padding:10px 0;font-size:13px;font-weight:600;color:#2A2A2A;width:170px;vertical-align:middle;">${esc(p.label)}</td>
-      <td style="padding:10px 0;vertical-align:middle;">
-        <table width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
-            <table width="${Math.max(4, v)}%" cellpadding="0" cellspacing="0"><tr>
-              <td style="background:#2A6FE8;height:9px;border-radius:999px;font-size:0;">&nbsp;</td>
-            </tr></table>
-          </td>
-        </tr></table>
-      </td>
-      <td style="padding:10px 0 10px 14px;font-size:14px;font-weight:700;color:#2A6FE8;width:52px;text-align:right;vertical-align:middle;">${v}/100</td>
-    </tr>`;
+    <div style="margin-bottom:14px;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="font-size:12.5px;font-weight:600;color:#0A0A0A;">${esc(p.label)}</td>
+        <td style="text-align:right;font-size:12.5px;font-weight:700;color:#2A6FE8;">${v}/100</td>
+      </tr></table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;"><tr>
+        <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
+          <table width="${Math.max(4, v)}%" cellpadding="0" cellspacing="0"><tr>
+            <td style="background:#2A6FE8;height:7px;border-radius:999px;font-size:0;">&nbsp;</td>
+          </tr></table>
+        </td>
+      </tr></table>
+    </div>`;
   }).join('');
 
   const issuesHtml = issues.slice(0, 5).map((it, idx) => {
@@ -8992,8 +9045,13 @@ function buildAuditReportHtml(audit) {
     </div>
 
     ${pillars.length ? `<div class="section">
-      <h2>Les 4 leviers de valeur</h2>
-      <div class="card"><table width="100%" cellpadding="0" cellspacing="0">${pillarsHtml}</table></div>
+      <h2>Le profil de votre flux</h2>
+      <div class="card">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:54%;vertical-align:middle;padding-right:18px;">${radarSvg}</td>
+          <td style="width:46%;vertical-align:middle;padding-left:20px;border-left:1px solid #E5E5E5;">${pillarsHtml}</td>
+        </tr></table>
+      </div>
     </div>` : ''}
 
     <div class="section">
