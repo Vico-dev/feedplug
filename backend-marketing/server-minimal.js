@@ -9062,11 +9062,14 @@ async function renderAuditReportPdf(html) {
   const page = await browser.newPage();
   try {
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 20000 });
-    return await page.pdf({
+    const pdfData = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
     });
+    // Puppeteer v23 renvoie un Uint8Array : on le convertit en Buffer Node
+    // pour qu'Express l'envoie en binaire (sinon sérialisé en JSON).
+    return Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData);
   } finally {
     await page.close().catch(() => {});
   }
