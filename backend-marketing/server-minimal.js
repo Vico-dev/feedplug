@@ -5556,6 +5556,8 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
     estimatedVisibilityLiftPct: aggregate.estimatedVisibilityLiftPct,
     summary: aggregate.metrics,
     scoreBreakdown: aggregate.scoreBreakdown,
+    auditPillars: aggregate.auditPillars,
+    scoreBand: aggregate.scoreBand,
     connectorType: String(auditRow.connectortype || 'OTHER').toUpperCase(),
     targetChannels: normalizeTargetChannels(typeof auditRow.targetchannels === 'string' ? JSON.parse(auditRow.targetchannels || '[]') : auditRow.targetchannels || []),
     coverage: {
