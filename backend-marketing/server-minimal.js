@@ -88,6 +88,7 @@ const {
   verifyMarketingUnsubscribeToken,
   getEmailLocale,
 } = require('./email/email-service');
+const { callAIWithCache } = require('./ai/ai-wrapper');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const { Storage } = require('@google-cloud/storage');
@@ -5375,6 +5376,154 @@ async function fetchMarketingAuditGmcData(audit, input = {}) {
   };
 }
 
+// ── Échantillon before/after pour le PDF d'audit ─────────────────────────────
+
+// Récupère les items du catalogue selon le connecteur de l'audit.
+async function fetchAuditItems(auditRow, input = {}) {
+  const connector = String(auditRow.connectortype || '').toUpperCase();
+  if (connector === 'SHOPIFY') {
+    return { items: await fetchMarketingAuditShopifyItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'PRESTASHOP') {
+    return { items: await fetchMarketingAuditPrestashopItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'CSV') {
+    return { items: await fetchMarketingAuditFileItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'GMC') {
+    return await fetchMarketingAuditGmcData(auditRow, input);
+  }
+  return null;
+}
+
+function auditFieldHasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
+// Liste des champs faibles d'une fiche (clés normalisées).
+function auditItemMissingFields(item) {
+  const missing = [];
+  if (!auditFieldHasValue(item.descriptionText) && !auditFieldHasValue(item.descriptionHtml)) missing.push('description');
+  if (!auditFieldHasValue(item.gtin) && !auditFieldHasValue(item.mpn)) missing.push('identifier');
+  if (!auditFieldHasValue(item.brand)) missing.push('brand');
+  if (!auditFieldHasValue(item.category) && !auditFieldHasValue(item.googleProductCategory) && !auditFieldHasValue(item.productType)) missing.push('category');
+  if (String(item.title || '').trim().length < 35) missing.push('title');
+  return missing;
+}
+
+// 3 fiches représentatives : titre présent, mais le plus de blocages possible.
+function selectAuditSampleItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter((it) => auditFieldHasValue(it.title))
+    .map((it) => ({ it, weak: auditItemMissingFields(it).length }))
+    .filter((s) => s.weak > 0)
+    .sort((a, b) => b.weak - a.weak)
+    .slice(0, 3)
+    .map((s) => s.it);
+}
+
+function auditExcerpt(value, max) {
+  const text = String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function parseAiJsonResponse(text) {
+  if (!text) return null;
+  let cleaned = String(text).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end < 0 || end < start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+// Version corrigée d'une fiche via l'IA (titre, description, attributs).
+async function generateAuditAfterVersion(item) {
+  const systemPrompt = `Tu es un expert en optimisation de flux produit e-commerce (Google Shopping, marketplaces). On te donne une fiche produit faible, tu produis une version corrigée.
+Règles strictes :
+- Garde la langue d'origine du produit.
+- Titre : 60 à 140 caractères, exprime le type de produit, la marque et l'attribut différenciant principal, sans superlatifs marketing.
+- Description : 2 à 3 phrases factuelles et structurées, sans inventer de spécifications techniques inconnues.
+- Attributs : déduis uniquement ce qui est raisonnablement inférable (catégorie, type de produit, couleur ou matière si évident). N'invente JAMAIS un GTIN ou un MPN.
+Réponds UNIQUEMENT avec un JSON valide, sans texte autour : {"title":"...","description":"...","attributes":[{"label":"...","value":"..."}]}`;
+  const userPrompt = `Fiche produit actuelle :
+Titre : ${item.title || '(vide)'}
+Description : ${auditExcerpt(item.descriptionText || item.descriptionHtml || '', 400) || '(vide)'}
+Marque : ${item.brand || '(vide)'}
+Catégorie : ${item.category || item.googleProductCategory || item.productType || '(vide)'}
+Prix : ${item.price != null ? item.price : '(vide)'} ${item.currency || ''}`.trim();
+
+  const response = await callAIWithCache(
+    prisma,
+    'audit_before_after',
+    { title: item.title || '', brand: item.brand || '', sku: item.sku || '' },
+    systemPrompt,
+    userPrompt,
+    String(item.sku || item.gtin || 'audit-sample'),
+    false
+  );
+  const parsed = parseAiJsonResponse(response?.text);
+  if (!parsed || !parsed.title) return null;
+  return {
+    title: String(parsed.title).slice(0, 200),
+    description: String(parsed.description || '').slice(0, 600),
+    attributes: Array.isArray(parsed.attributes)
+      ? parsed.attributes
+        .slice(0, 5)
+        .map((a) => ({ label: String(a?.label || '').slice(0, 40), value: String(a?.value || '').slice(0, 90) }))
+        .filter((a) => a.label && a.value)
+      : [],
+  };
+}
+
+// Construit jusqu'à 3 paires before/after pour le PDF d'audit.
+async function generateAuditSampleProducts(items) {
+  const samples = selectAuditSampleItems(items);
+  const results = [];
+  for (const item of samples) {
+    const before = {
+      title: String(item.title || '').trim(),
+      description: auditExcerpt(item.descriptionText || item.descriptionHtml || '', 240),
+      imageUrl: auditFieldHasValue(item.imageUrl) ? item.imageUrl : null,
+      issues: auditItemMissingFields(item),
+    };
+    let after = null;
+    try {
+      after = await generateAuditAfterVersion(item);
+    } catch (aiError) {
+      console.warn('Audit before/after IA échouée:', aiError.message);
+    }
+    results.push({ before, after });
+  }
+  return results;
+}
+
+// Backfill : génère l'échantillon before/after si un audit "ready" ne l'a pas.
+async function ensureAuditBeforeAfter(audit) {
+  if (!audit || !prismaReady || !prisma) return audit;
+  const report = typeof audit.reportjson === 'string' ? JSON.parse(audit.reportjson || '{}') : (audit.reportjson || {});
+  if (audit.status !== 'ready' || !report || !Number.isFinite(Number(report.score))) return audit;
+  if (Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0) return audit;
+
+  try {
+    const input = typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {});
+    const fetched = await fetchAuditItems(audit, input);
+    if (!fetched || !Array.isArray(fetched.items)) return audit;
+    report.sampleProducts = await generateAuditSampleProducts(fetched.items);
+    await prisma.$executeRawUnsafe(`
+      UPDATE marketing_audits SET reportjson = $1::jsonb, "updatedAt" = NOW() WHERE id = $2::text
+    `, JSON.stringify(report), audit.id);
+    const refreshed = await prisma.$queryRawUnsafe(`SELECT * FROM marketing_audits WHERE id = $1::text LIMIT 1`, audit.id);
+    return refreshed?.[0] || audit;
+  } catch (backfillError) {
+    console.warn('Backfill before/after échoué:', backfillError.message);
+    return audit;
+  }
+}
+
 async function maybeGenerateMarketingAuditReport(auditRow) {
   if (!auditRow || !prismaReady || !prisma) return auditRow;
   const currentReport = typeof auditRow.reportjson === 'string' ? JSON.parse(auditRow.reportjson || '{}') : (auditRow.reportjson || {});
@@ -5386,21 +5535,15 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
   }
 
   const input = typeof auditRow.inputjson === 'string' ? JSON.parse(auditRow.inputjson || '{}') : (auditRow.inputjson || {});
-  let items = [];
   let diagnostics = input.gmcDiagnostics || {};
 
-  if (String(auditRow.connectortype || '').toUpperCase() === 'SHOPIFY') {
-    items = await fetchMarketingAuditShopifyItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'PRESTASHOP') {
-    items = await fetchMarketingAuditPrestashopItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'CSV') {
-    items = await fetchMarketingAuditFileItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'GMC') {
-    const gmcData = await fetchMarketingAuditGmcData(auditRow, input);
-    items = gmcData.items;
-    diagnostics = gmcData.diagnostics;
-  } else {
+  const fetched = await fetchAuditItems(auditRow, input);
+  if (!fetched || !Array.isArray(fetched.items)) {
     return auditRow;
+  }
+  const items = fetched.items;
+  if (fetched.diagnostics) {
+    diagnostics = fetched.diagnostics;
   }
 
   const summary = buildAuditSummaryFromItems(items);
@@ -5456,6 +5599,13 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
     ],
     methodology: aggregate.methodology,
   };
+
+  try {
+    report.sampleProducts = await generateAuditSampleProducts(items);
+  } catch (sampleError) {
+    console.warn('Génération échantillon audit échouée:', sampleError.message);
+    report.sampleProducts = [];
+  }
 
   await prisma.$executeRawUnsafe(`
     UPDATE marketing_audits
@@ -7916,6 +8066,7 @@ function buildAuditNurtureContext(lead, audit) {
     gainVisibilite: report.estimatedVisibilityLiftPct ?? '',
     cms: input.cmsUsed || audit?.connectortype || '',
     lienAudit: `${publicBaseUrl}/${audit?.locale || 'fr'}/audit-flux/${audit?.sharetoken || ''}`,
+    lienAuditPdf: `${(process.env.API_URL || 'https://api.feedplug.com').replace(/\/$/, '')}/api/v1/marketing/audits/${audit?.sharetoken || ''}/pdf`,
     lienRdv: process.env.MARKETING_RDV_URL || 'https://calendly.com/victorsoldet/30min',
   };
 }
@@ -8651,6 +8802,255 @@ function serializeMarketingAudit(audit) {
   };
 }
 
+// ── PDF d'audit premium (HTML → PDF via Chromium) ────────────────────────────
+
+const AUDIT_PDF_FIELD_LABELS_FR = {
+  description: 'Description', identifier: 'Identifiant (GTIN/MPN)',
+  brand: 'Marque', category: 'Catégorie', title: 'Titre',
+};
+
+function auditPdfEscape(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function auditPdfScoreColor(score) {
+  if (score < 50) return '#dc2626';
+  if (score < 70) return '#d97706';
+  return '#16a34a';
+}
+
+// Construit le document HTML (print A4) du rapport d'audit.
+function buildAuditReportHtml(audit) {
+  const esc = auditPdfEscape;
+  const report = audit.report || {};
+  const score = Math.max(0, Math.min(100, Math.round(Number(report.score) || 0)));
+  const potential = Math.max(0, Math.min(100, Math.round(Number(report.potentialScore) || 0)));
+  const scoreColor = auditPdfScoreColor(score);
+  const band = report.scoreBand || {};
+  const pillars = Array.isArray(report.auditPillars) ? report.auditPillars : [];
+  const issues = Array.isArray(report.topIssues) ? report.topIssues : [];
+  const samples = Array.isArray(report.sampleProducts) ? report.sampleProducts : [];
+  const createdAt = audit.createdAt ? new Date(audit.createdAt) : new Date();
+  const dateStr = createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const sevColor = { high: '#dc2626', medium: '#d97706', low: '#64748b' };
+  const sevLabel = { high: 'Critique', medium: 'Important', low: 'À surveiller' };
+
+  const pillarsHtml = pillars.map((p) => {
+    const v = Math.max(0, Math.min(100, Math.round(Number(p.score) || 0)));
+    return `
+    <tr>
+      <td style="padding:9px 0;font-size:12.5px;color:#334155;width:165px;vertical-align:middle;">${esc(p.label)}</td>
+      <td style="padding:9px 0;vertical-align:middle;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="background:#e7ecf3;border-radius:999px;font-size:0;">
+            <table width="${Math.max(4, v)}%" cellpadding="0" cellspacing="0"><tr>
+              <td style="background:${auditPdfScoreColor(v)};height:8px;border-radius:999px;font-size:0;">&nbsp;</td>
+            </tr></table>
+          </td>
+        </tr></table>
+      </td>
+      <td style="padding:9px 0 9px 12px;font-size:12.5px;font-weight:700;color:#0b1120;width:46px;text-align:right;vertical-align:middle;">${v}/100</td>
+    </tr>`;
+  }).join('');
+
+  const issuesHtml = issues.slice(0, 5).map((it, idx) => `
+    <div class="card" style="border-left:3px solid ${sevColor[it.severity] || sevColor.low};">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="font-size:14px;font-weight:700;color:#0b1120;">${idx + 1}. ${esc(it.label)}</td>
+        <td style="text-align:right;font-size:11px;font-weight:700;color:${sevColor[it.severity] || sevColor.low};text-transform:uppercase;letter-spacing:0.04em;">${esc(sevLabel[it.severity] || '')}</td>
+      </tr></table>
+      <div style="font-size:12px;color:#64748b;margin-top:4px;">${esc(it.affectedProducts || 0)} fiches concernées · ${esc(it.affectedRate || 0)}% du catalogue</div>
+      ${it.impact ? `<div style="font-size:12.5px;color:#46546b;margin-top:8px;"><strong style="color:#0b1120;">Impact :</strong> ${esc(it.impact)}</div>` : ''}
+      ${it.recommendation ? `<div style="font-size:12.5px;color:#46546b;margin-top:4px;"><strong style="color:#0b1120;">Correctif :</strong> ${esc(it.recommendation)}</div>` : ''}
+    </div>`).join('');
+
+  const samplesHtml = samples.map((s, idx) => {
+    const before = s.before || {};
+    const after = s.after || null;
+    const beforeIssues = Array.isArray(before.issues)
+      ? before.issues.map((k) => AUDIT_PDF_FIELD_LABELS_FR[k] || k)
+      : [];
+    const afterAttrs = after && Array.isArray(after.attributes) ? after.attributes : [];
+    return `
+    <div class="ba-block">
+      <div style="font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Fiche ${idx + 1}</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
+        <td style="width:50%;vertical-align:top;padding-right:8px;">
+          <div class="ba-card ba-before">
+            <div class="ba-tag" style="color:#dc2626;">Avant</div>
+            <div class="ba-title">${esc(before.title) || '<span style="color:#cbd5e1;">(titre vide)</span>'}</div>
+            <div class="ba-desc">${esc(before.description) || '<span style="color:#cbd5e1;">(description vide)</span>'}</div>
+            ${beforeIssues.length ? `<div class="ba-issues">${beforeIssues.map((i) => `<span class="ba-chip">✕ ${esc(i)}</span>`).join('')}</div>` : ''}
+          </div>
+        </td>
+        <td style="width:50%;vertical-align:top;padding-left:8px;">
+          <div class="ba-card ba-after">
+            <div class="ba-tag" style="color:#16a34a;">Après — corrigé par FeedPlug</div>
+            ${after ? `
+            <div class="ba-title">${esc(after.title)}</div>
+            <div class="ba-desc">${esc(after.description)}</div>
+            ${afterAttrs.length ? `<div class="ba-attrs">${afterAttrs.map((a) => `<div class="ba-attr"><span>${esc(a.label)}</span> ${esc(a.value)}</div>`).join('')}</div>` : ''}
+            ` : '<div class="ba-desc" style="color:#94a3b8;">Version optimisée générée dans votre espace FeedPlug.</div>'}
+          </div>
+        </td>
+      </tr></table>
+    </div>`;
+  }).join('');
+
+  const planSteps = issues.slice(0, 4).map((it) => it.recommendation || `Corriger : ${it.label}`);
+  planSteps.push('Brancher FeedPlug pour appliquer et maintenir ces corrections automatiquement sur tous les canaux.');
+  const planHtml = planSteps.map((step, idx) => `
+    <tr>
+      <td style="width:30px;vertical-align:top;padding:6px 0;">
+        <div style="width:24px;height:24px;line-height:24px;text-align:center;background:#eef4ff;border-radius:999px;color:#2563eb;font-size:12px;font-weight:800;">${idx + 1}</div>
+      </td>
+      <td style="padding:6px 0 6px 10px;font-size:13px;line-height:1.55;color:#334155;">${esc(step)}</td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#0b1120; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .cover { background:#0b1120; color:#fff; padding:44px 48px; }
+  .wrap { padding:34px 48px; }
+  h2 { font-size:17px; font-weight:800; color:#0b1120; margin:0 0 14px; letter-spacing:-0.01em; }
+  .section { margin-bottom:30px; }
+  .card { background:#fff; border:1px solid #e7ecf3; border-radius:10px; padding:14px 16px; margin-bottom:10px; page-break-inside:avoid; }
+  .ba-block { margin-bottom:18px; page-break-inside:avoid; }
+  .ba-card { border:1px solid #e7ecf3; border-radius:10px; padding:13px 14px; min-height:140px; }
+  .ba-before { background:#fdf6f6; border-color:#f3d9d9; }
+  .ba-after { background:#f3faf5; border-color:#cce9d6; }
+  .ba-tag { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:7px; }
+  .ba-title { font-size:13px; font-weight:700; color:#0b1120; line-height:1.4; margin-bottom:6px; }
+  .ba-desc { font-size:11.5px; color:#46546b; line-height:1.55; }
+  .ba-issues { margin-top:9px; }
+  .ba-chip { display:inline-block; background:#fff; border:1px solid #f0cccc; color:#b91c1c; font-size:10px; font-weight:600; border-radius:6px; padding:3px 7px; margin:0 4px 4px 0; }
+  .ba-attrs { margin-top:9px; }
+  .ba-attr { font-size:11px; color:#0b1120; margin-bottom:3px; }
+  .ba-attr span { color:#16a34a; font-weight:700; }
+  .stat { background:#f7f9fc; border:1px solid #e7ecf3; border-radius:10px; padding:16px; text-align:center; }
+  .stat-v { font-size:24px; font-weight:800; color:#2563eb; }
+  .stat-l { font-size:11px; color:#64748b; margin-top:3px; line-height:1.4; }
+</style></head>
+<body>
+  <div class="cover">
+    <div style="font-size:21px;font-weight:600;letter-spacing:-0.02em;">FeedPlug</div>
+    <div style="font-size:28px;font-weight:800;margin-top:24px;letter-spacing:-0.01em;">Audit de flux produit</div>
+    <div style="font-size:13px;color:#94a3b8;margin-top:8px;">
+      ${esc(audit.company || 'Votre catalogue')} · ${esc(audit.cmsUsed || audit.connectorType || 'Source')} · ${esc((report.summary && report.summary.totalProducts) || audit.catalogSize || 0)} produits · ${esc(dateStr)}
+    </div>
+  </div>
+  <div class="wrap">
+
+    <div class="section">
+      <h2>Synthèse</h2>
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f7f9fc;border:1px solid #e7ecf3;border-radius:12px;padding:22px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;">Score actuel du flux</div>
+            <div style="font-size:46px;font-weight:800;line-height:1.05;color:${scoreColor};">${score}<span style="font-size:18px;color:#cbd5e1;">/100</span></div>
+          </td>
+          <td style="text-align:right;vertical-align:middle;">
+            <div style="display:inline-block;background:#eef4ff;border:1px solid #d6e4ff;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700;color:#2563eb;">Potentiel atteignable : ${potential}/100</div>
+          </td>
+        </tr></table>
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;"><tr>
+          <td style="background:#e7ecf3;border-radius:999px;font-size:0;">
+            <table width="${Math.max(4, score)}%" cellpadding="0" cellspacing="0"><tr><td style="background:#2563eb;height:10px;border-radius:999px;font-size:0;">&nbsp;</td></tr></table>
+          </td>
+        </tr></table>
+        ${band.label ? `<div style="margin-top:14px;font-size:12.5px;color:#46546b;"><strong style="color:#0b1120;">Niveau ${esc(band.label)}.</strong> ${esc(band.description || '')}</div>` : ''}
+      </td></tr></table>
+    </div>
+
+    <div class="section">
+      <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
+        <td style="width:33.33%;padding-right:7px;"><div class="stat"><div class="stat-v">${esc(report.estimatedAdditionalApprovedProducts || 0)}</div><div class="stat-l">produits récupérables</div></div></td>
+        <td style="width:33.33%;padding:0 7px;"><div class="stat"><div class="stat-v">+${esc(report.estimatedVisibilityLiftPct || 0)}%</div><div class="stat-l">de visibilité estimée</div></div></td>
+        <td style="width:33.33%;padding-left:7px;"><div class="stat"><div class="stat-v">${esc((report.summary && report.summary.approvalReadyRate) || 0)}%</div><div class="stat-l">produits déjà prêts</div></div></td>
+      </tr></table>
+    </div>
+
+    ${pillars.length ? `<div class="section">
+      <h2>Les 4 piliers du flux</h2>
+      <table width="100%" cellpadding="0" cellspacing="0">${pillarsHtml}</table>
+    </div>` : ''}
+
+    <div class="section">
+      <h2>Les blocages prioritaires</h2>
+      ${issuesHtml || '<div class="card">Aucun blocage majeur détecté.</div>'}
+    </div>
+
+    ${samples.length ? `<div class="section" style="page-break-before:always;padding-top:8px;">
+      <h2>Avant / Après sur votre catalogue</h2>
+      <p style="font-size:12.5px;color:#64748b;margin:0 0 16px;">Un échantillon de vos fiches, corrigées par FeedPlug — titres, descriptions et attributs.</p>
+      ${samplesHtml}
+    </div>` : ''}
+
+    <div class="section">
+      <h2>Plan d'action</h2>
+      <table width="100%" cellpadding="0" cellspacing="0">${planHtml}</table>
+    </div>
+
+    <div class="section" style="border-top:1px solid #e7ecf3;padding-top:18px;">
+      ${report.methodology ? `<div style="font-size:10.5px;color:#94a3b8;line-height:1.6;">${esc(report.methodology.scoring || '')} ${esc(report.methodology.estimation || '')}</div>` : ''}
+      <div style="margin-top:14px;font-size:12px;color:#46546b;">Audit complet et version optimisée de votre catalogue : <strong style="color:#2563eb;">${esc(audit.shareUrl || 'feedplug.com')}</strong></div>
+    </div>
+
+  </div>
+</body></html>`;
+}
+
+let auditPdfBrowserPromise = null;
+
+// Lance (ou réutilise) un Chromium headless adapté à Cloud Run.
+async function getAuditPdfBrowser() {
+  const puppeteer = require('puppeteer-core');
+  if (auditPdfBrowserPromise) {
+    try {
+      const existing = await auditPdfBrowserPromise;
+      if (existing && existing.connected !== false && existing.isConnected && existing.isConnected()) {
+        return existing;
+      }
+    } catch {
+      auditPdfBrowserPromise = null;
+    }
+  }
+  const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
+  auditPdfBrowserPromise = puppeteer.launch({
+    executablePath,
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+    ],
+  });
+  return auditPdfBrowserPromise;
+}
+
+// Rend un document HTML en PDF (buffer) via Chromium headless.
+async function renderAuditReportPdf(html) {
+  const browser = await getAuditPdfBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 20000 });
+    return await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 function buildMarketingAuditPdfBuffer(auditPayload) {
   const PDFDocument = require('pdfkit');
   return new Promise((resolve, reject) => {
@@ -9120,14 +9520,29 @@ app.get('/api/v1/marketing/audits/:shareToken/pdf', async (req, res) => {
       return res.status(404).json({ message: 'Audit introuvable' });
     }
     audit = await maybeGenerateMarketingAuditReport(audit);
+    audit = await ensureAuditBeforeAfter(audit);
     const serialized = serializeMarketingAudit(audit);
-    const buffer = await buildMarketingAuditPdfBuffer(serialized);
+
+    // Audit prêt → PDF premium (HTML → Chromium). Sinon ou en cas d'échec
+    // du rendu, on retombe sur le PDF texte pdfkit (jamais d'erreur 500).
+    let buffer = null;
+    if (serialized.status === 'ready' && serialized.report) {
+      try {
+        buffer = await renderAuditReportPdf(buildAuditReportHtml(serialized));
+      } catch (renderError) {
+        console.warn('Rendu PDF premium échoué, fallback pdfkit:', renderError.message);
+      }
+    }
+    if (!buffer) {
+      buffer = await buildMarketingAuditPdfBuffer(serialized);
+    }
+
     const filenameBase = String(serialized.company || 'audit-feedplug')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'audit-feedplug';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${filenameBase}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="audit-feedplug-${filenameBase}.pdf"`);
     res.send(buffer);
   } catch (error) {
     console.error('Marketing audit pdf error:', error);
@@ -9363,6 +9778,7 @@ app.post('/api/v1/marketing/nurture-test', async (req, res) => {
       gainVisibilite: 28,
       cms: 'Shopify',
       lienAudit: `${publicBaseUrl}/${locale}/audit-flux/exemple-token-demo`,
+      lienAuditPdf: `${(process.env.API_URL || 'https://api.feedplug.com').replace(/\/$/, '')}/api/v1/marketing/audits/exemple-token-demo/pdf`,
       lienRdv: process.env.MARKETING_RDV_URL || 'https://calendly.com/victorsoldet/30min',
     };
 

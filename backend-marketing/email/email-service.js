@@ -871,6 +871,7 @@ const AUDIT_NURTURE_SEQUENCE = {
           { t: 'issuecards' },
           { t: 'p', text: 'Un score, seul, ne fait rien avancer. Ce que FeedPlug ajoute : la **liste exacte des fiches à corriger**, classées par impact, avec le correctif proposé sur chacune. Vous ne cherchez plus où est le problème — vous avez un plan de travail priorisé, prêt à exécuter.' },
           { t: 'cta', text: 'Voir mes fiches à corriger', kind: 'register' },
+          { t: 'doclink', label: '📄 Télécharger l’audit complet en PDF', kind: 'pdf' },
           { t: 'linkline', label: 'Votre audit reste accessible ici :', kind: 'audit' },
         ],
       },
@@ -952,6 +953,7 @@ const AUDIT_NURTURE_SEQUENCE = {
           { t: 'issuecards' },
           { t: 'p', text: 'A score on its own moves nothing. What FeedPlug adds: the **exact list of products to fix**, ranked by impact, with the proposed fix on each. You stop hunting for the problem — you get a prioritized worklist, ready to run.' },
           { t: 'cta', text: 'See my products to fix', kind: 'register' },
+          { t: 'doclink', label: '📄 Download the full audit as a PDF', kind: 'pdf' },
           { t: 'linkline', label: 'Your audit stays available here:', kind: 'audit' },
         ],
       },
@@ -1033,6 +1035,7 @@ const AUDIT_NURTURE_SEQUENCE = {
           { t: 'issuecards' },
           { t: 'p', text: 'Una puntuación, por sí sola, no hace avanzar nada. Lo que FeedPlug añade: la **lista exacta de fichas a corregir**, ordenadas por impacto, con la corrección propuesta en cada una. Dejas de buscar dónde está el problema — tienes un plan de trabajo priorizado, listo para ejecutar.' },
           { t: 'cta', text: 'Ver mis fichas a corregir', kind: 'register' },
+          { t: 'doclink', label: '📄 Descargar la auditoría completa en PDF', kind: 'pdf' },
           { t: 'linkline', label: 'Tu auditoría sigue disponible aquí:', kind: 'audit' },
         ],
       },
@@ -1183,6 +1186,7 @@ function renderAuditNurtureBlocks(blocks, ctx, email, trackTarget, loc) {
   const ctaHref = (kind) => {
     if (kind === 'rdv') return String(ctx.lienRdv || MARKETING_RDV_URL);
     if (kind === 'audit') return String(ctx.lienAudit || `${APP_URL}/register`);
+    if (kind === 'pdf') return String(ctx.lienAuditPdf || ctx.lienAudit || `${APP_URL}/register`);
     return getMarketingCtaHref(email, trackTarget, `${APP_URL}/register`);
   };
   // Bouton robuste (table-based) pour passer correctement sous Outlook.
@@ -1225,6 +1229,9 @@ function renderAuditNurtureBlocks(blocks, ctx, email, trackTarget, loc) {
       const href = ctaHref(b.kind);
       return `<p class="muted-small" style="margin-top:18px;">${escapeHtml(interp(b.label))} <a href="${escapeHtml(href)}" style="color:#2563eb;">${escapeHtml(href)}</a></p>`;
     }
+    if (b.t === 'doclink') {
+      return `<p style="margin-top:18px;"><a href="${escapeHtml(ctaHref(b.kind))}" style="color:#2563eb;font-weight:600;font-size:14px;text-decoration:none;">${escapeHtml(interp(b.label))}</a></p>`;
+    }
     return '';
   }).join('\n');
 }
@@ -1249,7 +1256,7 @@ function renderAuditNurtureText(blocks, ctx, loc) {
     else if (b.t === 'stats') lines.push(`${ctx.produitsRecuperables} ${labels.statRecoverable}  —  +${ctx.gainVisibilite}% ${labels.statVisibility}`);
     else if (b.t === 'ul') (b.items || []).forEach((i) => lines.push(`- ${interp(i)}`));
     else if (b.t === 'ol') (b.items || []).forEach((i, idx) => lines.push(`${idx + 1}. ${interp(i)}`));
-    else if (b.t === 'cta') lines.push(`${interp(b.text)} : ${ctaHref(b.kind)}`);
+    else if (b.t === 'cta' || b.t === 'doclink') lines.push(`${interp(b.text || b.label)} : ${ctaHref(b.kind)}`);
     else if (b.t === 'cta2') {
       lines.push(`${interp(b.primary.text)} : ${ctaHref(b.primary.kind)}`);
       lines.push(`${interp(b.secondary.text)} : ${ctaHref(b.secondary.kind)}`);
