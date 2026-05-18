@@ -21,6 +21,10 @@ steps:
       - 'europe-west1'
       - '--platform'
       - 'managed'
+      # gen2 : environnement d'exécution Linux complet, requis pour Chromium
+      # headless (le PDF d'audit). gen1 (gVisor) fait crasher Chrome (SIGTRAP).
+      - '--execution-environment'
+      - 'gen2'
       - '--allow-unauthenticated'
       - '--port'
       - '8080'
