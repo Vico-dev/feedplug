@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api";
 import { SESSION_API_CACHE_KEYS, readSessionApiCache, writeSessionApiCache } from "@/lib/session-api-cache";
-import { ArrowRight, Building2, Phone, Mail, MapPin, Database, Package, Filter, Sparkles, FileText, BarChart3, Receipt, Hash } from "lucide-react";
+import { ArrowRight, Building2, Phone, Mail, MapPin, Database, Sparkles, FileText, Receipt, Hash, ChevronDown } from "lucide-react";
 import { COUNTRY_DIAL_CODES, buildE164 } from "@/data/country-dial-codes";
 import { buildLocalizedPath, getLocalePrefixFromPathname } from "@/lib/locale-navigation";
 import { appendShopifyEmbeddedParams } from "@/lib/shopify-navigation";
@@ -45,6 +45,7 @@ function OnboardingPageContent() {
   const [siren, setSiren] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showBillingDetails, setShowBillingDetails] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -241,11 +242,11 @@ function OnboardingPageContent() {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--paper-2)", padding: "24px" }}>
         <div style={{ maxWidth: "480px", width: "100%" }}>
           <h1 style={{ fontSize: "24px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
-            Informations entreprise
+            Créons votre espace FeedPlug
           </h1>
-          <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px" }}>
-            Seul le nom de votre entreprise est requis pour démarrer. Les informations de
-            facturation pourront être complétées plus tard, au moment du paiement.
+          <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px", lineHeight: 1.6 }}>
+            Un nom d&apos;entreprise suffit pour démarrer — vous y êtes presque.
+            Les informations de facturation s&apos;ajoutent plus tard, au moment du paiement.
           </p>
 
           <form onSubmit={handleSubmitCompanyInfo} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -270,6 +271,17 @@ function OnboardingPageContent() {
               />
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowBillingDetails((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: "6px", alignSelf: "flex-start", background: "none", border: "none", padding: 0, fontSize: "14px", fontWeight: 500, color: "var(--accent)", cursor: "pointer" }}
+            >
+              <ChevronDown style={{ width: "16px", height: "16px", transition: "transform 0.15s", transform: showBillingDetails ? "rotate(180deg)" : "none" }} />
+              {showBillingDetails ? "Masquer les informations de facturation" : "Ajouter mes informations de facturation (optionnel)"}
+            </button>
+
+            {showBillingDetails && (
+              <>
             <div>
               <label style={labelStyle}>
                 <Phone style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
@@ -367,6 +379,8 @@ function OnboardingPageContent() {
                 <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Pays (ex. FR)" style={{ ...inputStyle, maxWidth: "100px" }} />
               </div>
             </div>
+              </>
+            )}
 
             <button
               type="submit"
@@ -396,13 +410,22 @@ function OnboardingPageContent() {
     );
   }
 
-  const features = [
-    { icon: Database, label: "Sources", desc: "Connectez Shopify, CSV, API ou autres" },
-    { icon: Package, label: "Catalogue", desc: "Vos produits centralisés, score qualité et mapping" },
-    { icon: Filter, label: "Règles & optimisation", desc: "Titres, descriptions, A/B par canal" },
-    { icon: Sparkles, label: "IA", desc: "Enrichissement et optimisation assistés par l'IA" },
-    { icon: FileText, label: "Flux d'export", desc: "GMC, Meta, Amazon, TikTok, ChatGPT, etc." },
-    { icon: BarChart3, label: "Rapports & scoring", desc: "Score catalogue et canaux" },
+  const steps = [
+    {
+      icon: Database,
+      title: "Connectez votre catalogue",
+      desc: "Shopify, PrestaShop, CSV ou flux XML — FeedPlug importe vos produits en quelques secondes.",
+    },
+    {
+      icon: Sparkles,
+      title: "FeedPlug analyse et optimise",
+      desc: "Score qualité par produit, titres et descriptions retravaillés, enrichissement assisté par l'IA.",
+    },
+    {
+      icon: FileText,
+      title: "Diffusez sur tous vos canaux",
+      desc: "Un flux propre et adapté pour Google, Meta, Amazon, TikTok, ChatGPT et plus encore.",
+    },
   ];
 
   return (
@@ -437,55 +460,66 @@ function OnboardingPageContent() {
         <h1 style={{ fontSize: "28px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
           Bienvenue{user?.firstName ? ` ${user.firstName}` : ""} !
         </h1>
-        <p style={{ fontSize: "16px", color: "var(--ink-3)", marginBottom: "8px", lineHeight: 1.6 }}>
-          FeedPlug centralise, optimise et distribue vos fiches produit sur tous vos canaux.
-        </p>
-        <p style={{ fontSize: "14px", color: "var(--ink-4)", marginBottom: "24px" }}>
-          Première étape : connectez une source pour voir le score qualité de votre catalogue.
+        <p style={{ fontSize: "16px", color: "var(--ink-3)", marginBottom: "24px", lineHeight: 1.6 }}>
+          FeedPlug transforme votre catalogue en flux produit propres et optimisés,
+          prêts à diffuser sur tous vos canaux de vente.
         </p>
 
-        <div style={{ marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "var(--ink-2)" }}>
-          Ce que vous pouvez faire avec FeedPlug
+        <div style={{ marginBottom: "12px", fontSize: "14px", fontWeight: "600", color: "var(--ink-2)" }}>
+          Comment ça marche
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "12px",
-            marginBottom: "32px",
-          }}
-        >
-          {features.map(({ icon: Icon, label, desc }) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "28px" }}>
+          {steps.map(({ icon: Icon, title, desc }, index) => (
             <div
-              key={label}
+              key={title}
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: "12px",
-                padding: "14px",
+                gap: "14px",
+                padding: "16px",
                 border: "1px solid var(--line)",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 backgroundColor: "#ffffff",
               }}
             >
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  backgroundColor: "var(--accent-bg)",
-                  color: "var(--accent)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Icon style={{ width: "18px", height: "18px" }} />
+              <div style={{ position: "relative", width: "40px", height: "40px", flexShrink: 0 }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "var(--accent-bg)",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon style={{ width: "20px", height: "20px" }} />
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-7px",
+                    left: "-7px",
+                    width: "21px",
+                    height: "21px",
+                    borderRadius: "999px",
+                    backgroundColor: "#0a0a0a",
+                    color: "#ffffff",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {index + 1}
+                </div>
               </div>
               <div>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#0a0a0a" }}>{label}</div>
-                <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "2px" }}>{desc}</div>
+                <div style={{ fontSize: "15px", fontWeight: "600", color: "#0a0a0a" }}>{title}</div>
+                <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "3px", lineHeight: 1.55 }}>{desc}</div>
               </div>
             </div>
           ))}
