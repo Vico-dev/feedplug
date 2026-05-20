@@ -11,8 +11,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Requis au build pour les usages SSR/server-only de l'API backend.
 ARG BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com
+# Cloudflare Turnstile (anti-bot sur les formulaires marketing). Clé publique.
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ
 ENV BACKEND_API_URL=$BACKEND_API_URL
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 RUN npm run build
 
 FROM node:20-alpine AS runner
