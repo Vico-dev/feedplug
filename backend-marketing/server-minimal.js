@@ -14076,7 +14076,8 @@ try {
 try {
   const { registerChannelScoringRoutes } = require('./routes/channel-scoring');
   registerChannelScoringRoutes(app, {
-    prisma,
+    // Getter : `prisma` est initialisé après l'enregistrement des routes.
+    getPrisma: () => prisma,
     authenticateToken,
     getAccountId: (req) => req.accountId
   });
