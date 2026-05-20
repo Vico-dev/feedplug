@@ -11538,11 +11538,27 @@ app.post('/api/v1/auth/google', smartAuthLimiter, async (req, res) => {
     const givenName = payload.given_name || '';
     const familyName = payload.family_name || '';
 
+    // Google ne renvoie un id_token qu'après vérification de l'email côté
+    // Google. On le vérifie explicitement avant d'autoriser le lien de compte.
+    if (payload.email_verified === false) {
+      return res.status(400).json({ message: 'Email Google non vérifié.' });
+    }
+
     let user = await findUserByEmail(email);
     const isNewGoogleUser = !user;
+    let linkedNow = false;
     if (user) {
-      if (user.provider !== 'google') {
-        return res.status(409).json({ message: 'Un compte existe déjà avec cet email. Connectez-vous avec votre mot de passe.' });
+      // Lien automatique : si un compte existe avec ce même email (créé en
+      // local, p.ex.), on stocke le googleId sur le user pour le retrouver
+      // directement les fois suivantes. Le mot de passe reste utilisable en
+      // parallèle — l'utilisateur peut désormais se connecter par les deux
+      // chemins. Google ayant vérifié l'email, l'opération est légitime.
+      if (user.providerid !== googleId) {
+        await prisma.$executeRaw`
+          UPDATE "User" SET providerid = ${googleId}::text, updatedat = NOW() WHERE id = ${user.id}::text
+        `;
+        user.providerid = googleId;
+        linkedNow = user.provider !== 'google';
       }
     } else {
       const accountId = crypto.randomUUID();
@@ -11576,6 +11592,7 @@ app.post('/api/v1/auth/google', smartAuthLimiter, async (req, res) => {
       accessToken,
       refreshToken,
       token: accessToken,
+      linked: linkedNow,
       user: buildAuthUser(user, req)
     });
   } catch (error) {
