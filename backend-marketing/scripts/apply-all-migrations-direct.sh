@@ -97,7 +97,9 @@ for migration in "${MIGRATIONS[@]}"; do
   # Migrations qui ne sont PAS idempotentes (ALTER sans IF NOT EXISTS, etc.) :
   # on les laisse échouer silencieusement si déjà jouées, sinon on plante tout
   # le script à chaque relance dès que la prod aurait avancé.
-  NON_IDEMPOTENT=("018_ab_test.sql")
+  # Toutes les migrations sont désormais idempotentes (CREATE … IF NOT EXISTS,
+  # DO $$ … EXCEPTION WHEN duplicate_object … pour les TYPES/contraintes).
+  NON_IDEMPOTENT=()
   is_non_idempotent=false
   for ni in "${NON_IDEMPOTENT[@]}"; do
     if [ "$migration" = "$ni" ]; then is_non_idempotent=true; fi
