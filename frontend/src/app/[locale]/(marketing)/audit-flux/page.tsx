@@ -296,7 +296,7 @@ export default function AuditFluxPage() {
               <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 32, padding: 28, boxShadow: "0 24px 60px rgba(15,23,42,0.08)" }}>
                 <input
                   type="text"
-                  name="website"
+                  name="ax_check_value" autoCorrect="off" spellCheck={false}
                   value={companyWebsite}
                   onChange={(event) => setCompanyWebsite(event.target.value)}
                   tabIndex={-1}
