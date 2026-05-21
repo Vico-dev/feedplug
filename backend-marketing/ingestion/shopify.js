@@ -64,6 +64,11 @@ async function fetchAllShopifyProducts({ shop, accessToken, limit = 250, maxItem
 		const variables = { first: limit };
 		if (cursor) variables.after = cursor;
 
+		// SSRF guard : on n'autorise que les hôtes *.myshopify.com pour ce
+		// connecteur. `shop` peut venir indirectement de saisies utilisateur.
+		if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(String(shop || ''))) {
+			throw new Error(`Domaine Shopify invalide: ${shop}`);
+		}
 		const response = await fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
 			method: 'POST',
 			headers: {

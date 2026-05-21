@@ -5269,7 +5269,10 @@ async function fetchMarketingAuditFileItems(audit, input = {}) {
   if (!feedUrl) {
     throw new Error('URL de flux introuvable');
   }
-  const response = await fetch(feedUrl);
+  // SSRF guard : on refuse les IP internes / metadata cloud — l'URL vient d'un
+  // formulaire prospect non authentifié.
+  const { safeFetch } = require('./lib/safe-url');
+  const response = await safeFetch(feedUrl);
   if (!response.ok) {
     throw new Error(`Erreur recuperation flux ${response.status}`);
   }
