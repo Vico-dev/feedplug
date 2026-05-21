@@ -657,6 +657,8 @@ const OAUTH_EPHEMERAL_PROVIDER_SHOPIFY = 'shopify';
 const OAUTH_EPHEMERAL_FLOW_AMAZON_STATE = 'amazon_oauth_state';
 const OAUTH_EPHEMERAL_FLOW_AMAZON_CONNECT = 'amazon_connect_code';
 const OAUTH_EPHEMERAL_FLOW_GMC_SELECTION = 'gmc_selection';
+const OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE = 'gmc_oauth_state';
+const OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE = 'google_ads_oauth_state';
 const OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE = 'shopify_oauth_state';
 const AMAZON_STATE_TTL_MS = 15 * 60 * 1000;
 const AMAZON_CONNECT_CODE_TTL_MS = 5 * 60 * 1000;
@@ -14384,7 +14386,7 @@ app.get('/api/v1/platforms/gmc/oauth-config', requireAuth, (req, res) => {
 });
 
 // 1. Générer l'URL d'autorisation OAuth2 GMC
-app.get('/api/v1/platforms/gmc/auth-url', requireAuth, (req, res) => {
+app.get('/api/v1/platforms/gmc/auth-url', requireAuth, async (req, res) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Merchant Center non configurée.' });
   }
@@ -14394,14 +14396,30 @@ app.get('/api/v1/platforms/gmc/auth-url', requireAuth, (req, res) => {
   ];
   const locale = normalizeAppLocale(req.query.locale);
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-  
+
+  // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
+  // de l'embarquer dans le state OAuth (qui pouvait être forgé par un tiers).
+  const stateId = crypto.randomUUID();
+  try {
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      payload: { accountId: req.accountId, locale },
+      ttlMs: 10 * 60 * 1000,
+    });
+  } catch (stateError) {
+    console.error('GMC auth-url state store:', stateError);
+    return res.status(503).json({ message: 'Connexion Google Merchant Center temporairement indisponible.' });
+  }
+
   const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',      // Pour obtenir un refresh_token
+    access_type: 'offline',
     prompt: 'consent select_account',
     scope: scopes,
-    state: JSON.stringify({ accountId: req.accountId, locale })
+    state: stateId,
   });
-  
+
   res.json({ authUrl });
 });
 
@@ -14425,11 +14443,19 @@ app.get('/api/v1/marketing/audits/:shareToken/platforms/gmc/auth-url', async (re
       'https://www.googleapis.com/auth/userinfo.email'
     ];
     const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const stateId = crypto.randomUUID();
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      payload: { auditShareToken: shareToken, locale: rows[0].locale || 'fr', mode: 'marketing_audit_gmc' },
+      ttlMs: 10 * 60 * 1000,
+    });
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent select_account',
       scope: scopes,
-      state: JSON.stringify({ auditShareToken: shareToken, locale: rows[0].locale || 'fr', mode: 'marketing_audit_gmc' })
+      state: stateId,
     });
     res.json({ authUrl });
   } catch (error) {
@@ -14452,15 +14478,26 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     let auditShareToken;
     let auditLocale = 'fr';
     let dashboardLocale = 'fr';
+    // On récupère le payload via l'UUID opaque stocké côté serveur — il a été
+    // émis par nous, à usage unique, et expire en 10 min (CSRF guard).
+    let stateData;
     try {
-      const stateData = JSON.parse(state);
-      accountId = stateData.accountId;
-      auditShareToken = stateData.auditShareToken;
-      auditLocale = normalizeAppLocale(stateData.locale || 'fr');
-      dashboardLocale = normalizeAppLocale(stateData.locale || 'fr');
-    } catch {
+      stateData = await consumeOAuthEphemeralState({
+        id: String(state || ''),
+        provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+        flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      });
+    } catch (stateError) {
+      console.error('GMC callback state lookup:', stateError);
       return res.redirect(buildFluxRedirectUrl(appUrl, 'fr', { gmc: 'error', message: 'Etat OAuth Google invalide.' }));
     }
+    if (!stateData) {
+      return res.redirect(buildFluxRedirectUrl(appUrl, 'fr', { gmc: 'error', message: 'Etat OAuth Google invalide ou expiré.' }));
+    }
+    accountId = stateData.accountId;
+    auditShareToken = stateData.auditShareToken;
+    auditLocale = normalizeAppLocale(stateData.locale || 'fr');
+    dashboardLocale = normalizeAppLocale(stateData.locale || 'fr');
 
     if (!accountId && !auditShareToken) {
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
@@ -14739,17 +14776,30 @@ app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) 
 });
 
 // ===== GOOGLE ADS — Connexion OAuth2 pour sync performance (shopping_performance_view) =====
-app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, (req, res) => {
+app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, async (req, res) => {
   if (!GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Ads non configurée (GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET).' });
   }
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
+  const stateId = crypto.randomUUID();
+  try {
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE,
+      payload: { accountId: req.accountId, platform: 'google_ads' },
+      ttlMs: 10 * 60 * 1000,
+    });
+  } catch (stateError) {
+    console.error('Google Ads auth-url state store:', stateError);
+    return res.status(503).json({ message: 'Connexion Google Ads temporairement indisponible.' });
+  }
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: scopes,
-    state: JSON.stringify({ accountId: req.accountId, platform: 'google_ads' })
+    state: stateId,
   });
   res.json({ authUrl });
 });
@@ -14760,13 +14810,21 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
     if (!code) return res.redirect(`${performanceRedirect}?error=no_code`);
-    let accountId;
+    let stateData;
     try {
-      const stateData = JSON.parse(state);
-      accountId = stateData.accountId;
-    } catch {
+      stateData = await consumeOAuthEphemeralState({
+        id: String(state || ''),
+        provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+        flow: OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE,
+      });
+    } catch (stateError) {
+      console.error('Google Ads callback state lookup:', stateError);
       return res.redirect(`${performanceRedirect}?error=invalid_state`);
     }
+    if (!stateData) {
+      return res.redirect(`${performanceRedirect}?error=invalid_state`);
+    }
+    const accountId = stateData.accountId;
     if (!accountId || !GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
       return res.redirect(`${performanceRedirect}?error=config`);
     }
