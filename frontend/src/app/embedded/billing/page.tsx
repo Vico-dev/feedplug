@@ -2,7 +2,6 @@
 
 import {
   Badge,
-  Banner,
   BlockStack,
   Box,
   Button,
@@ -15,7 +14,7 @@ import {
   Select,
   Text,
 } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useMemo, useState } from "react";
 import {
   ADDON_IA_PRICE_EUR,
@@ -42,16 +41,27 @@ import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
  */
 export default function EmbeddedBillingPage() {
   const fetchApi = useEmbeddedFetch();
+  const shopify = useAppBridge();
   const [tier, setTier] = useState<ProductTier>(500);
   const [channels, setChannels] = useState<ChannelCount>(2);
   const [addonIA, setAddonIA] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const monthlyPriceEur = useMemo(
     () => getPriceEur({ productTier: tier, channels, addonIA }),
     [tier, channels, addonIA]
   );
+
+  const showError = (message: string) => {
+    try {
+      shopify.toast.show(message, { isError: true, duration: 6000 });
+    } catch {
+      // Bridge non disponible (debug standalone) : fallback alert dev-only
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[billing]", message);
+      }
+    }
+  };
 
   const tierOptions = PRODUCT_TIERS.map((t) => ({
     label: formatProductsLabel(t),
@@ -64,7 +74,6 @@ export default function EmbeddedBillingPage() {
 
   const handleSubscribe = async () => {
     setSubmitting(true);
-    setError(null);
     try {
       const response = await fetchApi("/api/v1/billing/shopify/subscribe", {
         method: "POST",
@@ -73,37 +82,33 @@ export default function EmbeddedBillingPage() {
       if (response.status === 409) {
         const body = await response.json().catch(() => null);
         if (body?.code === "NO_ACCOUNT_FOR_SHOP") {
-          setError(
-            "Aucun compte FeedPlug n'est encore lié à votre boutique. Terminez d'abord la création de votre espace."
+          showError(
+            "Aucun compte FeedPlug n'est encore lié à votre boutique. Rechargez l'app dans quelques secondes."
           );
           return;
         }
-        setError(body?.message || "Connexion Shopify manquante");
+        showError(body?.message || "Connexion Shopify manquante");
         return;
       }
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        setError(body?.message || `Erreur ${response.status}`);
+        showError(body?.message || `Erreur ${response.status}`);
         return;
       }
       const body = (await response.json()) as { confirmationUrl: string };
       if (!body.confirmationUrl) {
-        setError("Réponse Shopify invalide (confirmationUrl manquant)");
+        showError("Réponse Shopify invalide (confirmationUrl manquant)");
         return;
       }
       // L'écran de confirmation Shopify Billing ne peut pas être affiché dans
-      // l'iframe (X-Frame-Options deny côté Shopify). On force un top-level
-      // redirect ; après approbation, Shopify rappelle notre /return qui ramène
-      // le merchant dans l'app embedded.
-      if (typeof window !== "undefined") {
-        if (window.top) {
-          window.top.location.href = body.confirmationUrl;
-        } else {
-          window.location.href = body.confirmationUrl;
-        }
-      }
+      // l'iframe (Shopify pose des X-Frame-Options sur /admin/charges).
+      // Convention BFS : `open(url, '_top')` escape proprement l'iframe
+      // (équivalent moderne du Redirect.Action.REMOTE d'App Bridge v3).
+      // Après approbation, Shopify rappelle notre /return qui réinjecte
+      // le merchant dans l'app embedded via le redirect Shopify Admin.
+      open(body.confirmationUrl, "_top");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur réseau");
+      showError(err instanceof Error ? err.message : "Erreur réseau");
     } finally {
       setSubmitting(false);
     }
@@ -116,14 +121,6 @@ export default function EmbeddedBillingPage() {
     >
       <TitleBar title="Choisir un plan" />
       <Layout>
-        {error ? (
-          <Layout.Section>
-            <Banner tone="critical" onDismiss={() => setError(null)}>
-              <p>{error}</p>
-            </Banner>
-          </Layout.Section>
-        ) : null}
-
         <Layout.Section>
           <Card>
             <BlockStack gap="500">

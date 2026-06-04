@@ -11,8 +11,9 @@ import {
   Page,
   Text,
 } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
-import { useRouter } from "next/navigation";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 /**
  * Page d'accueil de l'app embedded FeedPlug dans Shopify Admin.
@@ -28,6 +29,28 @@ import { useRouter } from "next/navigation";
  */
 export default function EmbeddedHomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const shopify = useAppBridge();
+
+  // Le retour /api/v1/billing/shopify/return ajoute ?billing=ok à l'URL
+  // de l'embedded admin une fois la subscription Shopify approuvée.
+  // On affiche un Toast de confirmation et on nettoie le query param pour
+  // éviter de le re-afficher au prochain mount.
+  useEffect(() => {
+    if (searchParams.get("billing") === "ok") {
+      try {
+        shopify.toast.show("Abonnement Shopify confirmé. Bienvenue sur FeedPlug.", {
+          duration: 6000,
+        });
+      } catch {
+        // Bridge non disponible, on continue sans toast
+      }
+      const cleaned = new URLSearchParams(searchParams.toString());
+      cleaned.delete("billing");
+      const qs = cleaned.toString();
+      router.replace(`/embedded${qs ? `?${qs}` : ""}`);
+    }
+  }, [searchParams, shopify, router]);
 
   return (
     <Page
