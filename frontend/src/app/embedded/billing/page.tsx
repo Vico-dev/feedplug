@@ -15,8 +15,20 @@ import {
   Spinner,
   Text,
 } from "@shopify/polaris";
-import { Modal, TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+// Le composant Modal n'est chargé que si le merchant déclenche un cancel
+// (vue gestion uniquement). La vue configurator (cas le plus fréquent en
+// première visite) ne paye pas ce coût de bundle initial → meilleur LCP.
+const CancelSubscriptionModal = dynamic(
+  () =>
+    import("./_components/cancel-subscription-modal").then(
+      (m) => m.CancelSubscriptionModal
+    ),
+  { ssr: false }
+);
 import {
   ADDON_IA_PRICE_EUR,
   CHANNEL_OPTIONS,
@@ -291,35 +303,16 @@ export default function EmbeddedBillingPage() {
           </Layout.Section>
         </Layout>
 
-        <Modal
-          id="cancel-subscription-modal"
-          open={cancelModalOpen}
-          onHide={() => setCancelModalOpen(false)}
-        >
-          <Box padding="500">
-            <BlockStack gap="300">
-              <Text variant="bodyMd" as="p">
-                Voulez-vous vraiment annuler l'abonnement <strong>{currentSub.planKey}</strong> ?
-              </Text>
-              <Text variant="bodyMd" as="p" tone="subdued">
-                Vous conserverez l'accès complet jusqu'au{" "}
-                <strong>{formatDateLabel(currentSub.currentPeriodEnd)}</strong>. Aucun
-                nouveau débit ne sera émis. Vous pourrez réactiver un plan à tout moment.
-              </Text>
-            </BlockStack>
-          </Box>
-          <TitleBar title="Annuler l'abonnement">
-            <button onClick={() => setCancelModalOpen(false)}>Revenir</button>
-            <button
-              variant="primary"
-              tone="critical"
-              loading={cancelling ? "" : undefined}
-              onClick={handleCancel}
-            >
-              Confirmer l'annulation
-            </button>
-          </TitleBar>
-        </Modal>
+        {cancelModalOpen ? (
+          <CancelSubscriptionModal
+            open={cancelModalOpen}
+            onClose={() => setCancelModalOpen(false)}
+            onConfirm={handleCancel}
+            planLabel={currentSub.planKey}
+            periodEndLabel={formatDateLabel(currentSub.currentPeriodEnd)}
+            cancelling={cancelling}
+          />
+        ) : null}
       </Page>
     );
   }

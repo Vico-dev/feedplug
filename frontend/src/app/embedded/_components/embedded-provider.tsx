@@ -4,10 +4,12 @@ import { AppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import frTranslations from "@shopify/polaris/locales/fr.json";
 import esTranslations from "@shopify/polaris/locales/es.json";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 import type { LinkLikeComponentProps } from "@shopify/polaris/build/ts/src/utilities/link";
+import { EmbeddedWebVitals } from "./embedded-web-vitals";
 
 /**
  * Détecte la locale Shopify Admin via le query param `locale` (envoyé par
@@ -54,8 +56,21 @@ export function EmbeddedProvider({ children }: { children: React.ReactNode }) {
     return frTranslations;
   }, [locale]);
 
+  // Enrichit le scope Sentry avec le shop Shopify pour faciliter le debug
+  // des erreurs embedded ("quel merchant a vu ce crash ?").
+  const shop = searchParams.get("shop") || "";
+  useEffect(() => {
+    if (!shop) return;
+    Sentry.setTag("shopify.shop", shop);
+    Sentry.setContext("shopify_embedded", { shop, locale });
+    return () => {
+      Sentry.setTag("shopify.shop", undefined);
+    };
+  }, [shop, locale]);
+
   return (
     <AppProvider i18n={i18n} linkComponent={PolarisLink}>
+      <EmbeddedWebVitals />
       {children}
     </AppProvider>
   );
