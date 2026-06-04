@@ -10,7 +10,7 @@ handle = "feedplug"
 api_version = "2026-01"
 
   [[webhooks.subscriptions]]
-  topics = [ "app/uninstalled" ]
+  topics = [ "app/uninstalled", "app_subscriptions/update" ]
   uri = "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/webhooks/shopify"
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 

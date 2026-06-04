@@ -1554,6 +1554,26 @@ async function notifyInternalMarketingFormSubmission(event = {}) {
   };
 }
 
+/**
+ * Notification interne simple (texte brut) — utilisée par les webhooks
+ * compliance Shopify et autres alertes opérationnelles qui n'ont pas besoin
+ * du template marketing.
+ */
+async function notifyInternalAlert({ subject, body }) {
+  if (INTERNAL_ALERT_EMAILS.length === 0) {
+    return null;
+  }
+  const safeBody = String(body || '');
+  const html = `<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtml(safeBody)}</pre>`;
+  return dispatchEmail({
+    to: INTERNAL_ALERT_EMAILS,
+    subject: String(subject || 'FeedPlug — alerte interne'),
+    html,
+    text: safeBody,
+    tags: [{ name: 'category', value: 'internal_ops_alert' }],
+  });
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendSyncCompleteEmail,
@@ -1571,6 +1591,7 @@ module.exports = {
   createMarketingUnsubscribeToken,
   verifyMarketingUnsubscribeToken,
   notifyInternalMarketingFormSubmission,
+  notifyInternalAlert,
   SUPPORTED_EMAIL_LOCALES,
   getEmailLocale,
 };

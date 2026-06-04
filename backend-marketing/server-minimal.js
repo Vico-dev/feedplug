@@ -83,11 +83,22 @@ const {
   sendMarketingAuditNurtureEmail,
   sendMarketingAuditEmail,
   notifyInternalMarketingFormSubmission,
+  notifyInternalAlert,
   syncMarketingContact,
   verifyMarketingClickToken,
   verifyMarketingUnsubscribeToken,
   getEmailLocale,
 } = require('./email/email-service');
+const {
+  isComplianceTopic: isShopifyComplianceTopic,
+  processComplianceWebhook: processShopifyComplianceWebhook,
+} = require('./domains/shopify/compliance');
+const shopifyBilling = require('./domains/shopify/billing');
+const {
+  getPriceEur: getPlanPriceEur,
+  getPlanLabel: getPlanLabel,
+  tierIdFromProductTier,
+} = require('./lib/pricing');
 const { callAIWithCache } = require('./ai/ai-wrapper');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
@@ -586,7 +597,9 @@ const APP_URL = process.env.APP_URL || 'https://app.feedplug.com';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || '';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_products,read_inventory,read_locations';
+// Scopes alignés sur shopify.app.toml (source de vérité pour Shopify Partners).
+// Toute divergence déclenche un re-consent lors de l'install ou un warning App Store.
+const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_analytics,read_channels,read_inventory,read_orders,read_product_feeds,read_product_listings,read_products';
 const SHOPIFY_CALLBACK_URL = process.env.SHOPIFY_CALLBACK_URL || 'https://api.feedplug.com/api/v1/connectors/shopify/callback';
 const SHOPIFY_WEBHOOK_PATH = '/api/v1/webhooks/shopify';
 
@@ -977,12 +990,74 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
   try {
     if (topic === 'app/uninstalled') {
       await handleShopifyAppUninstalled(shopDomain);
-    } else if (
-      topic === 'customers/data_request' ||
-      topic === 'customers/redact' ||
-      topic === 'shop/redact'
-    ) {
-      console.log('✅ Shopify compliance webhook received:', { topic, shopDomain });
+    } else if (topic === 'app_subscriptions/update') {
+      // Sync l'état de l'abonnement Shopify (ACTIVE/CANCELLED/EXPIRED/FROZEN/DECLINED)
+      // déclenché à chaque transition côté Shopify.
+      const sub = payload?.app_subscription || payload || {};
+      const shopifySubscriptionId = sub.admin_graphql_api_id || sub.id || '';
+      const status = String(sub.status || '').toUpperCase();
+      if (shopifySubscriptionId && status && prismaReady && prisma) {
+        try {
+          await shopifyBilling.markShopifySubscriptionStatus({
+            prisma,
+            shopifySubscriptionId: String(shopifySubscriptionId),
+            status,
+            currentPeriodEnd: sub.current_period_end || null,
+            cancelled: status === 'CANCELLED',
+          });
+          const accountRow = await prisma.$queryRawUnsafe(
+            `SELECT accountid, plan_key FROM shopify_subscriptions WHERE shopify_subscription_id = $1::text LIMIT 1`,
+            String(shopifySubscriptionId)
+          );
+          const accountId = accountRow?.[0]?.accountid;
+          const planKey = accountRow?.[0]?.plan_key;
+          if (accountId) {
+            if (status === 'ACTIVE') {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
+                accountId,
+                planKey
+              );
+            } else if (status === 'CANCELLED' || status === 'EXPIRED' || status === 'FROZEN' || status === 'DECLINED') {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Account" SET billingstatus = $2::text, updatedat = NOW() WHERE id = $1::text`,
+                accountId,
+                status === 'FROZEN' ? 'payment_failed' : 'pending'
+              );
+            }
+          }
+          console.log('✅ Shopify app_subscriptions/update appliqué:', { shopifySubscriptionId, status });
+        } catch (subErr) {
+          console.error('Shopify app_subscriptions/update sync failed:', subErr?.message || subErr);
+          return res.status(500).send('Subscription sync failed');
+        }
+      }
+    } else if (isShopifyComplianceTopic(topic)) {
+      // Topics GDPR obligatoires (App Store) :
+      //  - customers/data_request : SLA 30j
+      //  - customers/redact       : SLA 30j après uninstall
+      //  - shop/redact            : SLA 48h après réception (déclenché 48h après uninstall)
+      if (!prismaReady || !prisma) {
+        console.error('Shopify compliance webhook reçu sans DB disponible:', { topic, shopDomain });
+        return res.status(503).send('Database unavailable, will retry');
+      }
+      try {
+        const result = await processShopifyComplianceWebhook({
+          prisma,
+          topic,
+          shopDomain,
+          payload,
+          notifyAdmin: notifyInternalAlert,
+        });
+        console.log('✅ Shopify compliance webhook processed:', { topic, shopDomain, ...result });
+      } catch (complianceErr) {
+        console.error('Shopify compliance webhook processing failed:', {
+          topic,
+          shopDomain,
+          error: complianceErr?.message || complianceErr,
+        });
+        return res.status(500).send('Compliance webhook processing failed');
+      }
     } else {
       console.log('ℹ️ Shopify webhook received:', { topic, shopDomain });
     }
@@ -16852,20 +16927,46 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
     const resolvedHost = typeof req.query?.host === 'string' && req.query.host.trim()
       ? req.query.host.trim()
       : (typeof oauthContext?.host === 'string' ? oauthContext.host.trim() : '');
-    const redirectParams = new URLSearchParams({
-      shopify: 'connected',
-      shop: normalizedShop,
-    });
-    if (isGuestInstall) {
-      redirectParams.set('guest', '1');
+
+    // Quand l'install vient de Shopify (App Store / lien Partners / app embedded),
+    // on doit rediriger DANS Shopify Admin pour que l'app se charge dans l'iframe.
+    // Une redirection vers APP_URL standalone casse l'expérience embedded et
+    // déclenche un rejet "doesn't stay within the iframe" lors de la review BFS.
+    //
+    // Le flux audit-flux (audit public) garde un redirect direct vers APP_URL
+    // car ce n'est pas un contexte embedded Shopify.
+    const cameFromShopifyAdmin = isGuestInstall || Boolean(resolvedHost);
+    const isAuditFlow = Boolean(oauthContext?.auditShareToken);
+
+    let redirectUrl;
+    if (cameFromShopifyAdmin && !isAuditFlow && SHOPIFY_API_KEY) {
+      // Redirige vers l'URL canonique de l'app embedded dans Shopify Admin.
+      // Format : https://{shop}/admin/apps/{api_key}
+      // Shopify Admin charge alors notre iframe avec les bons paramètres host/embedded.
+      const embeddedParams = new URLSearchParams({
+        shopify: 'connected',
+        shop: normalizedShop,
+      });
+      if (isGuestInstall) embeddedParams.set('guest', '1');
+      redirectUrl = `https://${normalizedShop}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}?${embeddedParams.toString()}`;
+    } else if (isAuditFlow) {
+      redirectUrl = `${APP_URL}/${resolvedLocale}/audit-flux/${encodeURIComponent(oauthContext.auditShareToken)}?shopify=connected`;
+    } else {
+      // Install initié depuis feedplug.com (user déjà loggué, pas de contexte Shopify Admin) :
+      // retour direct sur le dashboard FeedPlug.
+      const redirectParams = new URLSearchParams({
+        shopify: 'connected',
+        shop: normalizedShop,
+      });
+      if (isGuestInstall) {
+        redirectParams.set('guest', '1');
+      }
+      if (resolvedHost) {
+        redirectParams.set('host', resolvedHost);
+        redirectParams.set('embedded', '1');
+      }
+      redirectUrl = `${APP_URL}/${resolvedLocale}/sources?${redirectParams.toString()}`;
     }
-    if (resolvedHost) {
-      redirectParams.set('host', resolvedHost);
-      redirectParams.set('embedded', '1');
-    }
-    const redirectUrl = oauthContext?.auditShareToken
-      ? `${APP_URL}/${resolvedLocale}/audit-flux/${encodeURIComponent(oauthContext.auditShareToken)}?shopify=connected`
-      : `${APP_URL}/${resolvedLocale}/sources?${redirectParams.toString()}`;
     res.redirect(302, redirectUrl);
   } catch (err) {
     console.error('Shopify callback error:', err);
@@ -16918,6 +17019,215 @@ app.post('/api/v1/connectors/shopify/claim', authenticateToken, async (req, res)
   } catch (err) {
     console.error('Shopify claim error:', err);
     res.status(500).json({ message: 'Erreur lors de la liaison' });
+  }
+});
+
+// ============================================================
+// Shopify Billing API (AppSubscription) — pour merchants installés via App Store
+// ============================================================
+
+/**
+ * Récupère le credential Shopify lié à un account (le plus récent).
+ * Retourne { credentialId, shop, accessToken } ou null si absent.
+ */
+async function findShopifyCredentialForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT c.id, c.secretjson
+      FROM "Credential" c
+      JOIN "FeedSource" s ON s.credentialid = c.id
+      WHERE s.accountid = $1::text
+        AND c.connector = 'SHOPIFY'::text
+      ORDER BY c.createdat DESC
+      LIMIT 1
+    `,
+    accountId
+  );
+  if (!rows || rows.length === 0) return null;
+  const secret = rows[0].secretjson;
+  const data = decryptObjectSecrets(typeof secret === 'string' ? JSON.parse(secret) : secret);
+  const accessToken = data.accessToken || data.access_token;
+  const shop = normalizeShopifyShop(data.shop || '');
+  if (!accessToken || !shop) return null;
+  return { credentialId: rows[0].id, shop, accessToken };
+}
+
+// POST /subscribe — crée une AppSubscription Shopify et retourne confirmationUrl
+app.post('/api/v1/billing/shopify/subscribe', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const productTier = Number(req.body?.tier);
+    const channels = Number(req.body?.channels);
+    const addonIA = Boolean(req.body?.addonIA);
+
+    const priceEur = getPlanPriceEur({ productTier, channels, addonIA });
+    if (priceEur == null) {
+      return res.status(400).json({ message: 'Combinaison plan invalide (tier/channels)' });
+    }
+
+    const credential = await findShopifyCredentialForAccount(accountId);
+    if (!credential) {
+      return res.status(409).json({
+        message: 'Boutique Shopify non connectée. Shopify Billing nécessite une connexion Shopify active.',
+      });
+    }
+
+    let shopCurrency = 'USD';
+    try {
+      shopCurrency = await shopifyBilling.fetchShopCurrency({
+        shop: credential.shop,
+        accessToken: credential.accessToken,
+      });
+    } catch (currencyErr) {
+      console.warn('Shop currency fetch failed, fallback USD:', currencyErr?.message);
+    }
+    const { amount, currency } = shopifyBilling.computeShopifyPrice(priceEur, shopCurrency);
+
+    const planKey = tierIdFromProductTier(productTier);
+    const name = getPlanLabel({ productTier, channels, addonIA });
+    const apiBase = (process.env.API_PUBLIC_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+    const returnUrl = `${apiBase}/api/v1/billing/shopify/return?account=${encodeURIComponent(accountId)}`;
+
+    const created = await shopifyBilling.createAppSubscription({
+      shop: credential.shop,
+      accessToken: credential.accessToken,
+      name,
+      amount,
+      currency,
+      returnUrl,
+      trialDays: Number(process.env.SHOPIFY_BILLING_TRIAL_DAYS || 0),
+    });
+
+    await shopifyBilling.upsertShopifySubscription({
+      prisma,
+      row: {
+        accountId,
+        shopDomain: credential.shop,
+        shopifySubscriptionId: created.subscriptionId,
+        planKey: planKey || `CUSTOM_${productTier}_${channels}${addonIA ? '_IA' : ''}`,
+        priceAmount: amount,
+        currency,
+        interval: 'EVERY_30_DAYS',
+        status: 'PENDING',
+        trialDays: Number(process.env.SHOPIFY_BILLING_TRIAL_DAYS || 0),
+        confirmationUrl: created.confirmationUrl,
+        returnUrl,
+        testMode: created.subscription?.test === true,
+      },
+    });
+
+    return res.json({
+      confirmationUrl: created.confirmationUrl,
+      subscriptionId: created.subscriptionId,
+      amount,
+      currency,
+      planKey,
+    });
+  } catch (err) {
+    console.error('Shopify billing subscribe error:', err);
+    return res.status(500).json({ message: 'Erreur création abonnement Shopify', detail: err?.message });
+  }
+});
+
+// GET /return — appelé par Shopify après que le merchant approuve l'abonnement
+// Met à jour le status localement, puis redirige vers l'app embedded.
+app.get('/api/v1/billing/shopify/return', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).send('Service indisponible');
+    }
+    const accountId = String(req.query.account || '').trim();
+    if (!accountId) {
+      return res.status(400).send('account manquant');
+    }
+
+    const subRow = await shopifyBilling.findActiveSubscriptionForAccount({ prisma, accountId });
+    if (!subRow) {
+      return res.status(404).send('Aucune subscription en attente');
+    }
+
+    const credential = await findShopifyCredentialForAccount(accountId);
+    if (credential) {
+      try {
+        const fresh = await shopifyBilling.getAppSubscription({
+          shop: credential.shop,
+          accessToken: credential.accessToken,
+          subscriptionId: subRow.shopify_subscription_id,
+        });
+        if (fresh?.status) {
+          await shopifyBilling.markShopifySubscriptionStatus({
+            prisma,
+            shopifySubscriptionId: subRow.shopify_subscription_id,
+            status: fresh.status,
+            currentPeriodEnd: fresh.currentPeriodEnd,
+          });
+          if (fresh.status === 'ACTIVE') {
+            await prisma.$executeRawUnsafe(
+              `
+                UPDATE "Account"
+                SET plan = $2::text,
+                    billing_provider = 'SHOPIFY'::text,
+                    billingstatus = 'active'::text,
+                    paymentgraceuntil = NULL,
+                    updatedat = NOW()
+                WHERE id = $1::text
+              `,
+              accountId,
+              subRow.plan_key
+            );
+          }
+        }
+      } catch (verifyErr) {
+        console.warn('Shopify billing return verify failed:', verifyErr?.message);
+      }
+    }
+
+    const shopForRedirect = subRow.shop_domain;
+    if (SHOPIFY_API_KEY && shopForRedirect) {
+      return res.redirect(302, `https://${shopForRedirect}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}?billing=ok`);
+    }
+    return res.redirect(302, `${APP_URL}/fr/facturation?shopify=connected`);
+  } catch (err) {
+    console.error('Shopify billing return error:', err);
+    return res.status(500).send('Erreur traitement retour Shopify Billing');
+  }
+});
+
+// POST /cancel — annule la subscription Shopify active du compte
+app.post('/api/v1/billing/shopify/cancel', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const subRow = await shopifyBilling.findActiveSubscriptionForAccount({ prisma, accountId });
+    if (!subRow) {
+      return res.status(404).json({ message: 'Aucune subscription Shopify active' });
+    }
+    const credential = await findShopifyCredentialForAccount(accountId);
+    if (!credential) {
+      return res.status(409).json({ message: 'Connexion Shopify introuvable' });
+    }
+    await shopifyBilling.cancelAppSubscription({
+      shop: credential.shop,
+      accessToken: credential.accessToken,
+      subscriptionId: subRow.shopify_subscription_id,
+      prorate: Boolean(req.body?.prorate),
+    });
+    await shopifyBilling.markShopifySubscriptionStatus({
+      prisma,
+      shopifySubscriptionId: subRow.shopify_subscription_id,
+      status: 'CANCELLED',
+      cancelled: true,
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Shopify billing cancel error:', err);
+    return res.status(500).json({ message: 'Erreur annulation', detail: err?.message });
   }
 });
 
