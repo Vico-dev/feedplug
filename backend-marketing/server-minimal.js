@@ -17364,6 +17364,37 @@ app.get('/api/v1/billing/shopify/return', async (req, res) => {
 });
 
 // POST /cancel — annule la subscription Shopify active du compte
+// GET /current — état de la subscription Shopify active du compte
+app.get('/api/v1/billing/shopify/current', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const sub = await shopifyBilling.findActiveSubscriptionForAccount({
+      prisma,
+      accountId: req.user.accountId,
+    });
+    if (!sub) {
+      return res.json({ active: false });
+    }
+    return res.json({
+      active: sub.status === 'ACTIVE' || sub.status === 'PENDING',
+      subscriptionId: sub.shopify_subscription_id,
+      planKey: sub.plan_key,
+      priceAmount: Number(sub.price_amount),
+      currency: sub.currency,
+      interval: sub.interval,
+      status: sub.status,
+      trialEndsAt: sub.trial_ends_at,
+      currentPeriodEnd: sub.current_period_end,
+      testMode: sub.test_mode === true,
+    });
+  } catch (err) {
+    console.error('Shopify billing current error:', err);
+    return res.status(500).json({ message: 'Erreur récupération abonnement', detail: err?.message });
+  }
+});
+
 app.post('/api/v1/billing/shopify/cancel', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
