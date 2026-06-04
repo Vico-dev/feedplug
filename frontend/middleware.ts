@@ -30,7 +30,43 @@ const APP_ROUTES = [
   '/parametres',
   '/sources',
   '/oauth',
+  '/embedded',
 ];
+
+/**
+ * Routes destinées à l'iframe Shopify Admin. Auth via session token Shopify
+ * (Authorization header) côté API, pas via cookie de session. Doivent autoriser
+ * l'embedding dans Shopify Admin via CSP frame-ancestors.
+ */
+const SHOPIFY_EMBEDDED_PREFIX = '/embedded';
+
+function isEmbeddedRoute(pathname: string) {
+  // Routes embedded ne passent pas par [locale], on match donc le prefix brut
+  return pathname === SHOPIFY_EMBEDDED_PREFIX || pathname.startsWith(`${SHOPIFY_EMBEDDED_PREFIX}/`);
+}
+
+/**
+ * Applique les headers d'iframe sur la réponse.
+ *  - Routes embedded : autorisent Shopify Admin via CSP frame-ancestors.
+ *    On NE PEUT PAS combiner avec X-Frame-Options (qui ne supporte pas
+ *    plusieurs origines), donc on l'omet sur ces routes.
+ *  - Autres routes : verrouillent contre le clickjacking.
+ */
+function applyFrameHeaders(response: NextResponse, embedded: boolean) {
+  if (embedded) {
+    response.headers.set(
+      'Content-Security-Policy',
+      "frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
+    );
+  } else {
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set(
+      'Content-Security-Policy',
+      "frame-ancestors 'none';"
+    );
+  }
+  return response;
+}
 
 // Routes marketing
 const MARKETING_ROUTES_PATTERNS = [
@@ -82,6 +118,15 @@ export function middleware(request: NextRequest) {
   // API/assets
   if (pathname.startsWith('/feedplug-api') || pathname === '/sitemap.xml' || pathname === '/robots.txt' || pathname === '/og-image' || pathname === '/logo' || pathname === '/icon' || pathname.startsWith('/icon?')) {
     return NextResponse.next();
+  }
+
+  const embedded = isEmbeddedRoute(pathname);
+
+  // Routes embedded Shopify : ni auth cookie, ni i18n routing.
+  // L'auth se fait par session token Shopify côté API. La locale est lue par
+  // la page elle-même depuis le query param `locale` (envoyé par Shopify Admin).
+  if (embedded) {
+    return applyFrameHeaders(NextResponse.next(), true);
   }
 
   // Canonicalisation www
@@ -145,7 +190,7 @@ export function middleware(request: NextRequest) {
       pathnameWithoutLocale.startsWith('/oauth/');
 
     if (isAppAuthRouteWithoutLocale) {
-      return NextResponse.next();
+      return applyFrameHeaders(NextResponse.next(), false);
     }
 
     // Gate auth côté serveur sur les routes protégées : sans cookie de session,
@@ -161,7 +206,7 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url, 307);
     }
 
-    return intlMiddleware(request);
+    return applyFrameHeaders(intlMiddleware(request), false);
   }
 
   if (!isLocalHost && isMarketingDomain && isAppRoute) {
@@ -184,18 +229,18 @@ export function middleware(request: NextRequest) {
   // Docs
   const isDocsRoute = pathname === '/docs' || pathname.startsWith('/docs/');
   if (isMarketingDomain && isDocsRoute) {
-    return NextResponse.next();
+    return applyFrameHeaders(NextResponse.next(), false);
   }
 
   if (isMarketingDomain) {
-    return intlMiddleware(request);
+    return applyFrameHeaders(intlMiddleware(request), false);
   }
 
   if (isAppDomain) {
-    return intlMiddleware(request);
+    return applyFrameHeaders(intlMiddleware(request), false);
   }
 
-  return NextResponse.next();
+  return applyFrameHeaders(NextResponse.next(), false);
 }
 
 export const config = {
