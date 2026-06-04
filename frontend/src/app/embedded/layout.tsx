@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import "@shopify/polaris/build/esm/styles.css";
 import { EmbeddedProvider } from "./_components/embedded-provider";
+import { EmbeddedNavMenu } from "./_components/embedded-nav-menu";
 
 /**
  * Layout dédié à l'expérience embedded Shopify Admin.
@@ -17,7 +18,10 @@ import { EmbeddedProvider } from "./_components/embedded-provider";
 export default function EmbeddedLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={null}>
-      <EmbeddedProvider>{children}</EmbeddedProvider>
+      <EmbeddedProvider>
+        <EmbeddedNavMenu />
+        {children}
+      </EmbeddedProvider>
     </Suspense>
   );
 }

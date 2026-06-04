@@ -40,8 +40,13 @@ const buttonVariants = cva(
   }
 )
 
+// Note : on omet `variant` et `tone` du type HTML button parce que
+// @shopify/app-bridge-types augmente globalement React.ButtonHTMLAttributes
+// avec ses propres props (variant: "primary" | "breadcrumb", tone) destinées
+// aux web-components ui-title-bar/ui-nav-menu. Sans ce Omit, le `variant`
+// shadcn ("default" | "outline" | "ghost" | …) entre en collision.
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "variant" | "tone">,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }

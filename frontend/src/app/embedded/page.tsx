@@ -3,7 +3,6 @@
 import {
   BlockStack,
   Box,
-  Button,
   Card,
   InlineStack,
   Layout,
@@ -12,6 +11,7 @@ import {
   Page,
   Text,
 } from "@shopify/polaris";
+import { TitleBar } from "@shopify/app-bridge-react";
 import { useRouter } from "next/navigation";
 
 /**
@@ -21,26 +21,33 @@ import { useRouter } from "next/navigation";
  * depuis l'App Store : titre clair, value prop en 2 phrases, prochaine étape
  * actionable. Pas de bullshit marketing — on est dans Shopify Admin, le
  * merchant cherche à comprendre l'app et passer à l'action.
+ *
+ * Convention BFS : le titre + actions principales passent par TitleBar App
+ * Bridge (visible dans la barre Shopify Admin au-dessus de l'iframe) plutôt
+ * que par les props de Polaris Page (qui resterait à l'intérieur de l'iframe).
  */
 export default function EmbeddedHomePage() {
   const router = useRouter();
 
   return (
     <Page
-      title="FeedPlug"
       subtitle="Synchronisez votre catalogue Shopify vers Google Shopping, Bing et Amazon"
-      primaryAction={{
-        content: "Choisir un plan",
-        onAction: () => router.push("/embedded/billing"),
-      }}
-      secondaryActions={[
-        {
-          content: "Documentation",
-          url: "https://feedplug.com/docs",
-          external: true,
-        },
-      ]}
     >
+      <TitleBar title="FeedPlug">
+        <button
+          variant="primary"
+          onClick={() => router.push("/embedded/billing")}
+        >
+          Choisir un plan
+        </button>
+        <a
+          href="https://feedplug.com/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Documentation
+        </a>
+      </TitleBar>
       <Layout>
         <Layout.Section>
           <Card>

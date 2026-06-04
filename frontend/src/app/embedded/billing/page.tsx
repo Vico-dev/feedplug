@@ -15,6 +15,7 @@ import {
   Select,
   Text,
 } from "@shopify/polaris";
+import { TitleBar } from "@shopify/app-bridge-react";
 import { useMemo, useState } from "react";
 import {
   ADDON_IA_PRICE_EUR,
@@ -110,10 +111,10 @@ export default function EmbeddedBillingPage() {
 
   return (
     <Page
-      title="Choisir un plan"
       backAction={{ content: "Accueil", url: "/embedded" }}
       subtitle="Facturation gérée par Shopify Payments — aucune carte à saisir"
     >
+      <TitleBar title="Choisir un plan" />
       <Layout>
         {error ? (
           <Layout.Section>
