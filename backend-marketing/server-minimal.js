@@ -14310,10 +14310,14 @@ try {
 
 // ====== PERFORMANCE PAR CANAL (historique + purge) ======
 // GET /api/v1/performance/dashboard — agrégats par plateforme, top produits, par catégorie (ROAS, coût, revenus)
-app.get('/api/v1/performance/dashboard', async (req, res) => {
+// Auth mixte : JWT cookie (dashboard standalone via proxy Next) ou session token Shopify (embedded).
+app.get('/api/v1/performance/dashboard', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
+    if (!accountId) {
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
     const feedId = req.query.feedId || null;
     const limitProducts = Math.min(100, parseInt(req.query.limitProducts || '30', 10));
 

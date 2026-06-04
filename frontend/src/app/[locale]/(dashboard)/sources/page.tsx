@@ -26,36 +26,7 @@ import { getIngestionSyncToastMessage, getIngestionEmptyFileMessage } from '@/li
 import { ALL_MAPPING_FIELDS, CHANNEL_OPTIONS, MAPPING_FIELDS_GROUPS, getMappingFieldsForChannel, type MappingOutputChannel } from '@/lib/mapping-field-groups';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { buildLocalizedPath, getLocalePrefixForLocale } from '@/lib/locale-navigation';
-
-interface FeedSource {
-  id: string;
-  name: string;
-  connector: string;
-  configJson: Record<string, unknown>;
-  defaultFreq: string;
-  status: string;
-  lastRunAt: string | null;
-  createdAt: string;
-}
-
-interface Feed {
-  id: string;
-  name: string;
-  sourceId: string;
-  frequency: string;
-  status: string;
-  mappingJson?: Record<string, string>;
-  latestRun?: {
-    status?: string | null;
-    totalFetched?: number | null;
-    totalInserted?: number | null;
-    totalUpdated?: number | null;
-    totalSkipped?: number | null;
-    errorMessage?: string | null;
-    finishedAt?: string | null;
-  } | null;
-  createdAt: string;
-}
+import type { FeedSource, Feed } from '@/lib/shopify/types';
 
 interface EnrichmentSource {
   id: string;
