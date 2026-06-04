@@ -94,6 +94,7 @@ const {
   processComplianceWebhook: processShopifyComplianceWebhook,
 } = require('./domains/shopify/compliance');
 const shopifyBilling = require('./domains/shopify/billing');
+const shopifyProvisioning = require('./domains/shopify/provisioning');
 const {
   getPriceEur: getPlanPriceEur,
   getPlanLabel: getPlanLabel,
@@ -1228,11 +1229,57 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
       shop
     );
     if (!rows || rows.length === 0) {
-      return res.status(409).json({
-        code: 'NO_ACCOUNT_FOR_SHOP',
-        message: 'Aucun compte FeedPlug lié à cette boutique Shopify',
-        shop,
-      });
+      // Fallback : tente l'auto-provisioning à la volée si une Credential
+      // existe pour ce shop (cas merchant installé AVANT le déploiement de
+      // l'eager provisioning, ou échec transitoire au callback OAuth).
+      const credRows = await prisma.$queryRawUnsafe(
+        `
+          SELECT id, secretjson
+          FROM "Credential"
+          WHERE connector = 'SHOPIFY'::text
+            AND secretjson->>'shop' = $1::text
+          ORDER BY createdat DESC
+          LIMIT 1
+        `,
+        shop
+      );
+      const credRow = credRows?.[0];
+      if (credRow) {
+        try {
+          const secret = decryptObjectSecrets(
+            typeof credRow.secretjson === 'string' ? JSON.parse(credRow.secretjson) : credRow.secretjson
+          );
+          const accessToken = secret.accessToken || secret.access_token;
+          if (accessToken) {
+            const provision = await shopifyProvisioning.provisionAccountFromShopify({
+              prisma,
+              shop,
+              accessToken,
+              credentialId: credRow.id,
+            });
+            if (provision.accountId) {
+              // Re-lookup pour récupérer les colonnes Account fraîches
+              const reRows = await prisma.$queryRawUnsafe(
+                `SELECT id AS accountid, plan, trialendsat, billingstatus, paymentgraceuntil FROM "Account" WHERE id = $1::text LIMIT 1`,
+                provision.accountId
+              );
+              if (reRows?.length) {
+                rows.push(reRows[0]);
+                console.log('🔁 Shopify lazy provisioning effectué pour ' + shop + ' (account: ' + provision.accountId + ')');
+              }
+            }
+          }
+        } catch (lazyErr) {
+          console.warn('⚠️ Shopify lazy provisioning échoué:', lazyErr?.message || lazyErr);
+        }
+      }
+      if (rows.length === 0) {
+        return res.status(409).json({
+          code: 'NO_ACCOUNT_FOR_SHOP',
+          message: 'Aucun compte FeedPlug lié à cette boutique Shopify',
+          shop,
+        });
+      }
     }
     const row = rows[0];
     req.user = {
@@ -16981,8 +17028,31 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
             VALUES ($1::text, $2::text, $3::text, 'DAILY'::text, 'ACTIVE'::text, $4::jsonb, 'guid_or_url'::text, $5::timestamptz, $5::timestamptz, $6::text)
           `, feedId, 'Flux principal - ' + sourceName, sourceId, mappingData, now, oauthContext.accountId);
           console.log('✅ Shopify credential + source + feed créés pour ' + normalizedShop + ' (account: ' + oauthContext.accountId + ')');
+        } else if (isGuestInstall && !oauthContext?.auditShareToken) {
+          // Install depuis Shopify App Store : auto-provision un Account
+          // FeedPlug pour que le merchant soit utilisable immédiatement
+          // (requis pour Built for Shopify : pas d'étape de signup séparée).
+          try {
+            const provision = await shopifyProvisioning.provisionAccountFromShopify({
+              prisma,
+              shop: normalizedShop,
+              accessToken: tokenJson.access_token,
+              credentialId: credId,
+            });
+            if (provision.provisioned) {
+              console.log(`✅ Shopify auto-provisioning : Account ${provision.accountId} créé pour ${normalizedShop}`);
+            } else if (provision.existing && provision.accountId) {
+              console.log(`✅ Shopify auto-provisioning : Account ${provision.accountId} déjà existant pour ${normalizedShop} (${provision.reason})`);
+            } else {
+              console.log(`ℹ️ Shopify auto-provisioning skipped pour ${normalizedShop} : ${provision.reason}`);
+            }
+          } catch (provisionErr) {
+            // On dégrade vers le flow guest classique : credential créé mais
+            // pas de compte. Le merchant pourra claim manuellement.
+            console.warn('⚠️ Shopify auto-provisioning échoué pour ' + normalizedShop + ':', provisionErr?.message || provisionErr);
+          }
         } else {
-          // Flux install via lien Partners (guest) : credential seulement ; à lier via /claim depuis l'app
+          // Flux install via lien Partners (guest) AVEC audit ou autre contexte non-provisionnable
           console.log(`✅ Shopify credential créé pour ${normalizedShop} (en attente de liaison)`);
           if (oauthContext?.auditShareToken) {
             try {
