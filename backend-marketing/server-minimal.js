@@ -1160,6 +1160,102 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware d'authentification mixte JWT + Shopify session token.
+ * Utilisé sur les routes accessibles depuis l'app embedded Shopify Admin où
+ * le merchant n'a pas forcément de JWT FeedPlug (cas BFS : install Shopify →
+ * choix de plan → souscription, sans détour par feedplug.com/register).
+ *
+ * Stratégie :
+ *  1. Si le token décrypte comme JWT FeedPlug → comportement classique
+ *  2. Sinon, tente verifyShopifySessionToken → identifie le shop → résout
+ *     l'Account via le Credential Shopify lié au shop
+ *  3. Si aucun Account associé au shop, retourne 409 NO_ACCOUNT_FOR_SHOP
+ *     (le frontend peut alors guider vers l'auto-provisioning Shopify-native)
+ */
+const authenticateJwtOrShopifySession = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Token d\'accès requis' });
+  }
+
+  // 1) JWT FeedPlug
+  try {
+    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    req.user = user;
+    req.accountId = user.accountId;
+    const accessAllowed = await enforceAccountAccess(req, res);
+    if (accessAllowed !== true) return accessAllowed;
+    return next();
+  } catch {
+    // Bascule sur session token Shopify
+  }
+
+  // 2) Shopify session token
+  if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    return res.status(403).json({ message: 'Token invalide' });
+  }
+  let shopifyAuth;
+  try {
+    shopifyAuth = verifyShopifySessionToken(token);
+  } catch {
+    return res.status(403).json({ message: 'Token invalide' });
+  }
+
+  const shop = shopifyAuth.shop;
+  if (!shop) {
+    return res.status(403).json({ message: 'Session Shopify invalide' });
+  }
+
+  // 3) Résolution Account via Credential.shop
+  if (!prismaReady || !prisma) {
+    return res.status(503).json({ message: 'Service indisponible' });
+  }
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      `
+        SELECT s.accountid, a.plan, a.trialendsat, a.billingstatus, a.paymentgraceuntil
+        FROM "Credential" c
+        JOIN "FeedSource" s ON s.credentialid = c.id
+        JOIN "Account" a ON a.id = s.accountid
+        WHERE c.connector = 'SHOPIFY'::text
+          AND c.secretjson->>'shop' = $1::text
+        ORDER BY c.createdat DESC
+        LIMIT 1
+      `,
+      shop
+    );
+    if (!rows || rows.length === 0) {
+      return res.status(409).json({
+        code: 'NO_ACCOUNT_FOR_SHOP',
+        message: 'Aucun compte FeedPlug lié à cette boutique Shopify',
+        shop,
+      });
+    }
+    const row = rows[0];
+    req.user = {
+      accountId: row.accountid,
+      shopifyShop: shop,
+      authSource: 'shopify_session',
+    };
+    req.accountId = row.accountid;
+    req.account = {
+      plan: row.plan,
+      trialEndsAt: row.trialendsat,
+      billingStatus: row.billingstatus,
+      paymentGraceUntil: row.paymentgraceuntil,
+    };
+    const accessAllowed = await enforceAccountAccess(req, res);
+    if (accessAllowed !== true) return accessAllowed;
+    return next();
+  } catch (err) {
+    console.error('Shopify session auth error:', err);
+    return res.status(500).json({ message: 'Erreur authentification Shopify' });
+  }
+};
+
 // Staff FeedPlug = accès aux données prospect/admin (leads marketing, diagnostic, etc.)
 // Un client OWNER de son compte NE DOIT PAS y accéder.
 // Vérification par email uniquement — l'accountId est contrôlable via le JWT et ne doit pas être utilisé.
@@ -17054,7 +17150,7 @@ async function findShopifyCredentialForAccount(accountId) {
 }
 
 // POST /subscribe — crée une AppSubscription Shopify et retourne confirmationUrl
-app.post('/api/v1/billing/shopify/subscribe', authenticateToken, async (req, res) => {
+app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service indisponible' });
@@ -17198,7 +17294,7 @@ app.get('/api/v1/billing/shopify/return', async (req, res) => {
 });
 
 // POST /cancel — annule la subscription Shopify active du compte
-app.post('/api/v1/billing/shopify/cancel', authenticateToken, async (req, res) => {
+app.post('/api/v1/billing/shopify/cancel', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service indisponible' });
