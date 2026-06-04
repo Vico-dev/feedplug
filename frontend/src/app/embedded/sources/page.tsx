@@ -197,7 +197,7 @@ export default function EmbeddedSourcesPage() {
               content: "Reconnecter Shopify",
               url: "/embedded",
             }}
-            image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+            image="/embedded-empty.svg"
           >
             <p>
               Votre boutique Shopify n'apparaît pas comme connectée à FeedPlug.
@@ -298,7 +298,7 @@ function ProductsTable({ items }: { items: FeedItemSummary[] }) {
       <Box padding="800">
         <EmptyState
           heading="Aucun produit synchronisé pour l'instant"
-          image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+          image="/embedded-empty.svg"
         >
           <p>
             La première synchronisation peut prendre quelques minutes après

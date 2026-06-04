@@ -41,7 +41,7 @@ export default function EmbeddedError({
             url: "mailto:support@feedplug.com",
             external: true,
           }}
-          image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+          image="/embedded-empty.svg"
         >
           <p>
             FeedPlug n'a pas pu charger cette page. Si le problème persiste,

@@ -145,7 +145,7 @@ export default function EmbeddedPerformancePage() {
               url: "https://app.feedplug.com/fr/sources",
               external: true,
             }}
-            image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+            image="/embedded-empty.svg"
           >
             <p>
               Les performances apparaissent dès que vous connectez un canal
