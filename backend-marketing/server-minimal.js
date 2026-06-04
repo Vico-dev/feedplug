@@ -17428,6 +17428,192 @@ app.post('/api/v1/billing/shopify/cancel', authenticateJwtOrShopifySession, asyn
   }
 });
 
+// ============================================================
+// Embedded Shopify — Sources (vue catalogue dans l'iframe Shopify Admin)
+// ============================================================
+
+/**
+ * Retourne le feed Shopify principal d'un account (le plus récemment créé).
+ * Convention FeedPlug : un install Shopify crée 1 Credential + 1 Source + 1 Feed.
+ */
+async function findShopifyFeedForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT f.id AS feed_id, f.name AS feed_name, f.status AS feed_status,
+             s.id AS source_id, s.name AS source_name, s.status AS source_status,
+             s.lastrunat AS last_run_at, s.createdat AS connected_at,
+             c.secretjson AS secretjson, c.id AS credential_id
+      FROM "Feed" f
+      JOIN "FeedSource" s ON s.id = f.sourceid
+      JOIN "Credential" c ON c.id = s.credentialid
+      WHERE f.accountid = $1::text
+        AND s.connector = 'SHOPIFY'::text
+      ORDER BY f.createdat DESC
+      LIMIT 1
+    `,
+    accountId
+  );
+  if (!rows || rows.length === 0) return null;
+  const row = rows[0];
+  let shop = '';
+  try {
+    const secret = decryptObjectSecrets(
+      typeof row.secretjson === 'string' ? JSON.parse(row.secretjson) : row.secretjson
+    );
+    shop = normalizeShopifyShop(secret.shop || '');
+  } catch {
+    shop = '';
+  }
+  return {
+    feedId: row.feed_id,
+    feedName: row.feed_name,
+    feedStatus: row.feed_status,
+    sourceId: row.source_id,
+    sourceName: row.source_name,
+    sourceStatus: row.source_status,
+    lastRunAt: row.last_run_at,
+    connectedAt: row.connected_at,
+    credentialId: row.credential_id,
+    shop,
+  };
+}
+
+// GET /overview — état du catalogue Shopify pour l'embedded admin
+app.get('/api/v1/embedded/sources/overview', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+
+    if (!feed) {
+      return res.json({
+        connected: false,
+        shop: null,
+        feedId: null,
+        lastSyncAt: null,
+        totalItems: 0,
+        items: [],
+      });
+    }
+
+    const countRows = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS c FROM "FeedItem" WHERE feedid = $1::text`,
+      feed.feedId
+    );
+    const totalItems = countRows?.[0]?.c ?? 0;
+
+    const itemRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT id, title, imageurl, brand, sku, price, currency, inventory,
+               url, updatedat
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+        ORDER BY COALESCE(updatedat, createdat) DESC
+        LIMIT 20
+      `,
+      feed.feedId
+    );
+    const items = (itemRows || []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      imageUrl: r.imageurl || null,
+      brand: r.brand || null,
+      sku: r.sku || null,
+      price: r.price != null ? Number(r.price) : null,
+      currency: r.currency || null,
+      inventory: r.inventory != null ? Number(r.inventory) : null,
+      url: r.url || null,
+      updatedAt: r.updatedat,
+    }));
+
+    return res.json({
+      connected: true,
+      shop: feed.shop,
+      shopName: feed.shop ? feed.shop.replace(/\.myshopify\.com$/, '') : null,
+      feedId: feed.feedId,
+      feedStatus: feed.feedStatus,
+      sourceStatus: feed.sourceStatus,
+      lastSyncAt: feed.lastRunAt,
+      connectedAt: feed.connectedAt,
+      totalItems,
+      items,
+    });
+  } catch (err) {
+    console.error('Embedded sources overview error:', err);
+    return res.status(500).json({ message: 'Erreur récupération catalogue', detail: err?.message });
+  }
+});
+
+// POST /sync — déclenche une re-sync du feed Shopify principal (manuel)
+app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.status(404).json({ message: 'Aucune source Shopify connectée' });
+    }
+    if (!feed.shop) {
+      return res.status(409).json({ message: 'Domaine boutique manquant dans la credential' });
+    }
+
+    // Récupère le credential déchiffré
+    const credRows = await prisma.$queryRawUnsafe(
+      `SELECT secretjson FROM "Credential" WHERE id = $1::text LIMIT 1`,
+      feed.credentialId
+    );
+    if (!credRows?.length) {
+      return res.status(404).json({ message: 'Credential introuvable' });
+    }
+    const secret = decryptObjectSecrets(
+      typeof credRows[0].secretjson === 'string' ? JSON.parse(credRows[0].secretjson) : credRows[0].secretjson
+    );
+    const accessToken = secret.accessToken || secret.access_token;
+    if (!accessToken) {
+      return res.status(409).json({ message: 'Token Shopify expiré, reconnectez la boutique' });
+    }
+
+    // Lance la re-sync de manière asynchrone : on répond 202 immédiatement
+    // pour que le bouton "Synchroniser" ne bloque pas l'UI plus de quelques
+    // secondes. Le polling de /overview affichera la nouvelle valeur de
+    // lastSyncAt quand la run sera terminée.
+    const startedAt = new Date().toISOString();
+    (async () => {
+      try {
+        await ingestShopifyFromApi({
+          prisma,
+          feed: {
+            id: feed.feedId,
+            name: feed.feedName,
+            sourceId: feed.sourceId,
+            mappingJson: {},
+          },
+          shop: feed.shop,
+          accessToken,
+        });
+        await prisma.$executeRawUnsafe(
+          `UPDATE "FeedSource" SET lastrunat = $1::timestamptz, updatedat = $1::timestamptz WHERE id = $2::text`,
+          new Date().toISOString(),
+          feed.sourceId
+        );
+        console.log('✅ Embedded sync done for shop=' + feed.shop + ' accountid=' + accountId);
+      } catch (asyncErr) {
+        console.error('Embedded sync async error:', asyncErr?.message || asyncErr);
+      }
+    })();
+
+    return res.status(202).json({ accepted: true, startedAt, feedId: feed.feedId });
+  } catch (err) {
+    console.error('Embedded sources sync error:', err);
+    return res.status(500).json({ message: 'Erreur déclenchement sync', detail: err?.message });
+  }
+});
+
 // Vérification d'accès Shopify (ping Admin API)
 app.get('/api/v1/connectors/shopify/verify', authenticateToken, async (req, res) => {
   try {
