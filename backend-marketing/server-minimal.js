@@ -577,8 +577,15 @@ function isHealthRequest(req) {
   return req.path === '/health' || req.path === '/healthz';
 }
 
-const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+// Access token court (30 min) pour limiter l'impact d'un token volé. Le frontend
+// rafraîchit via /auth/refresh + cookie HttpOnly. Override possible via JWT_EXPIRES_IN
+// si un besoin spécifique justifie une autre valeur.
+const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30m';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
+
+// Whitelist d'algorithmes JWT (anti alg-confusion / "none"). HS256 = HMAC-SHA256
+// avec un secret partagé, cohérent avec jwt.sign(secret).
+const JWT_VERIFY_OPTIONS = Object.freeze({ algorithms: ['HS256'] });
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your-google-client-id';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback';
@@ -1150,7 +1157,7 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
-    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = user;
     req.accountId = user.accountId;
     const accessAllowed = await enforceAccountAccess(req, res);
@@ -1184,7 +1191,7 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
 
   // 1) JWT FeedPlug
   try {
-    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = user;
     req.accountId = user.accountId;
     const accessAllowed = await enforceAccountAccess(req, res);
@@ -1349,7 +1356,7 @@ const requireAuth = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = decoded;
     req.accountId = decoded.accountId;
 
@@ -10571,7 +10578,7 @@ app.post('/api/v1/auth/refresh', async (req, res) => {
 
     let decoded;
     try {
-      decoded = jwt.verify(refreshToken, EFFECTIVE_JWT_REFRESH_SECRET);
+      decoded = jwt.verify(refreshToken, EFFECTIVE_JWT_REFRESH_SECRET, JWT_VERIFY_OPTIONS);
     } catch (_) {
       return res.status(401).json({ message: 'Refresh token invalide ou expiré' });
     }
