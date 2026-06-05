@@ -1160,6 +1160,9 @@ const authenticateToken = async (req, res, next) => {
     const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = user;
     req.accountId = user.accountId;
+    if (!req.accountId) {
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
     const accessAllowed = await enforceAccountAccess(req, res);
     if (accessAllowed !== true) return accessAllowed;
     next();
@@ -1192,6 +1195,12 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
   // 1) JWT FeedPlug
   try {
     const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
+    if (!user?.accountId) {
+      // Token JWT bien signé mais sans accountId : on rejette plutôt que de
+      // basculer sur Shopify (risque de routage cross-tenant si on tentait
+      // l'auto-provisioning derrière).
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
     req.user = user;
     req.accountId = user.accountId;
     const accessAllowed = await enforceAccountAccess(req, res);
@@ -2289,7 +2298,7 @@ app.post('/api/v1/ingestion/sources', async (req, res) => {
     }
     const initialFeedMapping = feedMappingJson || mappingJson || null;
 
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     if (prismaReady && prisma) {
       const [sourcesRows, feedsRows] = await Promise.all([
         prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS c FROM "FeedSource" WHERE accountid = $1::text`, acctId),
@@ -2701,7 +2710,7 @@ app.post('/api/v1/ingestion/feeds', async (req, res) => {
     if (!name || !sourceId || !mappingJson) {
       return res.status(400).json({ message: 'name, sourceId et mappingJson sont requis' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     if (prismaReady && prisma) {
       if (!await verifySourceAccess(sourceId, acctId)) {
         return res.status(403).json({ message: 'Accès refusé à cette source' });
@@ -3213,7 +3222,7 @@ app.post('/api/v1/ingestion/create-missing-feeds', async (req, res) => {
   };
 
   try {
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feedsRows = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS c FROM "Feed" WHERE accountid = $1::text`, acctId);
     const feedsCount = feedsRows?.[0]?.c ?? 0;
 
@@ -3274,7 +3283,7 @@ app.post('/api/v1/ingestion/create-missing-feeds', async (req, res) => {
           'guid_or_url',
           now,
           now,
-          req.accountId || source.accountid || 'default-account'
+          req.accountId || source.accountid
         );
 
         results.created.push({
@@ -3308,7 +3317,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible (runs)' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const productCount = await countProductsForAccount(prisma, acctId);
     const limitProducts = await checkPlanLimit(prisma, acctId, 'maxProducts', productCount);
     if (!limitProducts.allowed) {
@@ -3793,7 +3802,7 @@ app.post('/api/v1/ingestion/feeds/:id/enrichment-sources', async (req, res) => {
     const { name, configJson, mappingJson } = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
     if (!await verifyFeedAccess(feedId, req.accountId)) return res.status(403).json({ message: 'Accès refusé' });
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'aiEnrichment');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -3825,7 +3834,7 @@ app.post('/api/v1/ingestion/feeds/:id/apply-enrichment-sources', async (req, res
     const { id: feedId } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
     if (!await verifyFeedAccess(feedId, req.accountId)) return res.status(403).json({ message: 'Accès refusé' });
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'aiEnrichment');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -4450,7 +4459,7 @@ app.get('/api/v1/ingestion/feeds/:id/items', async (req, res) => {
       return res.status(403).json({ message: 'Accès refusé à ce flux' });
     }
     const destinationContext = requestedDestinationId
-      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId)
+      ? await getDestinationPushContext(req.accountId, requestedDestinationId)
       : null;
 
     const hasSearch = q.length > 0;
@@ -6308,7 +6317,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     const requestedPlatform = String(req.query.platform || '').toLowerCase();
     const requestedDestinationId = String(req.query.destinationId || '').trim();
     const destinationContext = requestedDestinationId
-      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId, requestedPlatform || null)
+      ? await getDestinationPushContext(req.accountId, requestedDestinationId, requestedPlatform || null)
       : null;
     const platform = destinationContext?.platformKey || requestedPlatform || 'gmc';
     const format = (req.query.format || (platform === 'chatgpt' ? 'json' : 'csv')).toLowerCase();
@@ -6365,7 +6374,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     const channelKey = platform === 'gmc' ? 'gmc' : (platform === 'amazon' ? (channel || 'amazon') : (platform === 'chatgpt' ? 'chatgpt' : platform));
     try {
       const { applyRules, getActiveRules } = require('./rules/engine');
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const rules = await prisma.$queryRawUnsafe(`
         SELECT id, conditionjson, actionjson, feedids, channelids, priority, isactive, startdate, enddate
         FROM "Rule" WHERE accountid = $1::text AND isactive = true ORDER BY priority ASC
@@ -6750,7 +6759,7 @@ app.get('/api/v1/ingestion/items/:id', async (req, res) => {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
 
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     
     // Si l'ID ne ressemble pas à un UUID, chercher par MPN ou SKU (dans le compte uniquement)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -6897,7 +6906,7 @@ app.get('/api/v1/ingestion/items/:id/debug', async (req, res) => {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
 
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Si l'ID ne ressemble pas à un UUID, chercher par MPN ou SKU (dans le compte uniquement)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -6987,7 +6996,7 @@ app.get('/api/v1/ingestion/items/:id/score', async (req, res) => {
     }
 
     // Récupérer l'item (support UUID, MPN ou SKU)
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Vérifier si c'est un UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -7118,7 +7127,7 @@ app.get('/api/v1/ingestion/items/:id/score-history', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     let items;
     if (isUUID) {
@@ -7591,7 +7600,7 @@ app.post('/api/v1/ingestion/recalculate-all-scores', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'qualityScore');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -11856,7 +11865,7 @@ app.get('/api/v1/ingestion/items/:id/enrichment-analysis', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Récupérer l'item (support UUID, MPN ou SKU) — avec isolation multi-tenant
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -11922,7 +11931,7 @@ app.post('/api/v1/ingestion/items/:id/enrich', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Récupérer l'item — avec isolation multi-tenant
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -12531,7 +12540,7 @@ app.get('/api/v1/ingestion/items/:id/enrichment-history', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!(await verifyItemAccess(itemId, accountId))) return res.status(403).json({ message: 'Accès refusé' });
@@ -12568,7 +12577,7 @@ app.get('/api/v1/ingestion/items/:id/revisions', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12587,7 +12596,7 @@ app.post('/api/v1/ingestion/items/:id/restore', async (req, res) => {
     const { revisionId } = req.body || {};
     if (!revisionId) return res.status(400).json({ message: 'revisionId requis' });
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12634,7 +12643,7 @@ app.post('/api/v1/ingestion/items/:id/revert-to-feed', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12717,7 +12726,7 @@ app.put('/api/v1/ingestion/items/:id', async (req, res) => {
     const { id } = req.params;
     const body = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12810,7 +12819,7 @@ app.patch('/api/v1/ingestion/items/:id/channels', async (req, res) => {
     const { id } = req.params;
     const body = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12847,7 +12856,7 @@ app.get('/api/v1/ingestion/items/:id/destinations', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12869,7 +12878,7 @@ app.patch('/api/v1/ingestion/items/:id/destinations/:destinationId', async (req,
       return res.status(400).json({ message: 'isEnabled (boolean) est requis.' });
     }
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -12922,7 +12931,7 @@ app.patch('/api/v1/ingestion/items/:id/optimized', async (req, res) => {
       return res.status(400).json({ message: 'platform requis (gmc|meta|amazon|chatgpt)' });
     }
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -13283,7 +13292,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
@@ -13336,7 +13345,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
 // Compteur de consommation IA du mois courant (soft cap — affichage front).
 app.get('/api/v1/enrichment/ai-usage', async (req, res) => {
   try {
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (!prismaReady || !prisma) {
       return res.json({ used: 0, softCap: AI_SOFT_CAP_MONTHLY, percent: 0, period: null });
     }
@@ -13360,7 +13369,7 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
       return res.status(503).json({ message: 'Service non disponible' });
     }
     
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
@@ -13390,7 +13399,7 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
       destinationContext: targetDestinationContext,
     });
     
-    if (savePlatform && result.optimizedTitle && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
+    if (savePlatform && result.optimizedTitle && (await verifyItemAccess(items[0].id, req.accountId))) {
       const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
       if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
         const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
@@ -13430,7 +13439,7 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
       return res.status(503).json({ message: 'Service non disponible' });
     }
     
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const resolvedId = await resolveItemId(prisma, String(itemId), accountId);
     if (!resolvedId) {
       return res.status(404).json({ message: 'Produit non trouvé' });
@@ -13456,7 +13465,7 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
       destinationContext: targetDestinationContext,
     });
     
-    if (savePlatform && result.optimizedDescription && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
+    if (savePlatform && result.optimizedDescription && (await verifyItemAccess(items[0].id, req.accountId))) {
       const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
       if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
         const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
@@ -13492,7 +13501,7 @@ app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
       return res.status(400).json({ message: 'itemId requis' });
     }
 
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (prismaReady && prisma) {
       const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
       if (!addonIA.allowed) {
@@ -13572,7 +13581,7 @@ app.post('/api/v1/enrichment/optimize-image', async (req, res) => {
     if (!imageUrl) {
       return res.status(400).json({ message: 'imageUrl requis' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (prismaReady && prisma) {
       const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
       if (!addonIA.allowed) {
@@ -13612,7 +13621,7 @@ app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
     if (!imageUrl && !imageBase64) {
       return res.status(400).json({ message: 'imageUrl ou imageBase64 requis' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (prismaReady && prisma) {
       const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
       if (!addonIA.allowed) {
@@ -13825,7 +13834,7 @@ app.post('/api/v1/enrichment/proxy-image', async (req, res) => {
     if (!imageUrl || typeof imageUrl !== 'string') {
       return res.status(400).json({ message: 'imageUrl requis' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     let refererOrigin = null;
     if (productPageUrl && typeof productPageUrl === 'string') {
       try {
@@ -13891,7 +13900,7 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
       ...itemIds, req.accountId
     );
     
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const results = { total: itemIds.length, found: products.length, titles: null, descriptions: null, images: null, totalCost: 0 };
     
     const platformResults = {};
@@ -14094,7 +14103,7 @@ app.get('/api/v1/enrichment/score/:itemId', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (!(await verifyItemAccess(itemId, accountId))) {
       return res.status(404).json({ message: 'Produit non trouvé' });
     }
@@ -14432,7 +14441,7 @@ app.get('/api/v1/performance/history', async (req, res) => {
     if (CHANNELS.indexOf(channel) === -1) {
       return res.status(400).json({ message: 'channel invalide. Valeurs: ' + CHANNELS.join(', ') });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (!(await verifyItemAccess(itemId, accountId))) {
       return res.status(404).json({ message: 'Produit non trouvé' });
     }
@@ -14466,7 +14475,7 @@ app.get('/api/v1/performance/history', async (req, res) => {
 app.post('/api/v1/performance/sync/google-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
     const clientId = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
@@ -14513,7 +14522,7 @@ app.post('/api/v1/performance/sync/google-ads', async (req, res) => {
 app.post('/api/v1/performance/sync/meta-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     let adAccountId = req.body?.adAccountId || null;
     let accessToken = req.body?.accessToken || null;
@@ -14549,7 +14558,7 @@ app.post('/api/v1/performance/sync/meta-ads', async (req, res) => {
 app.post('/api/v1/performance/sync/amazon-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     const region = (req.query.region || req.body?.region || 'eu').toLowerCase();
     let profileId = req.body?.profileId || null;
@@ -16380,7 +16389,7 @@ app.get('/api/v1/dashboard/overview', requireAuth, async (req, res) => {
       return res.status(503).json({ message: 'Service non disponible' });
     }
 
-    const acct = req.accountId || 'default-account';
+    const acct = req.accountId;
 
     // Nombre de sources
     const sourcesResult = await prisma.$queryRawUnsafe(`

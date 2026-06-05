@@ -8,7 +8,7 @@ function registerEnrichmentRoutes(app, prisma, getPrismaReady, { authenticateTok
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Service non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { feedId } = req.query;
 
       const feedFilter = feedId ? `AND f.id = $2` : '';
@@ -125,7 +125,7 @@ function registerEnrichmentRoutes(app, prisma, getPrismaReady, { authenticateTok
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Prisma non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
 
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       let items;
@@ -184,7 +184,7 @@ function registerEnrichmentRoutes(app, prisma, getPrismaReady, { authenticateTok
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Service non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       if (!(await verifyItemAccess(itemId, accountId))) {
         return res.status(404).json({ message: 'Produit non trouvé' });
       }

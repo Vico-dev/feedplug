@@ -16,7 +16,7 @@ function registerChannelScoringRoutes(app, deps) {
   // Getter (et non valeur capturée) : `prisma` est initialisé après l'appel
   // à registerChannelScoringRoutes(). Capturer la valeur ici donnait `undefined`.
   const { getPrisma, authenticateToken, getAccountId } = deps;
-  const accountId = (req) => (getAccountId ? getAccountId(req) : req.accountId) || 'default-account';
+  const accountId = (req) => (getAccountId ? getAccountId(req) : req.accountId);
 
   /** Liste des canaux disponibles + configs du compte */
   app.get('/api/v1/scoring-canaux', authenticateToken, async (req, res) => {

@@ -98,12 +98,15 @@ function getJoinValue(item, joinKey) {
 async function applyEnrichmentSources(prisma, feedId, accountId, storage = null) {
   if (!prisma || !feedId) throw new Error('prisma et feedId requis');
 
+  if (!accountId) {
+    throw new Error('accountId requis pour appliquer les sources d\'enrichissement');
+  }
   const sources = await prisma.$queryRawUnsafe(`
     SELECT id, name, configjson, mappingjson, status
     FROM "EnrichmentSource"
-    WHERE feedid = $1::text AND status = 'ACTIVE' AND (accountid = $2::text OR accountid = 'default-account')
+    WHERE feedid = $1::text AND status = 'ACTIVE' AND accountid = $2::text
     ORDER BY createdat ASC
-  `, feedId, accountId || 'default-account');
+  `, feedId, accountId);
 
   if (sources.length === 0) return { applied: 0, sources: 0 };
 
