@@ -9614,7 +9614,9 @@ app.post('/api/v1/marketing/early-access', marketingEarlyAccessLimiter, async (r
     `, leadId);
     const newLead = saved?.[0] || null;
 
-    console.log(`✅ Nouveau lead Early Access: ${newLead?.firstName || 'N/A'} (${newLead?.email || emailNormalized})`);
+    // PII: ne pas logguer l'email en clair (Cloud Run logs → Sentry → indexés).
+    // Le leadId suffit pour retrouver l'enregistrement complet en DB.
+    console.log(`✅ Nouveau lead Early Access — leadId: ${leadId}`);
 
     setImmediate(async () => {
       if (!newLead) return;
@@ -10189,7 +10191,8 @@ app.post('/api/v1/marketing/feature-idea', marketingFeatureIdeaLimiter, async (r
       VALUES ($1::text, $2::text, $3::text, $4::text, $5::timestamptz)
     `, id, emailNormalized, (name && name.trim()) || null, ideaTrimmed, now);
 
-    console.log(`💡 Nouvelle idée feature: ${emailNormalized} — ${ideaTrimmed.slice(0, 50)}…`);
+    // PII: pas d'email en clair dans les logs ; l'id permet de retrouver l'auteur si besoin.
+    console.log(`💡 Nouvelle idée feature — id: ${id} — ${ideaTrimmed.slice(0, 50)}…`);
 
     setImmediate(async () => {
       try {
