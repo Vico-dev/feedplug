@@ -42,11 +42,12 @@ export const metadata: Metadata = {
     template: "%s | FeedPlug",
   },
   description: "Centralize and synchronize your product catalogs across all channels",
-  icons: {
-    icon: [{ url: "/app-icon-1200.png", sizes: "1200x1200", type: "image/png" }],
-    shortcut: [{ url: "/app-icon-512.png", sizes: "512x512", type: "image/png" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-  },
+  // Pas de `icons:` explicite → Next.js auto-détecte :
+  //  - src/app/favicon.ico (ICO multi-res, picto "FP" sur fond blanc)
+  //  - src/app/icon.tsx (PNG dynamique 32×32)
+  //  - src/app/apple-icon.tsx (apple-touch-icon)
+  // L'ancien override forçait /app-icon-1200.png comme favicon, taille
+  // trop grande pour être reconnue comme favicon par les browsers → onglet vide.
 };
 
 export default async function RootLayout({
