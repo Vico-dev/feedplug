@@ -987,12 +987,39 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
 
   const topic = String(req.get('x-shopify-topic') || '').trim().toLowerCase();
   const shopDomain = normalizeShopifyShop(req.get('x-shopify-shop-domain') || '');
+  const webhookId = String(req.get('x-shopify-webhook-id') || '').trim();
   const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   let payload = null;
   try {
     payload = rawBody ? JSON.parse(rawBody) : null;
   } catch {
     payload = null;
+  }
+
+  // Idempotency : Shopify rejoue les webhooks en cas de 5xx/timeout. Sans dedup,
+  // app_subscriptions/update UPDATE Account plusieurs fois et customers/redact
+  // tente de re-supprimer. On insère l'id ; conflit = déjà traité, on répond 200.
+  if (webhookId && prismaReady && prisma) {
+    try {
+      const inserted = await prisma.$executeRawUnsafe(
+        `INSERT INTO shopify_processed_webhooks (webhook_id, topic, shop_domain)
+         VALUES ($1::text, $2::text, $3::text)
+         ON CONFLICT (webhook_id) DO NOTHING`,
+        webhookId,
+        topic,
+        shopDomain || null
+      );
+      if (inserted === 0) {
+        // Déjà traité auparavant — 200 silencieux pour que Shopify arrête les retries.
+        return res.status(200).json({ ok: true, topic, duplicate: true });
+      }
+    } catch (idemErr) {
+      // Si la table n'existe pas encore (migration pas appliquée), on log et on
+      // poursuit plutôt que de bloquer. À retirer une fois la migration 039 en prod.
+      if (!/shopify_processed_webhooks|42P01/i.test(idemErr?.message || '')) {
+        console.warn('Shopify webhook idempotency check failed:', idemErr?.message);
+      }
+    }
   }
 
   try {
