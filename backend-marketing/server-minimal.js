@@ -1380,14 +1380,21 @@ app.use('/api/v1/optimization', requireAuth);
 app.use('/api/v1/rules', requireAuth);
 app.use('/api/v1/performance', requireAuth);
 
-// Middleware auto-vérification d'ownership pour les routes feeds/:id/*
+// Middleware auto-vérification d'ownership pour les routes feeds/:id/*.
+// Fail-closed : si on ne PEUT pas vérifier (pas d'accountId, DB indispo), on bloque.
 app.use('/api/v1/ingestion/feeds/:id', async (req, res, next) => {
-  // Seulement pour les sous-routes (items, export, runs, etc.)
-  if (req.params.id && req.accountId && prismaReady && prisma) {
-    const hasAccess = await verifyFeedAccess(req.params.id, req.accountId);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Accès refusé à ce flux' });
-    }
+  if (!req.params.id) {
+    return next();
+  }
+  if (!req.accountId) {
+    return res.status(401).json({ message: 'Authentification requise' });
+  }
+  if (!prismaReady || !prisma) {
+    return res.status(503).json({ message: 'Service temporairement indisponible' });
+  }
+  const hasAccess = await verifyFeedAccess(req.params.id, req.accountId);
+  if (!hasAccess) {
+    return res.status(403).json({ message: 'Accès refusé à ce flux' });
   }
   next();
 });
