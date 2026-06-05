@@ -4,7 +4,7 @@ export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
 /**
- * Favicon FeedPlug : FP minimal, lisible en 32×32. DA #0a0a0a sur blanc.
+ * Compact mark FeedPlug (DS v2 Tesla mineral) : FP paper sur ink, coins arrondis.
  */
 export default function Icon() {
   return new ImageResponse(
@@ -16,17 +16,16 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#ffffff",
-          borderRadius: 4,
-          border: "1px solid #E5E5E5",
+          backgroundColor: "#0A0A0A",
+          borderRadius: 6,
         }}
       >
         <span
           style={{
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: 700,
-            color: "#0a0a0a",
-            letterSpacing: "-0.04em",
+            color: "#FAFAFA",
+            letterSpacing: "-0.06em",
             fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
