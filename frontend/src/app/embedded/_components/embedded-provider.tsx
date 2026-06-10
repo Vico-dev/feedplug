@@ -33,6 +33,7 @@ function PolarisLink({
   ref: _ref,
   ...rest
 }: LinkLikeComponentProps) {
+  void _ref;
   if (external || /^https?:\/\//.test(url)) {
     return (
       <a href={url} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} {...rest}>

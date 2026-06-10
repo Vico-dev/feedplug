@@ -129,6 +129,24 @@ export function middleware(request: NextRequest) {
     return applyFrameHeaders(NextResponse.next(), true);
   }
 
+  // Shopify Admin charge parfois l'app sur un path autre que /embedded en
+  // injectant ses query params (host base64 + shop myshopify.com). C'est le
+  // cas notamment après approbation Managed Pricing (Shopify redirige vers
+  // {app}/dashboard?host=...&shop=...). Sans CSP frame-ancestors permissif,
+  // le browser bloque l'iframe avec "n'autorise pas la connexion". On
+  // redirige donc systématiquement vers /embedded en préservant les params.
+  const hostParam = request.nextUrl.searchParams.get('host');
+  const shopParam = request.nextUrl.searchParams.get('shop');
+  const isShopifyAdminContext =
+    Boolean(hostParam) &&
+    Boolean(shopParam) &&
+    /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shopParam || '');
+  if (isShopifyAdminContext) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/embedded';
+    return applyFrameHeaders(NextResponse.redirect(url, 302), true);
+  }
+
   // Canonicalisation www
   if (hostname === 'www.feedplug.com') {
     const url = new URL(request.url);

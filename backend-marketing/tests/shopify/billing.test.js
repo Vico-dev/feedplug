@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const billing = require('../../domains/shopify/billing');
+const { SHOPIFY_ADMIN_API_VERSION } = require('../../domains/shopify/config');
 
 test('pickShopifyBillingCurrency garde EUR si shop EUR', () => {
   assert.equal(billing.pickShopifyBillingCurrency('EUR'), 'EUR');
@@ -95,7 +96,7 @@ test('buildShopifyGraphqlEndpoint rejette les domaines non-myshopify (SSRF guard
   assert.throws(() => build(''), /Domaine Shopify invalide/);
   assert.equal(
     build('demo-shop.myshopify.com'),
-    'https://demo-shop.myshopify.com/admin/api/2026-01/graphql.json'
+    `https://demo-shop.myshopify.com/admin/api/${SHOPIFY_ADMIN_API_VERSION}/graphql.json`
   );
 });
 

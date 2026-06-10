@@ -44,7 +44,7 @@ export default function EmbeddedError({
           image="/embedded-empty.svg"
         >
           <p>
-            FeedPlug n'a pas pu charger cette page. Si le problème persiste,
+            FeedPlug n&apos;a pas pu charger cette page. Si le problème persiste,
             contactez le support en mentionnant la référence{" "}
             <code>{error?.digest || "n/a"}</code>.
           </p>

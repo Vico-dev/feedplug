@@ -4,7 +4,6 @@ import {
   Badge,
   BlockStack,
   Box,
-  Button,
   Card,
   EmptyState,
   IndexTable,
@@ -113,7 +112,7 @@ export default function EmbeddedSourcesPage() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchApi("/api/v1/embedded/sources/overview");
+      const response = await fetchApi("/embedded/sources/overview");
       if (response.status === 409) {
         // Pas d'Account encore lié : on retombe sur l'EmptyState "boutique non connectée"
         setOverview({
@@ -150,7 +149,7 @@ export default function EmbeddedSourcesPage() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const response = await fetchApi("/api/v1/embedded/sources/sync", {
+      const response = await fetchApi("/embedded/sources/sync", {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -200,9 +199,9 @@ export default function EmbeddedSourcesPage() {
             image="/embedded-empty.svg"
           >
             <p>
-              Votre boutique Shopify n'apparaît pas comme connectée à FeedPlug.
-              Cela peut arriver après une réinstallation de l'app. Rechargez
-              l'app ou contactez le support.
+              Votre boutique Shopify n&apos;apparaît pas comme connectée à FeedPlug.
+              Cela peut arriver après une réinstallation de l&apos;app. Rechargez
+              l&apos;app ou contactez le support.
             </p>
           </EmptyState>
         </Box>
@@ -272,12 +271,9 @@ export default function EmbeddedSourcesPage() {
             {overview.totalItems > overview.items.length ? (
               <Box padding="400">
                 <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-                  Affichage des 20 derniers. Voir l'ensemble du catalogue ({" "}
-                  {overview.totalItems.toLocaleString("fr-FR")} produits) sur{" "}
-                  <Button variant="plain" url="https://app.feedplug.com/fr/catalogue" target="_blank">
-                    app.feedplug.com
-                  </Button>
-                  .
+                  Affichage des 20 derniers produits sur {overview.totalItems.toLocaleString("fr-FR")} synchronisés.
+                  Cette vue Shopify Admin sert à vérifier rapidement la fraîcheur et la qualité
+                  du catalogue sans sortir du workflow principal.
                 </Text>
               </Box>
             ) : null}
@@ -302,7 +298,7 @@ function ProductsTable({ items }: { items: FeedItemSummary[] }) {
         >
           <p>
             La première synchronisation peut prendre quelques minutes après
-            l'install. Utilisez "Synchroniser maintenant" pour la déclencher
+            l&apos;install. Utilisez &quot;Synchroniser maintenant&quot; pour la déclencher
             immédiatement.
           </p>
         </EmptyState>

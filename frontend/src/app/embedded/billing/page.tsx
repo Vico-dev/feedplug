@@ -6,22 +6,21 @@ import {
   Box,
   Button,
   Card,
-  Checkbox,
   Divider,
   InlineStack,
   Layout,
+  List,
   Page,
-  Select,
   Spinner,
   Text,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // Le composant Modal n'est chargé que si le merchant déclenche un cancel
-// (vue gestion uniquement). La vue configurator (cas le plus fréquent en
-// première visite) ne paye pas ce coût de bundle initial → meilleur LCP.
+// (vue gestion uniquement). La vue grille de plans (cas le plus fréquent en
+// première visite) ne paye pas ce coût de bundle initial.
 const CancelSubscriptionModal = dynamic(
   () =>
     import("./_components/cancel-subscription-modal").then(
@@ -29,15 +28,7 @@ const CancelSubscriptionModal = dynamic(
     ),
   { ssr: false }
 );
-import {
-  ADDON_IA_PRICE_EUR,
-  CHANNEL_OPTIONS,
-  PRODUCT_TIERS,
-  type ChannelCount,
-  type ProductTier,
-  formatProductsLabel,
-  getPriceEur,
-} from "./_pricing";
+import { SHOPIFY_PLANS, type ShopifyPlanHandle } from "./_shopify-plans";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
 
 type CurrentSub = {
@@ -73,15 +64,17 @@ function formatDateLabel(value?: string | null): string {
 }
 
 /**
- * Page de souscription / gestion Shopify Billing.
+ * Page de souscription / gestion Shopify Managed Pricing.
  *
- * Au mount, on appelle /api/v1/billing/shopify/current pour savoir si le
- * merchant a déjà une subscription active :
+ * Au mount, on appelle /billing/shopify/current pour savoir si le merchant a
+ * déjà une subscription active :
  *  - Sub active → vue gestion (statut, prix, période, bouton Annuler)
- *  - Pas de sub → vue configurator (choix tier × channels × IA + Souscrire)
+ *  - Pas de sub → grille de 4 plans (Starter / Pro / Business / Premium)
  *
- * Le cancel passe par une Modal App Bridge de confirmation (convention BFS
- * pour les actions destructives).
+ * Le clic "Choisir ce plan" appelle /billing/shopify/subscribe qui renvoie
+ * une URL Shopify Admin Managed Pricing. On ouvre cette URL en top-level
+ * (escape iframe) ; Shopify gère la confirmation et nous envoie un webhook
+ * app_subscriptions/update à l'approbation.
  */
 export default function EmbeddedBillingPage() {
   const fetchApi = useEmbeddedFetch();
@@ -89,19 +82,10 @@ export default function EmbeddedBillingPage() {
 
   const [loading, setLoading] = useState(true);
   const [currentSub, setCurrentSub] = useState<CurrentSub | null>(null);
-
-  const [tier, setTier] = useState<ProductTier>(500);
-  const [channels, setChannels] = useState<ChannelCount>(2);
-  const [addonIA, setAddonIA] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<ShopifyPlanHandle | null>(null);
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-
-  const monthlyPriceEur = useMemo(
-    () => getPriceEur({ productTier: tier, channels, addonIA }),
-    [tier, channels, addonIA]
-  );
 
   const showToast = useCallback(
     (message: string, isError = false) => {
@@ -119,10 +103,8 @@ export default function EmbeddedBillingPage() {
   const refetchCurrent = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchApi("/api/v1/billing/shopify/current");
+      const response = await fetchApi("/billing/shopify/current");
       if (response.status === 409) {
-        // Pas d'Account encore lié — comportement géré par le subscribe ;
-        // ici on traite comme "pas de sub" et on affiche le configurator.
         setCurrentSub({ active: false });
         return;
       }
@@ -145,21 +127,12 @@ export default function EmbeddedBillingPage() {
     void refetchCurrent();
   }, [refetchCurrent]);
 
-  const tierOptions = PRODUCT_TIERS.map((t) => ({
-    label: formatProductsLabel(t),
-    value: String(t),
-  }));
-  const channelOptions = CHANNEL_OPTIONS.map((c) => ({
-    label: `${c} canal${c > 1 ? "x" : ""} d'export`,
-    value: String(c),
-  }));
-
-  const handleSubscribe = async () => {
-    setSubmitting(true);
+  const handleSubscribe = async (planHandle: ShopifyPlanHandle) => {
+    setSubmitting(planHandle);
     try {
-      const response = await fetchApi("/api/v1/billing/shopify/subscribe", {
+      const response = await fetchApi("/billing/shopify/subscribe", {
         method: "POST",
-        body: JSON.stringify({ tier, channels, addonIA }),
+        body: JSON.stringify({ plan: planHandle }),
       });
       if (response.status === 409) {
         const body = await response.json().catch(() => null);
@@ -183,20 +156,21 @@ export default function EmbeddedBillingPage() {
         showToast("Réponse Shopify invalide (confirmationUrl manquant)", true);
         return;
       }
-      // BFS : `open(url, '_top')` escape l'iframe vers la page confirmation
-      // Shopify Billing. Après approbation, /return réinjecte le merchant.
+      // BFS : `open(url, '_top')` escape l'iframe vers la page Managed Pricing
+      // de Shopify Admin. Après approbation, Shopify envoie le webhook et le
+      // merchant revient sur l'app.
       open(body.confirmationUrl, "_top");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Erreur réseau", true);
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
   };
 
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      const response = await fetchApi("/api/v1/billing/shopify/cancel", {
+      const response = await fetchApi("/billing/shopify/cancel", {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -234,7 +208,7 @@ export default function EmbeddedBillingPage() {
     return (
       <Page
         backAction={{ content: "Accueil", url: "/embedded" }}
-        subtitle="Gestion de votre abonnement Shopify Billing"
+        subtitle="Gestion de votre abonnement Shopify"
       >
         <TitleBar title="Abonnement actif" />
         <Layout>
@@ -267,7 +241,7 @@ export default function EmbeddedBillingPage() {
                   {currentSub.trialEndsAt ? (
                     <InlineStack align="space-between">
                       <Text variant="bodyMd" as="p" tone="subdued">
-                        Fin de la période d'essai
+                        Fin de la période d&apos;essai
                       </Text>
                       <Text variant="bodyMd" as="p">
                         {formatDateLabel(currentSub.trialEndsAt)}
@@ -288,14 +262,14 @@ export default function EmbeddedBillingPage() {
 
                 <InlineStack align="space-between" blockAlign="center" wrap>
                   <Text variant="bodySm" as="p" tone="subdued">
-                    L'annulation prend effet à la fin de la période en cours.
+                    L&apos;annulation prend effet à la fin de la période en cours.
                   </Text>
                   <Button
                     variant="primary"
                     tone="critical"
                     onClick={() => setCancelModalOpen(true)}
                   >
-                    Annuler l'abonnement
+                    Annuler l&apos;abonnement
                   </Button>
                 </InlineStack>
               </BlockStack>
@@ -317,7 +291,7 @@ export default function EmbeddedBillingPage() {
     );
   }
 
-  // === Vue configurator (pas de sub) ===
+  // === Grille de 4 plans (pas de sub) ===
   return (
     <Page
       backAction={{ content: "Accueil", url: "/embedded" }}
@@ -326,107 +300,69 @@ export default function EmbeddedBillingPage() {
       <TitleBar title="Choisir un plan" />
       <Layout>
         <Layout.Section>
-          <Card>
-            <BlockStack gap="500">
-              <Text variant="headingMd" as="h2">
-                Configurez votre plan
-              </Text>
-
-              <Select
-                label="Volume de produits à synchroniser"
-                helpText="Choisissez la tranche correspondant à votre catalogue actif."
-                options={tierOptions}
-                value={String(tier)}
-                onChange={(value) => setTier(Number(value) as ProductTier)}
-              />
-
-              <Select
-                label="Nombre de canaux d'export"
-                helpText="1 canal = Google Shopping seul. Ajoutez Bing, Amazon, etc."
-                options={channelOptions}
-                value={String(channels)}
-                onChange={(value) => setChannels(Number(value) as ChannelCount)}
-              />
-
-              <Checkbox
-                label={`Pack IA : optimisation titres + génération images (+${ADDON_IA_PRICE_EUR} € HT/mois)`}
-                helpText="Recommandé si vous avez des descriptions courtes ou des images sans fond uniforme."
-                checked={addonIA}
-                onChange={(checked) => setAddonIA(checked)}
-              />
-            </BlockStack>
-          </Card>
+          <Text variant="bodyMd" as="p" tone="subdued">
+            14 jours d&apos;essai gratuit sur tous les plans. Aucun engagement, vous pouvez
+            changer ou annuler à tout moment depuis cet écran.
+          </Text>
         </Layout.Section>
 
-        <Layout.Section variant="oneThird">
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd" as="h3">
-                  Récapitulatif
+        {SHOPIFY_PLANS.map((plan) => (
+          <Layout.Section key={plan.handle} variant="oneHalf">
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="start">
+                  <BlockStack gap="100">
+                    <Text variant="headingLg" as="h2">
+                      {plan.name}
+                    </Text>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      {plan.tagline}
+                    </Text>
+                  </BlockStack>
+                  {plan.recommended ? (
+                    <Badge tone="success">Recommandé</Badge>
+                  ) : null}
+                </InlineStack>
+
+                <InlineStack gap="100" blockAlign="end">
+                  <Text variant="heading2xl" as="p">
+                    {plan.priceEur} €
+                  </Text>
+                  <Box paddingBlockEnd="100">
+                    <Text variant="bodyMd" as="p" tone="subdued">
+                      / mois HT
+                    </Text>
+                  </Box>
+                </InlineStack>
+
+                <Divider />
+
+                <List type="bullet">
+                  {plan.features.map((feature) => (
+                    <List.Item key={feature}>{feature}</List.Item>
+                  ))}
+                </List>
+
+                <Box paddingBlockStart="200">
+                  <Button
+                    variant={plan.recommended ? "primary" : "secondary"}
+                    size="large"
+                    fullWidth
+                    loading={submitting === plan.handle}
+                    disabled={submitting !== null && submitting !== plan.handle}
+                    onClick={() => handleSubscribe(plan.handle)}
+                  >
+                    Choisir {plan.name}
+                  </Button>
+                </Box>
+
+                <Text variant="bodySm" as="p" tone="subdued" alignment="center">
+                  {plan.trialDays} jours d&apos;essai · annulation à tout moment
                 </Text>
-                <Badge tone="success">Sans engagement</Badge>
-              </InlineStack>
-
-              <Divider />
-
-              <BlockStack gap="200">
-                <InlineStack align="space-between">
-                  <Text variant="bodyMd" as="p" tone="subdued">
-                    Volume
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    {formatProductsLabel(tier)}
-                  </Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text variant="bodyMd" as="p" tone="subdued">
-                    Canaux
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    {channels} canal{channels > 1 ? "x" : ""}
-                  </Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text variant="bodyMd" as="p" tone="subdued">
-                    Pack IA
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    {addonIA ? "Inclus" : "Non inclus"}
-                  </Text>
-                </InlineStack>
               </BlockStack>
-
-              <Divider />
-
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="bodyMd" as="p">
-                  Total mensuel HT
-                </Text>
-                <Text variant="headingLg" as="p">
-                  {monthlyPriceEur} €
-                </Text>
-              </InlineStack>
-
-              <Box paddingBlockStart="200">
-                <Button
-                  variant="primary"
-                  size="large"
-                  fullWidth
-                  loading={submitting}
-                  onClick={handleSubscribe}
-                >
-                  Souscrire via Shopify
-                </Button>
-              </Box>
-
-              <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-                Vous serez redirigé vers la page de confirmation Shopify pour
-                approuver le débit récurrent.
-              </Text>
-            </BlockStack>
-          </Card>
-        </Layout.Section>
+            </Card>
+          </Layout.Section>
+        ))}
       </Layout>
     </Page>
   );

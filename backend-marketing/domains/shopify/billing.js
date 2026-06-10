@@ -18,10 +18,9 @@
  */
 
 const crypto = require('crypto');
+const { buildShopifyAdminGraphqlUrl } = require('./config');
 
-const SHOPIFY_ADMIN_API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION || '2026-01';
-
-// Devises supportées par Shopify Billing API (à jour 2026-01).
+// Devises supportées par Shopify Billing API.
 // Source : Shopify Partners docs > Billing API > Currencies supported.
 const SHOPIFY_BILLING_SUPPORTED_CURRENCIES = Object.freeze([
   'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY',
@@ -95,10 +94,7 @@ function isShopifyBillingTestMode() {
 }
 
 function buildShopifyGraphqlEndpoint(shop) {
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(String(shop || ''))) {
-    throw new Error(`Domaine Shopify invalide: ${shop}`);
-  }
-  return `https://${shop}/admin/api/${SHOPIFY_ADMIN_API_VERSION}/graphql.json`;
+  return buildShopifyAdminGraphqlUrl(shop);
 }
 
 async function shopifyGraphql({ shop, accessToken, query, variables, fetchImpl = fetch }) {

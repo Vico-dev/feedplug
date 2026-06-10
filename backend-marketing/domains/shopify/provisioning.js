@@ -16,8 +16,7 @@
  */
 
 const crypto = require('crypto');
-
-const SHOPIFY_ADMIN_API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION || '2026-01';
+const { buildShopifyAdminGraphqlUrl } = require('./config');
 const SHOPIFY_PROVIDER = 'shopify';
 const DEFAULT_PLAN = 'STARTER';
 const DEFAULT_TRIAL_DAYS = Number(process.env.SHOPIFY_PROVISION_TRIAL_DAYS || 14);
@@ -47,10 +46,7 @@ const SHOP_INFO_QUERY = `
 `;
 
 async function fetchShopInfo({ shop, accessToken, fetchImpl = fetch }) {
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(String(shop || ''))) {
-    throw new Error(`Domaine Shopify invalide: ${shop}`);
-  }
-  const endpoint = `https://${shop}/admin/api/${SHOPIFY_ADMIN_API_VERSION}/graphql.json`;
+  const endpoint = buildShopifyAdminGraphqlUrl(shop);
   const response = await fetchImpl(endpoint, {
     method: 'POST',
     headers: {
@@ -124,6 +120,7 @@ async function provisionAccountFromShopify({
   const shopName = shopInfo.name || shop.replace(/\.myshopify\.com$/, '');
 
   // 3) Gestion email conflict.
+  let hasEmailConflict = false;
   if (email) {
     const existingUsers = await prisma.$queryRawUnsafe(
       `SELECT id, accountid, provider FROM "User" WHERE email = $1::text LIMIT 1`,
@@ -152,12 +149,18 @@ async function provisionAccountFromShopify({
           reason: 'shopify_user_exists',
         };
       }
-      // User local avec même email : refus d'auto-link pour éviter fusion accidentelle.
-      return { provisioned: false, reason: 'email_conflict', email };
+      // User local existant avec même email : on NE FUSIONNE PAS automatiquement
+      // (un attaquant pourrait sinon prendre le contrôle d'un Account en installant
+      // l'app sur sa dev store avec un email connu). On crée un Account Shopify
+      // *orphelin* (sans User côté FeedPlug) : l'auth se fait via session token
+      // App Bridge, donc pas besoin de User pour utiliser l'app embedded.
+      // Le merchant pourra plus tard se logger sur feedplug.com et "claimer" la
+      // connexion via /api/v1/connectors/shopify/claim pour merger.
+      hasEmailConflict = true;
     }
   }
 
-  // 4) Crée Account + User + Source + Feed.
+  // 4) Crée Account + (User si pas de conflit) + Source + Feed.
   const accountId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -188,7 +191,7 @@ async function provisionAccountFromShopify({
     now
   );
 
-  if (email) {
+  if (email && !hasEmailConflict) {
     await prisma.$executeRawUnsafe(
       `
         INSERT INTO "User" (
@@ -223,8 +226,9 @@ async function provisionAccountFromShopify({
   return {
     provisioned: true,
     accountId,
-    userId: email ? userId : null,
+    userId: email && !hasEmailConflict ? userId : null,
     email: email || null,
+    reason: hasEmailConflict ? 'orphan_account_email_conflict' : undefined,
   };
 }
 

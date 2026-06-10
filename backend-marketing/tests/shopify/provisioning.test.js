@@ -6,6 +6,7 @@ const {
   linkCredentialToAccount,
   fetchShopInfo,
 } = require('../../domains/shopify/provisioning');
+const { SHOPIFY_ADMIN_API_VERSION } = require('../../domains/shopify/config');
 
 function createPrismaMock({
   existingUser = null,
@@ -79,6 +80,27 @@ test('fetchShopInfo rejette les domaines non-myshopify', async () => {
   );
 });
 
+test('fetchShopInfo utilise la version Admin API courante', async () => {
+  let capturedUrl = '';
+  await fetchShopInfo({
+    shop: 'demo.myshopify.com',
+    accessToken: 'shpat_xxx',
+    fetchImpl: async (url) => {
+      capturedUrl = url;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { shop: SAMPLE_SHOP } }),
+      };
+    },
+  });
+
+  assert.equal(
+    capturedUrl,
+    `https://demo.myshopify.com/admin/api/${SHOPIFY_ADMIN_API_VERSION}/graphql.json`
+  );
+});
+
 test('provisionAccountFromShopify crée Account + User + Source + Feed quand nouveau', async () => {
   const { prisma, calls } = createPrismaMock();
   const fetchImpl = shopFetchOk(SAMPLE_SHOP);
@@ -104,7 +126,12 @@ test('provisionAccountFromShopify crée Account + User + Source + Feed quand nou
   assert.ok(targets.includes('Feed'), 'doit insérer Feed');
 });
 
-test('provisionAccountFromShopify retourne email_conflict si user local existe', async () => {
+test('provisionAccountFromShopify crée Account orphelin si user local existe (pas de User créé)', async () => {
+  // Quand un User local FeedPlug existe avec le même email que le shop, on
+  // ne fusionne PAS automatiquement (sinon un install Shopify malveillant
+  // pourrait prendre le contrôle d'un Account existant). On crée à la place
+  // un Account Shopify orphelin (sans User) ; auth via session token suffit,
+  // et le merchant peut "claim" le shop plus tard via /shopify/claim.
   const { prisma, calls } = createPrismaMock({
     existingUser: { id: 'u-1', accountid: 'acc-1', provider: 'local' },
   });
@@ -118,15 +145,21 @@ test('provisionAccountFromShopify retourne email_conflict si user local existe',
     fetchImpl,
   });
 
-  assert.equal(result.provisioned, false);
-  assert.equal(result.reason, 'email_conflict');
+  assert.equal(result.provisioned, true);
+  assert.equal(result.reason, 'orphan_account_email_conflict');
   assert.equal(result.email, 'owner@demo.com');
+  assert.equal(result.userId, null, 'pas de User créé en cas de conflit');
+  assert.ok(result.accountId, 'un Account doit être créé');
 
-  // Ne doit PAS avoir tenté de créer un Account
   const accountInserts = calls.filter(
     (c) => c.kind === 'execute' && /INSERT INTO "Account"/i.test(c.query)
   );
-  assert.equal(accountInserts.length, 0, 'aucun Account créé en email_conflict');
+  assert.equal(accountInserts.length, 1, 'Account orphelin doit être créé');
+
+  const userInserts = calls.filter(
+    (c) => c.kind === 'execute' && /INSERT INTO "User"/i.test(c.query)
+  );
+  assert.equal(userInserts.length, 0, 'aucun User créé en cas de conflit');
 });
 
 test('provisionAccountFromShopify link sur Account existant si User Shopify pré-existant', async () => {

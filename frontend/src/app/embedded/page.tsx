@@ -3,6 +3,7 @@
 import {
   BlockStack,
   Box,
+  Button,
   Card,
   InlineStack,
   Layout,
@@ -37,6 +38,11 @@ export default function EmbeddedHomePage() {
   // On affiche un Toast de confirmation et on nettoie le query param pour
   // éviter de le re-afficher au prochain mount.
   useEffect(() => {
+    const returnTo = searchParams.get("returnTo");
+    if (returnTo && returnTo.startsWith("/embedded")) {
+      router.replace(returnTo);
+      return;
+    }
     if (searchParams.get("billing") === "ok") {
       try {
         shopify.toast.show("Abonnement Shopify confirmé. Bienvenue sur FeedPlug.", {
@@ -54,7 +60,7 @@ export default function EmbeddedHomePage() {
 
   return (
     <Page
-      subtitle="Synchronisez votre catalogue Shopify vers Google Shopping, Bing et Amazon"
+      subtitle="Préparez Google Shopping, Bing et Amazon depuis Shopify Admin."
     >
       <TitleBar title="FeedPlug">
         <button
@@ -79,14 +85,23 @@ export default function EmbeddedHomePage() {
                 Bienvenue dans FeedPlug
               </Text>
               <Text variant="bodyMd" as="p">
-                FeedPlug pousse automatiquement votre catalogue Shopify vers les principaux canaux
-                marketing : Google Shopping (GMC), Microsoft Bing Shopping et Amazon Seller. Aucun
-                fichier CSV à générer, pas de cron à configurer — l'app détecte les changements et
-                synchronise en continu.
+                FeedPlug connecte votre catalogue Shopify à Google Shopping, Microsoft Bing
+                Shopping et Amazon Seller depuis une seule interface. Les mises à jour
+                catalogue sont déclenchées par Shopify, et vous gardez toujours une relance
+                manuelle disponible dans Shopify Admin.
               </Text>
               <Text variant="bodyMd" as="p" tone="subdued">
-                Votre boutique est déjà connectée. Sélectionnez un plan pour démarrer.
+                Votre boutique est déjà connectée. Choisissez un plan, puis configurez vos
+                canaux sans quitter Shopify.
               </Text>
+              <InlineStack gap="300" wrap>
+                <Button variant="primary" onClick={() => router.push("/embedded/billing")}>
+                  Choisir un plan
+                </Button>
+                <Button onClick={() => router.push("/embedded/channels")}>
+                  Configurer mes canaux
+                </Button>
+              </InlineStack>
             </BlockStack>
           </Card>
         </Layout.Section>
@@ -99,8 +114,8 @@ export default function EmbeddedHomePage() {
               </Text>
               <List type="number">
                 <List.Item>Choisir votre plan (tranches de 100 à 50 000 produits)</List.Item>
-                <List.Item>Connecter vos canaux d'export (Google Merchant, Bing, Amazon)</List.Item>
-                <List.Item>Activer la synchronisation automatique</List.Item>
+                <List.Item>Configurer vos canaux d&apos;export (Google Merchant, Bing, Amazon)</List.Item>
+                <List.Item>Lancer la première synchronisation du catalogue</List.Item>
               </List>
             </BlockStack>
           </Card>
@@ -116,10 +131,10 @@ export default function EmbeddedHomePage() {
                 <Box minWidth="200px">
                   <BlockStack gap="100">
                     <Text variant="bodyMd" as="p" fontWeight="semibold">
-                      Sync continue
+                      Sync catalogue
                     </Text>
                     <Text variant="bodySm" as="p" tone="subdued">
-                      Détection des changements en temps réel via webhooks Shopify
+                      Mises a jour catalogue declenchees par Shopify, avec relance manuelle depuis Shopify Admin
                     </Text>
                   </BlockStack>
                 </Box>
@@ -151,7 +166,7 @@ export default function EmbeddedHomePage() {
         <Layout.Section>
           <Box paddingBlock="400">
             <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-              Besoin d'aide ?{" "}
+              Besoin d&apos;aide ?{" "}
               <Link url="mailto:support@feedplug.com">support@feedplug.com</Link>
             </Text>
           </Box>

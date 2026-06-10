@@ -22,6 +22,7 @@ export function EmbeddedNavMenu() {
         Accueil
       </Link>
       <Link href="/embedded/billing">Facturation</Link>
+      <Link href="/embedded/channels">Canaux</Link>
       <Link href="/embedded/sources">Catalogue</Link>
       <Link href="/embedded/performance">Performance</Link>
     </NavMenu>

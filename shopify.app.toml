@@ -2,21 +2,25 @@
 
 client_id = "006ec5745b9e27a629e7a6f471379685"
 name = "FeedPlug"
-application_url = "https://app.feedplug.com"
+application_url = "https://app.feedplug.com/embedded"
 embedded = true
 handle = "feedplug"
 
 [webhooks]
-api_version = "2026-01"
+api_version = "2026-04"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled", "app_subscriptions/update" ]
   uri = "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/webhooks/shopify"
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
+  [[webhooks.subscriptions]]
+  topics = [ "products/create", "products/update", "products/delete" ]
+  uri = "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/webhooks/shopify"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_analytics,read_channels,read_inventory,read_orders,read_product_feeds,read_product_listings,read_products"
+scopes = "read_products"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

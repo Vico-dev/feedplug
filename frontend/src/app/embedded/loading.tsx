@@ -2,7 +2,6 @@
 
 import {
   Layout,
-  Page,
   SkeletonBodyText,
   SkeletonDisplayText,
   SkeletonPage,

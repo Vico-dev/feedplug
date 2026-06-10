@@ -13,9 +13,13 @@ ARG BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com
 # Cloudflare Turnstile (anti-bot sur les formulaires marketing). Clé publique.
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ
+# Shopify App Bridge a besoin de la clé publique au build pour la baker dans le
+# bundle JS (lue par <ShopifyEmbeddedBridge /> et useAppBridge()).
+ARG NEXT_PUBLIC_SHOPIFY_API_KEY=
 ENV BACKEND_API_URL=$BACKEND_API_URL
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_SHOPIFY_API_KEY=$NEXT_PUBLIC_SHOPIFY_API_KEY
 RUN npm run build
 
 FROM node:20-alpine AS runner

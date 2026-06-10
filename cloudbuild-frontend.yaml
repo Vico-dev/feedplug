@@ -1,0 +1,49 @@
+steps:
+  # Build l'image Docker avec NEXT_PUBLIC_SHOPIFY_API_KEY baked dans le bundle.
+  # Sans le build-arg, Next.js inline la variable comme "" et App Bridge ne charge pas.
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY'
+      - '.'
+    dir: 'frontend'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'feedplug-frontend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '3000'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--set-env-vars'
+      - 'BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com,NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ,NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY'
+
+substitutions:
+  _SHOPIFY_API_KEY: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -64,14 +64,12 @@ export function EmbeddedWebVitals() {
               // ignore
             }
             if (process.env.NODE_ENV !== "production") {
-              // eslint-disable-next-line no-console
               console.info("[shopify webvitals]", metric.name, metric.value);
             }
           }
         });
       } catch (err) {
         if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
           console.warn("[shopify webvitals] register failed", err);
         }
       }

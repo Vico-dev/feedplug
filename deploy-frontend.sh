@@ -41,24 +41,17 @@ echo "   Region: $REGION"
 echo "   Image: $IMAGE_NAME"
 echo "   Tag: $IMAGE_TAG"
 
-echo "Build Docker du frontend via Cloud Build..."
-$GCLOUD_CMD builds submit "$FRONTEND_DIR" \
-  --tag "$IMAGE_NAME" \
-  --project "$PROJECT_ID"
-
-echo "Deploiement Cloud Run..."
-$GCLOUD_CMD run deploy $FRONTEND_SERVICE \
-  --image "$IMAGE_NAME" \
-  --platform managed \
-  --region $REGION \
-  --allow-unauthenticated \
-  --port 3000 \
-  --memory 1Gi \
-  --cpu 1 \
-  --min-instances 0 \
-  --max-instances 10 \
-  --set-env-vars "BACKEND_API_URL=$BACKEND_API_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID,NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY,NEXT_PUBLIC_SHOPIFY_API_KEY=$NEXT_PUBLIC_SHOPIFY_API_KEY" \
-  --project $PROJECT_ID
+echo "Build + Deploy via cloudbuild-frontend.yaml (bake les NEXT_PUBLIC_* dans le bundle JS)..."
+# IMPORTANT : on doit utiliser cloudbuild-frontend.yaml (avec substitutions) au
+# lieu de `gcloud builds submit --tag` (qui ne passe pas les build-args). Sans
+# le build-arg NEXT_PUBLIC_SHOPIFY_API_KEY, le bundle Next.js ne contient pas
+# la clé → App Bridge ne se charge pas → /embedded plante en "shopify is not
+# defined".
+$GCLOUD_CMD builds submit \
+  --config=cloudbuild-frontend.yaml \
+  --substitutions=_SHOPIFY_API_KEY="$NEXT_PUBLIC_SHOPIFY_API_KEY" \
+  --project="$PROJECT_ID" \
+  .
 
 echo "Deploiement termine."
 echo "Le service $FRONTEND_SERVICE devrait etre disponible dans quelques minutes."

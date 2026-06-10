@@ -27,6 +27,9 @@ export const metadata: Metadata = {
  * handshake avant le 1er parse JS.
  */
 export default function EmbeddedLayout({ children }: { children: React.ReactNode }) {
+  // App Bridge (<meta> + <script>) est injecté dans le root layout via
+  // strategy="beforeInteractive" — c'est la seule manière de garantir un
+  // <script> non-async, requis par App Bridge ("must not use async").
   return (
     <>
       <link rel="preconnect" href="https://cdn.shopify.com" crossOrigin="" />

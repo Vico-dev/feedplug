@@ -84,7 +84,7 @@ export default function EmbeddedPerformancePage() {
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchApi("/api/v1/performance/dashboard");
+      const response = await fetchApi("/performance/dashboard");
       if (response.status === 409) {
         setData({ byChannel: [], topProducts: [], byCategory: [] });
         return;
@@ -141,9 +141,8 @@ export default function EmbeddedPerformancePage() {
             heading="Aucune donnée de performance pour l'instant"
             action={{ content: "Synchroniser le catalogue", url: "/embedded/sources" }}
             secondaryAction={{
-              content: "Connecter Google Ads sur app.feedplug.com",
-              url: "https://app.feedplug.com/fr/sources",
-              external: true,
+              content: "Configurer mes canaux",
+              url: "/embedded/channels",
             }}
             image="/embedded-empty.svg"
           >
@@ -205,8 +204,8 @@ export default function EmbeddedPerformancePage() {
         <Layout.Section>
           <Box paddingBlock="400">
             <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-              Analyse complète (séries temporelles, comparatifs, segmentation)
-              disponible sur{" "}
+              Analyses avancées (séries temporelles, comparatifs, segmentation)
+              disponibles sur{" "}
               <a
                 href="https://app.feedplug.com/fr/performance"
                 target="_blank"

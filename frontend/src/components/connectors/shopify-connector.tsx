@@ -11,7 +11,6 @@ import {
   AlertCircle, 
   ExternalLink, 
   RefreshCw,
-  Package,
 } from 'lucide-react';
 
 interface ShopifyConnectorProps {
@@ -25,12 +24,6 @@ interface ShopifyConnectResponse {
 interface ShopifyVerifyResponse {
   ok?: boolean;
   data?: unknown;
-}
-
-interface ShopifyProductsResponse {
-  success?: boolean;
-  total?: number;
-  products?: unknown[];
 }
 
 interface ShopifyShopData {
@@ -136,24 +129,6 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
       setConnectionStatus('error');
     } finally {
       setIsVerifying(false);
-    }
-  };
-
-  const handleGetProducts = async () => {
-    const normalizedShop = normalizeShopifyShopInput(shopName);
-    if (!normalizedShop) return;
-
-    try {
-      const response = await apiClient.get<ShopifyProductsResponse>(`/connectors/shopify/products?shop=${normalizedShop}`);
-      
-      if (response.data.success) {
-        console.log('Produits Shopify:', response.data.products);
-        // Ici on pourrait afficher les produits ou les traiter
-        alert(`${response.data.total} produits récupérés avec succès !`);
-      }
-    } catch (err: unknown) {
-      console.error('Erreur récupération produits:', err);
-      setError(getErrorMessage(err, 'Erreur lors de la récupération des produits'));
     }
   };
 
@@ -339,25 +314,6 @@ export function ShopifyConnector({ onConnected }: ShopifyConnectorProps) {
             )}
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button
-                onClick={handleGetProducts}
-                style={{
-                  backgroundColor: 'var(--success)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <Package style={{ width: '16px', height: '16px' }} />
-                Récupérer les produits
-              </Button>
-
               <Button
                 onClick={handleVerify}
                 disabled={isVerifying}

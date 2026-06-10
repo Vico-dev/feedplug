@@ -93,8 +93,21 @@ const {
   isComplianceTopic: isShopifyComplianceTopic,
   processComplianceWebhook: processShopifyComplianceWebhook,
 } = require('./domains/shopify/compliance');
+const {
+  SHOPIFY_ADMIN_API_VERSION,
+  SHOPIFY_SCOPES: DEFAULT_SHOPIFY_SCOPES,
+  buildShopifyAdminGraphqlUrl,
+} = require('./domains/shopify/config');
 const shopifyBilling = require('./domains/shopify/billing');
 const shopifyProvisioning = require('./domains/shopify/provisioning');
+const {
+  exchangeSessionTokenForAccessToken: exchangeShopifySessionToken,
+} = require('./domains/shopify/token-exchange');
+const shopifyManagedPricing = require('./domains/shopify/managed-pricing');
+const {
+  handleAppUninstalled: shopifyHandleAppUninstalled,
+  matchPendingSubscriptionToWebhook: shopifyMatchPendingSubToWebhook,
+} = require('./domains/shopify/lifecycle');
 const {
   getPriceEur: getPlanPriceEur,
   getPlanLabel: getPlanLabel,
@@ -257,7 +270,12 @@ let prismaInitPromise = null;
 let rulesRoutesRegistered = false;
 // Ingestion handlers
 const { ingestCsvFromUrl } = require('./ingestion/csv');
-const { ingestShopifyFromApi, fetchAllShopifyProducts } = require('./ingestion/shopify');
+const {
+  ingestShopifyFromApi,
+  fetchAllShopifyProducts,
+  ingestShopifyProductFromWebhook,
+  shouldUseFullSyncForWebhookPayload,
+} = require('./ingestion/shopify');
 const { ingestPrestashopFromApi, fetchPrestashopProducts } = require('./ingestion/prestashop');
 // Scoring handlers - Nouveau système avancé multi-dimensionnel
 const { 
@@ -607,9 +625,19 @@ const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || '';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
 // Scopes alignés sur shopify.app.toml (source de vérité pour Shopify Partners).
 // Toute divergence déclenche un re-consent lors de l'install ou un warning App Store.
-const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_analytics,read_channels,read_inventory,read_orders,read_product_feeds,read_product_listings,read_products';
+const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || DEFAULT_SHOPIFY_SCOPES;
 const SHOPIFY_CALLBACK_URL = process.env.SHOPIFY_CALLBACK_URL || 'https://api.feedplug.com/api/v1/connectors/shopify/callback';
 const SHOPIFY_WEBHOOK_PATH = '/api/v1/webhooks/shopify';
+const SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS = Math.max(
+  0,
+  Number(process.env.SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS || 5 * 60 * 1000)
+);
+const SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS = Math.max(
+  0,
+  Number(process.env.SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS || 30 * 1000)
+);
+const SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS = new Set(['products/create', 'products/update']);
+const SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS = new Set(['products/delete']);
 
 const {
   smartAuthLimiter,
@@ -790,14 +818,26 @@ function normalizeShopifyShop(shop) {
 }
 
 function verifyShopifyInstallHmac(query, secret) {
-  const { hmac, ...rest } = query;
-  if (!hmac || !secret) return false;
-  const message = Object.keys(rest)
+  if (!query || !secret) return false;
+  const rawHmac = Array.isArray(query.hmac) ? query.hmac[0] : query.hmac;
+  if (typeof rawHmac !== 'string' || !rawHmac) return false;
+  const message = Object.keys(query)
+    .filter((key) => key !== 'hmac' && key !== 'signature')
     .sort()
-    .map((k) => `${k}=${rest[k]}`)
+    .flatMap((key) => {
+      const value = query[key];
+      if (Array.isArray(value)) {
+        return value.map((entry) => `${key}=${String(entry ?? '')}`);
+      }
+      if (value == null) {
+        return [];
+      }
+      return [`${key}=${String(value)}`];
+    })
     .join('&');
   const computed = crypto.createHmac('sha256', secret).update(message).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(hmac, 'utf8'), Buffer.from(computed, 'utf8'));
+  if (computed.length !== rawHmac.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(rawHmac, 'utf8'), Buffer.from(computed, 'utf8'));
 }
 
 function verifyShopifyWebhookHmac(rawBody, hmacHeader, secret) {
@@ -833,26 +873,176 @@ function verifyShopifySessionToken(token) {
   };
 }
 
+function shouldRefreshShopifyTokenExchange(row) {
+  if (!row || SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS <= 0) {
+    return true;
+  }
+  const updatedAt = new Date(row.updatedat || 0).getTime();
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return true;
+  }
+  return (Date.now() - updatedAt) >= SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS;
+}
+
 async function handleShopifyAppUninstalled(shopDomain) {
+  if (!prismaReady || !prisma) return;
+  const result = await shopifyHandleAppUninstalled({ prisma, shopDomain });
+  if (!result.ok && result.error) {
+    console.warn('Shopify uninstall cleanup skipped:', result.error);
+  }
+}
+
+async function listShopifyFeedsForShop(shopDomain) {
+  if (!shopDomain || !prismaReady || !prisma) {
+    return [];
+  }
+
+  return prisma.$queryRawUnsafe(
+    `
+      SELECT
+        f.id AS feed_id,
+        f.name AS feed_name,
+        f.accountid,
+        f.mappingjson,
+        s.id AS source_id,
+        s.lastrunat,
+        c.id AS credential_id,
+        c.secretjson
+      FROM "Feed" f
+      JOIN "FeedSource" s ON s.id = f.sourceid
+      JOIN "Credential" c ON c.id = s.credentialid
+      WHERE f.status = 'ACTIVE'::text
+        AND s.status = 'ACTIVE'::text
+        AND s.connector = 'SHOPIFY'::text
+        AND c.connector = 'SHOPIFY'::text
+        AND c.secretjson->>'shop' = $1::text
+      ORDER BY f.createdat DESC
+    `,
+    shopDomain
+  );
+}
+
+async function hasRunningIngestion(feedId) {
+  if (!feedId || !prismaReady || !prisma) {
+    return false;
+  }
+
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT 1
+      FROM "IngestionRun"
+      WHERE feedid = $1::text
+        AND status = 'RUNNING'::text
+      LIMIT 1
+    `,
+    feedId
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+function hasRecentShopifyWebhookSync(lastRunAt) {
+  if (!lastRunAt || SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS <= 0) {
+    return false;
+  }
+  const lastRunTs = new Date(lastRunAt).getTime();
+  if (!Number.isFinite(lastRunTs) || lastRunTs <= 0) {
+    return false;
+  }
+  return (Date.now() - lastRunTs) < SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS;
+}
+
+async function runShopifyPostSyncHooks(feedId, accountId) {
+  try {
+    const { applyRulesOnIngestion } = require('./rules/engine');
+    await applyRulesOnIngestion(prisma, feedId, accountId, createRevision);
+  } catch (rulesErr) {
+    console.warn('⚠️ Règles non appliquées après webhook Shopify:', rulesErr.message);
+  }
+
+  try {
+    await applyEnrichmentSources(prisma, feedId, accountId, storage);
+  } catch (enrichErr) {
+    console.warn('⚠️ Enrichissement non appliqué après webhook Shopify:', enrichErr.message);
+  }
+}
+
+async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }) {
   if (!shopDomain || !prismaReady || !prisma) {
     return;
   }
 
-  try {
-    await prisma.$executeRawUnsafe(`
-      UPDATE "FeedSource"
-      SET status = 'INACTIVE'::text,
-          updatedat = NOW()
-      WHERE connector = 'SHOPIFY'::text
-        AND credentialid IN (
-          SELECT id
-          FROM "Credential"
-          WHERE connector = 'SHOPIFY'::text
-            AND secretjson->>'shop' = $1::text
-        )
-    `, shopDomain);
-  } catch (error) {
-    console.warn('Shopify uninstall cleanup skipped:', error?.message || error);
+  const feeds = await listShopifyFeedsForShop(shopDomain);
+  if (!feeds.length) {
+    return;
+  }
+
+  for (const feed of feeds) {
+    if (await hasRunningIngestion(feed.feed_id)) {
+      console.log(`ℹ️ Shopify webhook ${topic}: sync déjà en cours pour feed ${feed.feed_id}, skip`);
+      continue;
+    }
+    if (hasRecentShopifyWebhookSync(feed.lastrunat)) {
+      console.log(`ℹ️ Shopify webhook ${topic}: feed ${feed.feed_id} encore dans la fenêtre de debounce, skip`);
+      continue;
+    }
+
+    let secretData;
+    try {
+      secretData = decryptObjectSecrets(
+        typeof feed.secretjson === 'string' ? JSON.parse(feed.secretjson) : feed.secretjson
+      );
+    } catch (error) {
+      console.warn(`⚠️ Shopify webhook ${topic}: secretjson invalide pour feed ${feed.feed_id}:`, error?.message || error);
+      continue;
+    }
+
+    const accessToken = secretData?.accessToken || secretData?.access_token || '';
+    if (!accessToken) {
+      console.warn(`⚠️ Shopify webhook ${topic}: token manquant pour feed ${feed.feed_id}`);
+      continue;
+    }
+
+    const feedContext = {
+      id: feed.feed_id,
+      name: feed.feed_name,
+      sourceId: feed.source_id,
+      mappingJson: feed.mappingjson || {},
+    };
+
+    try {
+      let result;
+      const prefersFullSync = SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS.has(topic)
+        || shouldUseFullSyncForWebhookPayload(payload);
+
+      if (prefersFullSync) {
+        result = await ingestShopifyFromApi({
+          prisma,
+          feed: feedContext,
+          shop: shopDomain,
+          accessToken,
+        });
+      } else if (SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS.has(topic)) {
+        result = await ingestShopifyProductFromWebhook({
+          prisma,
+          feed: feedContext,
+          shop: shopDomain,
+          payload,
+        });
+      } else {
+        continue;
+      }
+
+      await runShopifyPostSyncHooks(feed.feed_id, feed.accountid);
+      console.log(`✅ Shopify webhook ${topic}: sync appliquée pour ${shopDomain}`, {
+        feedId: feed.feed_id,
+        totalFetched: result?.totalFetched ?? 0,
+        totalInserted: result?.totalInserted ?? 0,
+        totalUpdated: result?.totalUpdated ?? 0,
+        totalDeleted: result?.totalDeleted ?? 0,
+      });
+    } catch (error) {
+      console.error(`Shopify webhook ${topic} sync failed for ${shopDomain} / feed ${feed.feed_id}:`, error);
+    }
   }
 }
 
@@ -1025,14 +1215,34 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
   try {
     if (topic === 'app/uninstalled') {
       await handleShopifyAppUninstalled(shopDomain);
+    } else if (SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS.has(topic) || SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS.has(topic)) {
+      if (shopDomain) {
+        setImmediate(() => {
+          triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }).catch((error) => {
+            console.error(`Shopify webhook async sync failed (${topic} / ${shopDomain}):`, error);
+          });
+        });
+      }
     } else if (topic === 'app_subscriptions/update') {
       // Sync l'état de l'abonnement Shopify (ACTIVE/CANCELLED/EXPIRED/FROZEN/DECLINED)
       // déclenché à chaque transition côté Shopify.
       const sub = payload?.app_subscription || payload || {};
       const shopifySubscriptionId = sub.admin_graphql_api_id || sub.id || '';
+      const subName = String(sub.name || '').trim();
       const status = String(sub.status || '').toUpperCase();
       if (shopifySubscriptionId && status && prismaReady && prisma) {
         try {
+          // Managed Pricing : le 1er webhook ACTIVE arrive avec un subscription_id
+          // que nous n'avons jamais vu (on avait stocké un id provisoire "pending_..."
+          // au moment du clic). matchPendingSubscriptionToWebhook trouve la row
+          // PENDING locale par shop + plan name et la promeut avec le vrai id.
+          await shopifyMatchPendingSubToWebhook({
+            prisma,
+            shopifySubscriptionId: String(shopifySubscriptionId),
+            shopDomain,
+            subscriptionName: subName,
+            status,
+          });
           await shopifyBilling.markShopifySubscriptionStatus({
             prisma,
             shopifySubscriptionId: String(shopifySubscriptionId),
@@ -1258,6 +1468,37 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
     return res.status(503).json({ message: 'Service indisponible' });
   }
   try {
+    // On limite le token exchange Shopify à une fois toutes les quelques
+    // minutes par boutique pour éviter un aller-retour Admin OAuth à chaque
+    // requête embedded, tout en gardant un refresh fréquent en cas de
+    // réinstallation ou rotation de token.
+    try {
+      const credRefreshRows = await prisma.$queryRawUnsafe(
+        `SELECT id, updatedat FROM "Credential" WHERE connector = 'SHOPIFY'::text AND secretjson->>'shop' = $1::text ORDER BY createdat DESC LIMIT 1`,
+        shop
+      );
+      if (credRefreshRows && credRefreshRows.length > 0 && shouldRefreshShopifyTokenExchange(credRefreshRows[0])) {
+        const refreshed = await exchangeShopifySessionToken({
+          shop,
+          sessionToken: token,
+          clientId: SHOPIFY_API_KEY,
+          clientSecret: SHOPIFY_API_SECRET,
+        });
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Credential" SET secretjson = $2::jsonb, updatedat = NOW() WHERE id = $1::text`,
+          credRefreshRows[0].id,
+          stringifyEncryptedJson({
+            accessToken: refreshed.accessToken,
+            scope: refreshed.scope,
+            shop,
+          })
+        );
+      }
+    } catch (refreshErr) {
+      // Token Exchange peut échouer transitoirement (réseau Shopify, etc.) ;
+      // on ne bloque pas l'auth, on continue avec le token existant en DB.
+      console.warn(`⚠️ Shopify token refresh skipped for ${shop}: ${refreshErr?.message || refreshErr}`);
+    }
     const rows = await prisma.$queryRawUnsafe(
       `
         SELECT s.accountid, a.plan, a.trialendsat, a.billingstatus, a.paymentgraceuntil
@@ -1314,6 +1555,57 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
           }
         } catch (lazyErr) {
           console.warn('⚠️ Shopify lazy provisioning échoué:', lazyErr?.message || lazyErr);
+        }
+      } else {
+        // Managed Installation : Shopify n'appelle plus notre callback OAuth,
+        // donc aucune Credential n'a été créée à l'install. Le seul moyen
+        // d'obtenir un access_token est le Token Exchange à partir du session
+        // token App Bridge (déjà vérifié plus haut). On crée la Credential
+        // chiffrée puis on provisionne Account/User/Source/Feed.
+        try {
+          const exchanged = await exchangeShopifySessionToken({
+            shop,
+            sessionToken: token,
+            clientId: SHOPIFY_API_KEY,
+            clientSecret: SHOPIFY_API_SECRET,
+          });
+          const credId = crypto.randomUUID();
+          const now = new Date().toISOString();
+          const secretData = stringifyEncryptedJson({
+            accessToken: exchanged.accessToken,
+            scope: exchanged.scope,
+            shop,
+          });
+          await prisma.$executeRawUnsafe(
+            `
+              INSERT INTO "Credential" (id, name, connector, secretjson, createdat, updatedat)
+              VALUES ($1::text, $2::text, 'SHOPIFY'::text, $3::jsonb, $4::timestamptz, $4::timestamptz)
+            `,
+            credId,
+            `Shopify - ${shop}`,
+            secretData,
+            now,
+          );
+          const provision = await shopifyProvisioning.provisionAccountFromShopify({
+            prisma,
+            shop,
+            accessToken: exchanged.accessToken,
+            credentialId: credId,
+          });
+          if (provision.accountId) {
+            const reRows = await prisma.$queryRawUnsafe(
+              `SELECT id AS accountid, plan, trialendsat, billingstatus, paymentgraceuntil FROM "Account" WHERE id = $1::text LIMIT 1`,
+              provision.accountId
+            );
+            if (reRows?.length) {
+              rows.push(reRows[0]);
+              console.log(`🔑 Shopify Token Exchange OK pour ${shop} (account: ${provision.accountId}, reason: ${provision.reason || 'new'})`);
+            }
+          } else {
+            console.warn(`⚠️ Shopify Token Exchange OK mais provisioning incomplet pour ${shop}: ${provision.reason}`);
+          }
+        } catch (exchangeErr) {
+          console.warn(`⚠️ Shopify Token Exchange échoué pour ${shop}:`, exchangeErr?.message || exchangeErr);
         }
       }
       if (rows.length === 0) {
@@ -5391,6 +5683,59 @@ function buildFluxRedirectUrl(appUrl, locale, params = {}) {
     target.searchParams.set(key, String(value));
   }
   return target.toString();
+}
+
+function normalizeEmbeddedReturnTo(value, fallback = '/embedded/channels') {
+  const raw = String(value || '').trim();
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || !raw.startsWith('/embedded')) {
+    return fallback;
+  }
+  try {
+    const target = new URL(raw, 'https://embedded.feedplug.local');
+    return `${target.pathname}${target.search}`;
+  } catch {
+    return fallback;
+  }
+}
+
+async function buildEmbeddedShopifyAdminRedirectUrl({
+  accountId,
+  shop,
+  returnTo = '/embedded/channels',
+  fallbackUrl,
+  params = {},
+}) {
+  const targetPath = new URL(
+    normalizeEmbeddedReturnTo(returnTo, '/embedded/channels'),
+    'https://embedded.feedplug.local'
+  );
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    targetPath.searchParams.set(key, String(value));
+  }
+
+  let resolvedShop = normalizeShopifyShop(shop || '');
+  if (!resolvedShop && accountId) {
+    try {
+      const credential = await findShopifyCredentialForAccount(accountId);
+      resolvedShop = credential?.shop || '';
+    } catch (error) {
+      console.warn('⚠️ Impossible de résoudre le shop Shopify pour redirect embedded:', error?.message || error);
+    }
+  }
+
+  if (resolvedShop && SHOPIFY_API_KEY) {
+    const adminUrl = new URL(`https://${resolvedShop}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}`);
+    adminUrl.searchParams.set('returnTo', `${targetPath.pathname}${targetPath.search}`);
+    return adminUrl.toString();
+  }
+
+  const fallback = new URL(String(fallbackUrl || APP_URL || 'https://app.feedplug.com'));
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    fallback.searchParams.set(key, String(value));
+  }
+  return fallback.toString();
 }
 
 function parseGmcMerchantOptions(accountsData) {
@@ -14661,7 +15006,7 @@ app.get('/api/v1/platforms/gmc/oauth-config', requireAuth, (req, res) => {
 });
 
 // 1. Générer l'URL d'autorisation OAuth2 GMC
-app.get('/api/v1/platforms/gmc/auth-url', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/gmc/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Merchant Center non configurée.' });
   }
@@ -14670,6 +15015,8 @@ app.get('/api/v1/platforms/gmc/auth-url', requireAuth, async (req, res) => {
     'https://www.googleapis.com/auth/userinfo.email'    // Email utilisateur
   ];
   const locale = normalizeAppLocale(req.query.locale);
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 
   // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
@@ -14680,7 +15027,12 @@ app.get('/api/v1/platforms/gmc/auth-url', requireAuth, async (req, res) => {
       id: stateId,
       provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
       flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
-      payload: { accountId: req.accountId, locale },
+      payload: {
+        accountId: req.accountId,
+        locale,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: 10 * 60 * 1000,
     });
   } catch (stateError) {
@@ -14753,6 +15105,8 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     let auditShareToken;
     let auditLocale = 'fr';
     let dashboardLocale = 'fr';
+    let embeddedSurface = false;
+    let embeddedReturnTo = '/embedded/channels';
     // On récupère le payload via l'UUID opaque stocké côté serveur — il a été
     // émis par nous, à usage unique, et expire en 10 min (CSRF guard).
     let stateData;
@@ -14773,8 +15127,24 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     auditShareToken = stateData.auditShareToken;
     auditLocale = normalizeAppLocale(stateData.locale || 'fr');
     dashboardLocale = normalizeAppLocale(stateData.locale || 'fr');
+    embeddedSurface = stateData.surface === 'embedded';
+    embeddedReturnTo = normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels');
 
     if (!accountId && !auditShareToken) {
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'error',
+            message: 'Compte FeedPlug manquant pour la connexion GMC.',
+          }),
+          params: {
+            gmc: 'error',
+            message: 'Compte FeedPlug manquant pour la connexion GMC.',
+          },
+        }));
+      }
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'error',
         message: 'Compte FeedPlug manquant pour la connexion GMC.',
@@ -14826,6 +15196,20 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       if (auditShareToken) {
         return res.redirect(`${appUrl}/${auditLocale}/audit-flux/${auditShareToken}?error=no_merchant_account`);
       }
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'error',
+            message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
+          }),
+          params: {
+            gmc: 'error',
+            message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
+          },
+        }));
+      }
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'error',
         message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
@@ -14850,6 +15234,21 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         },
         ttlMs: GMC_SELECTION_TTL_MS,
       });
+
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'select',
+            selection: selectionId,
+          }),
+          params: {
+            gmc: 'select',
+            selection: selectionId,
+          },
+        }));
+      }
 
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'select',
@@ -14898,6 +15297,21 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     }
 
     // Rediriger vers le frontend avec succès (APP_URL pour multi-env)
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+          gmc: 'connected',
+          merchant: selectedMerchant.merchantId || '',
+        }),
+        params: {
+          gmc: 'connected',
+          merchant: selectedMerchant.merchantId || '',
+        },
+      }));
+    }
+
     res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
       gmc: 'connected',
       merchant: selectedMerchant.merchantId || '',
@@ -14913,7 +15327,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
 });
 
 // 3. Statut de la connexion GMC
-app.get('/api/v1/platforms/gmc/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/gmc/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ connected: false });
@@ -14945,7 +15359,7 @@ app.get('/api/v1/platforms/gmc/status', requireAuth, async (req, res) => {
 });
 
 // 4. Déconnecter GMC
-app.delete('/api/v1/platforms/gmc/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/gmc/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       const connections = await prisma.$queryRawUnsafe(`
@@ -14971,7 +15385,7 @@ app.delete('/api/v1/platforms/gmc/disconnect', requireAuth, async (req, res) => 
   }
 });
 
-app.get('/api/v1/platforms/gmc/selection/:selectionId', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/gmc/selection/:selectionId', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const selectionId = String(req.params.selectionId || '').trim();
     if (!selectionId) {
@@ -14998,7 +15412,7 @@ app.get('/api/v1/platforms/gmc/selection/:selectionId', requireAuth, async (req,
   }
 });
 
-app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/gmc/select-merchant', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const selectionId = String(req.body?.selectionId || '').trim();
     const merchantId = String(req.body?.merchantId || '').trim();
@@ -15051,19 +15465,26 @@ app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) 
 });
 
 // ===== GOOGLE ADS — Connexion OAuth2 pour sync performance (shopping_performance_view) =====
-app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/google-ads/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Ads non configurée (GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET).' });
   }
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const stateId = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
       id: stateId,
       provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
       flow: OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE,
-      payload: { accountId: req.accountId, platform: 'google_ads' },
+      payload: {
+        accountId: req.accountId,
+        platform: 'google_ads',
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: 10 * 60 * 1000,
     });
   } catch (stateError) {
@@ -15082,10 +15503,10 @@ app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, async (req, res) =
 app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
   const appUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
   const performanceRedirect = `${appUrl}/performance`;
+  let stateData = null;
   try {
     const { code, state } = req.query;
     if (!code) return res.redirect(`${performanceRedirect}?error=no_code`);
-    let stateData;
     try {
       stateData = await consumeOAuthEphemeralState({
         id: String(state || ''),
@@ -15100,7 +15521,17 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
       return res.redirect(`${performanceRedirect}?error=invalid_state`);
     }
     const accountId = stateData.accountId;
+    const embeddedSurface = stateData.surface === 'embedded';
+    const embeddedReturnTo = normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels');
     if (!accountId || !GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${performanceRedirect}?error=config`,
+          params: { google_ads: 'error', message: 'Configuration Google Ads manquante.' },
+        }));
+      }
       return res.redirect(`${performanceRedirect}?error=config`);
     }
     const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
@@ -15143,14 +15574,31 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         metadata: {},
       });
     }
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`,
+        params: { google_ads: 'connected', customer: customerId || '' },
+      }));
+    }
+
     res.redirect(`${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`);
   } catch (error) {
     console.error('Google Ads OAuth callback error:', error);
+    if (stateData?.surface === 'embedded') {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId: stateData.accountId,
+        returnTo: normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels'),
+        fallbackUrl: `${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`,
+        params: { google_ads: 'error', message: error.message || 'Connexion Google Ads impossible.' },
+      }));
+    }
     res.redirect(`${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
   }
 });
 
-app.get('/api/v1/platforms/google-ads/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/google-ads/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.json({ connected: false });
     const connections = await prisma.$queryRawUnsafe(
@@ -15170,7 +15618,7 @@ app.get('/api/v1/platforms/google-ads/status', requireAuth, async (req, res) => 
   }
 });
 
-app.delete('/api/v1/platforms/google-ads/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/google-ads/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       await prisma.$executeRawUnsafe(`DELETE FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'google_ads'`, req.accountId);
@@ -15183,7 +15631,7 @@ app.delete('/api/v1/platforms/google-ads/disconnect', requireAuth, async (req, r
 
 // ===== AMAZON — Canaux (FR, UK, DE, IT, ES) + Export =====
 // 1. Liste des canaux Amazon du compte
-app.get('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/channels', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ channels: [] });
@@ -15202,7 +15650,7 @@ app.get('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
 });
 
 // 2. Créer un canal Amazon (amazon_fr, amazon_uk, amazon_de, amazon_it, amazon_es)
-app.post('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/amazon/channels', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const { channelKey } = req.body || {};
     const key = (channelKey || '').toLowerCase();
@@ -15243,7 +15691,7 @@ app.post('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
 });
 
 // 3. Supprimer (désactiver) un canal Amazon
-app.delete('/api/v1/platforms/amazon/channels/:channelKey', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/amazon/channels/:channelKey', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const key = (req.params.channelKey || '').toLowerCase();
     if (!AMAZON_CHANNEL_CONFIG[key]) {
@@ -15277,20 +15725,26 @@ app.get('/api/v1/platforms/amazon/channels/available', (_req, res) => {
 });
 
 // 5. Connexion Amazon — auth-url pour OAuth LWA
-app.get('/api/v1/platforms/amazon/auth-url', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {
     return res.status(503).json({
       message: 'Connexion Amazon OAuth non configurée. Définissez AMAZON_APPLICATION_ID, AMAZON_REDIRECT_URI, AMAZON_LOGIN_URI.',
       configured: false
     });
   }
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const state = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
       id: state,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_STATE,
-      payload: { accountId: req.accountId },
+      payload: {
+        accountId: req.accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: AMAZON_STATE_TTL_MS,
     });
   } catch (error) {
@@ -15357,8 +15811,18 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=invalid_state`);
   }
   const accountId = stored.accountId;
+  const embeddedSurface = stored.surface === 'embedded';
+  const embeddedReturnTo = normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels');
   const sellerId = selling_partner_id || stored.sellingPartnerId || null;
   if (!AMAZON_LWA_CLIENT_ID || !AMAZON_LWA_CLIENT_SECRET || !AMAZON_REDIRECT_URI) {
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=error&reason=config`,
+        params: { amazon: 'error', reason: 'config' },
+      }));
+    }
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=config`);
   }
   try {
@@ -15398,25 +15862,47 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         `, connId, accountId, sellerId || null, encryptSecret(tokens.access_token), encryptSecret(tokens.refresh_token), expiry, meta);
       }
     }
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=connected&seller=${sellerId || ''}`,
+        params: { amazon: 'connected', seller: sellerId || '' },
+      }));
+    }
     return res.redirect(`${APP_URL}/flux?amazon=connected&seller=${sellerId || ''}`);
   } catch (e) {
     console.error('Amazon callback error:', e);
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=error&reason=server`,
+        params: { amazon: 'error', reason: 'server' },
+      }));
+    }
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=server`);
   }
 });
 
 // 5d. Init connexion — retourne l'URL à visiter pour lancer le flow OAuth
-app.get('/api/v1/platforms/amazon/connect-init', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/connect-init', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID) {
     return res.status(503).json({ configured: false, message: 'Amazon OAuth non configuré' });
   }
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const code = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
       id: code,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_CONNECT,
-      payload: { accountId: req.accountId },
+      payload: {
+        accountId: req.accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: AMAZON_CONNECT_CODE_TTL_MS,
     });
   } catch (error) {
@@ -15450,6 +15936,8 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=invalid_code`);
   }
   const accountId = stored.accountId;
+  const embeddedSurface = stored.surface === 'embedded';
+  const embeddedReturnTo = normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels');
   if (!AMAZON_APPLICATION_ID) {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=not_configured`);
   }
@@ -15459,7 +15947,11 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
       id: state,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_STATE,
-      payload: { accountId },
+      payload: {
+        accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo: embeddedReturnTo,
+      },
       ttlMs: AMAZON_STATE_TTL_MS,
     });
   } catch (error) {
@@ -15478,7 +15970,7 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
 });
 
 // 5f. Connexion manuelle (refresh_token) — pour tests ou app privée
-app.post('/api/v1/platforms/amazon/connect', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/amazon/connect', authenticateJwtOrShopifySession, async (req, res) => {
   const { refresh_token, seller_id } = req.body || {};
   if (!refresh_token) {
     return res.status(400).json({ message: 'refresh_token requis' });
@@ -15528,7 +16020,7 @@ app.post('/api/v1/platforms/amazon/connect', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/v1/platforms/amazon/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ connected: false });
@@ -15552,7 +16044,7 @@ app.get('/api/v1/platforms/amazon/status', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/v1/platforms/amazon/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/amazon/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       await prisma.$executeRawUnsafe(`
@@ -16761,13 +17253,12 @@ app.get('/api/v1/connectors/shopify/install', async (req, res) => {
     if (!shop || !hmac) {
       return res.status(400).send('Paramètres shop et hmac requis');
     }
+    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
+      return res.status(400).send('Signature HMAC invalide');
+    }
     const normalizedShop = normalizeShopifyShop(shop);
     if (!normalizedShop) {
       return res.status(400).send('Nom de boutique Shopify invalide');
-    }
-    const query = { shop: normalizedShop, timestamp: timestamp || '', hmac: String(hmac) };
-    if (!verifyShopifyInstallHmac(query, SHOPIFY_API_SECRET)) {
-      return res.status(400).send('Signature HMAC invalide');
     }
     const state = crypto.randomUUID();
     try {
@@ -17005,12 +17496,18 @@ app.post('/api/v1/marketing/audits/:shareToken/connectors/file/connect', async (
 app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
   try {
     const { shop, code, state } = req.query;
+    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+      return res.status(500).send('Clés Shopify non configurées');
+    }
     if (!shop || !code || !state) {
       return res.status(400).send('Requête invalide (shop/code/state manquant)');
     }
     const normalizedShop = normalizeShopifyShop(shop);
     if (!normalizedShop) {
       return res.status(400).send('Nom de boutique Shopify invalide');
+    }
+    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
+      return res.status(400).send('Signature HMAC Shopify invalide');
     }
 
     let oauthContext = null;
@@ -17276,82 +17773,64 @@ async function findShopifyCredentialForAccount(accountId) {
   return { credentialId: rows[0].id, shop, accessToken };
 }
 
-// POST /subscribe — crée une AppSubscription Shopify et retourne confirmationUrl
+// POST /subscribe — Managed Pricing : retourne l'URL Shopify Admin où le
+// merchant va choisir/approuver son plan. Plus de call appSubscriptionCreate :
+// les apps Managed Pricing ne peuvent pas créer de charges via l'API.
+// Après approbation, Shopify envoie le webhook app_subscriptions/update.
 app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service indisponible' });
     }
     const accountId = req.user.accountId;
-    const productTier = Number(req.body?.tier);
-    const channels = Number(req.body?.channels);
-    const addonIA = Boolean(req.body?.addonIA);
-
-    const priceEur = getPlanPriceEur({ productTier, channels, addonIA });
-    if (priceEur == null) {
-      return res.status(400).json({ message: 'Combinaison plan invalide (tier/channels)' });
+    const planHandle = String(req.body?.plan || '').trim().toLowerCase();
+    const plan = shopifyManagedPricing.getPlan(planHandle);
+    if (!plan) {
+      return res.status(400).json({
+        message: 'Plan inconnu. Valeurs valides : starter, pro, business, premium.',
+      });
     }
 
     const credential = await findShopifyCredentialForAccount(accountId);
     if (!credential) {
       return res.status(409).json({
-        message: 'Boutique Shopify non connectée. Shopify Billing nécessite une connexion Shopify active.',
+        message: 'Boutique Shopify non connectée.',
       });
     }
 
-    let shopCurrency = 'USD';
-    try {
-      shopCurrency = await shopifyBilling.fetchShopCurrency({
-        shop: credential.shop,
-        accessToken: credential.accessToken,
-      });
-    } catch (currencyErr) {
-      console.warn('Shop currency fetch failed, fallback USD:', currencyErr?.message);
-    }
-    const { amount, currency } = shopifyBilling.computeShopifyPrice(priceEur, shopCurrency);
-
-    const planKey = tierIdFromProductTier(productTier);
-    const name = getPlanLabel({ productTier, channels, addonIA });
-    const apiBase = (process.env.API_PUBLIC_URL || '').replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
-    const returnUrl = `${apiBase}/api/v1/billing/shopify/return?account=${encodeURIComponent(accountId)}`;
-
-    const created = await shopifyBilling.createAppSubscription({
+    const confirmationUrl = shopifyManagedPricing.buildManagedPricingUrl({
       shop: credential.shop,
-      accessToken: credential.accessToken,
-      name,
-      amount,
-      currency,
-      returnUrl,
-      trialDays: Number(process.env.SHOPIFY_BILLING_TRIAL_DAYS || 0),
+      planHandle: plan.handle,
     });
 
+    // Trace la tentative en DB (status PENDING). Le subscription_id réel est
+    // attribué par Shopify lors de l'approbation et nous arrive via webhook
+    // app_subscriptions/update. Ici on stocke un id provisoire.
     await shopifyBilling.upsertShopifySubscription({
       prisma,
       row: {
         accountId,
         shopDomain: credential.shop,
-        shopifySubscriptionId: created.subscriptionId,
-        planKey: planKey || `CUSTOM_${productTier}_${channels}${addonIA ? '_IA' : ''}`,
-        priceAmount: amount,
-        currency,
+        shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
+        planKey: plan.handle.toUpperCase(),
+        priceAmount: plan.priceEur,
+        currency: 'EUR',
         interval: 'EVERY_30_DAYS',
         status: 'PENDING',
-        trialDays: Number(process.env.SHOPIFY_BILLING_TRIAL_DAYS || 0),
-        confirmationUrl: created.confirmationUrl,
-        returnUrl,
-        testMode: created.subscription?.test === true,
+        trialDays: plan.trialDays || 0,
+        confirmationUrl,
+        returnUrl: null,
+        testMode: process.env.NODE_ENV !== 'production',
       },
     });
 
     return res.json({
-      confirmationUrl: created.confirmationUrl,
-      subscriptionId: created.subscriptionId,
-      amount,
-      currency,
-      planKey,
+      confirmationUrl,
+      plan: plan.handle,
+      priceEur: plan.priceEur,
     });
   } catch (err) {
-    console.error('Shopify billing subscribe error:', err);
+    console.error('Shopify managed pricing subscribe error:', err);
     return res.status(500).json({ message: 'Erreur création abonnement Shopify', detail: err?.message });
   }
 });
@@ -17463,18 +17942,32 @@ app.post('/api/v1/billing/shopify/cancel', authenticateJwtOrShopifySession, asyn
       return res.status(404).json({ message: 'Aucune subscription Shopify active' });
     }
     const credential = await findShopifyCredentialForAccount(accountId);
-    if (!credential) {
-      return res.status(409).json({ message: 'Connexion Shopify introuvable' });
+    const subId = subRow.shopify_subscription_id || '';
+    const isPendingPlaceholder = subId.startsWith('pending_');
+
+    // Cas 1 : sub PENDING (placeholder, jamais approuvée) ou pas de credential valide
+    //         → on annule juste localement, pas de call Shopify (qui échouerait
+    //         de toutes façons : pas de subscription Shopify à annuler).
+    // Cas 2 : sub ACTIVE avec credential valide → on call Shopify pour annuler.
+    if (!isPendingPlaceholder && credential) {
+      try {
+        await shopifyBilling.cancelAppSubscription({
+          shop: credential.shop,
+          accessToken: credential.accessToken,
+          subscriptionId: subId,
+          prorate: Boolean(req.body?.prorate),
+        });
+      } catch (cancelErr) {
+        // Si le token est invalide (merchant a désinstallé puis revenu) ou la
+        // sub n'existe plus côté Shopify, on tombe quand même en CANCELLED
+        // localement plutôt que de bloquer le merchant.
+        console.warn('Shopify cancel API failed, marking cancelled locally only:', cancelErr?.message || cancelErr);
+      }
     }
-    await shopifyBilling.cancelAppSubscription({
-      shop: credential.shop,
-      accessToken: credential.accessToken,
-      subscriptionId: subRow.shopify_subscription_id,
-      prorate: Boolean(req.body?.prorate),
-    });
+
     await shopifyBilling.markShopifySubscriptionStatus({
       prisma,
-      shopifySubscriptionId: subRow.shopify_subscription_id,
+      shopifySubscriptionId: subId,
       status: 'CANCELLED',
       cancelled: true,
     });
@@ -17674,27 +18167,79 @@ app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async
 // Vérification d'accès Shopify (ping Admin API)
 app.get('/api/v1/connectors/shopify/verify', authenticateToken, async (req, res) => {
   try {
-    const { shop, access_token } = req.query;
-    if (!shop || !access_token) {
-      return res.status(400).json({ message: 'shop et access_token requis' });
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
     }
-    const normalizedShop = normalizeShopifyShop(shop);
-    if (!normalizedShop) {
+    const requestedShop = typeof req.query?.shop === 'string' ? req.query.shop.trim() : '';
+    const normalizedShop = requestedShop ? normalizeShopifyShop(requestedShop) : '';
+    if (requestedShop && !normalizedShop) {
       return res.status(400).json({ message: 'Nom de boutique Shopify invalide' });
     }
-    const resp = await fetch(`https://${normalizedShop}/admin/api/2024-10/graphql.json`, {
+
+    const rows = normalizedShop
+      ? await prisma.$queryRawUnsafe(
+          `
+            SELECT c.secretjson
+            FROM "Credential" c
+            JOIN "FeedSource" s ON s.credentialid = c.id
+            WHERE c.connector = 'SHOPIFY'::text
+              AND s.accountid = $1::text
+              AND c.secretjson->>'shop' = $2::text
+            ORDER BY c.createdat DESC
+            LIMIT 1
+          `,
+          req.user.accountId,
+          normalizedShop
+        )
+      : await prisma.$queryRawUnsafe(
+          `
+            SELECT c.secretjson
+            FROM "Credential" c
+            JOIN "FeedSource" s ON s.credentialid = c.id
+            WHERE c.connector = 'SHOPIFY'::text
+              AND s.accountid = $1::text
+            ORDER BY c.createdat DESC
+            LIMIT 1
+          `,
+          req.user.accountId
+        );
+
+    if (!rows?.length) {
+      return res.status(404).json({ message: 'Aucune boutique Shopify connectée pour ce compte' });
+    }
+
+    const secret = decryptObjectSecrets(
+      typeof rows[0].secretjson === 'string' ? JSON.parse(rows[0].secretjson) : rows[0].secretjson
+    );
+    const accessToken = secret.accessToken || secret.access_token || '';
+    const resolvedShop = normalizeShopifyShop(secret.shop || normalizedShop);
+    if (!resolvedShop || !accessToken) {
+      return res.status(409).json({ message: 'Connexion Shopify incomplète, reconnectez la boutique' });
+    }
+
+    const resp = await fetch(buildShopifyAdminGraphqlUrl(resolvedShop), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': String(access_token),
+        'X-Shopify-Access-Token': String(accessToken),
       },
       body: JSON.stringify({ query: '{ shop { name } }' }),
     });
-    const json = await resp.json();
+    const json = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      return res.status(resp.status).json(json);
+      return res.status(resp.status).json({
+        message: 'Erreur de verification Shopify',
+        detail: json,
+        shop: resolvedShop,
+        apiVersion: SHOPIFY_ADMIN_API_VERSION,
+      });
     }
-    res.json({ ok: true, data: json });
+    res.json({
+      ok: true,
+      shop: resolvedShop,
+      apiVersion: SHOPIFY_ADMIN_API_VERSION,
+      data: json.data || json,
+    });
   } catch (err) {
     console.error('Shopify verify error:', err);
     res.status(500).json({ message: 'Erreur vérification Shopify' });
