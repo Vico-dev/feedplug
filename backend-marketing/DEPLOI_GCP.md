@@ -88,6 +88,9 @@ Le backend n’applique plus aucune migration au runtime: les schémas requis do
 
    psql "postgresql://feedplug_user:VOTRE_MOT_DE_PASSE@127.0.0.1:5432/feedplug_marketing?sslmode=disable" \
      -f backend-marketing/prisma/migrations/031_shared_rate_limits.sql
+
+   psql "postgresql://feedplug_user:VOTRE_MOT_DE_PASSE@127.0.0.1:5432/feedplug_marketing?sslmode=disable" \
+     -f backend-marketing/prisma/migrations/040_feeditem_identifiers.sql
    ```
    Remplacez `VOTRE_MOT_DE_PASSE` par le mot de passe (voir « Où trouver les infos de connexion » ci‑dessus).
 
@@ -239,7 +242,7 @@ Et stockez **GOOGLE_CLIENT_ID** et **GOOGLE_CLIENT_SECRET** dans Secret Manager 
 
 | Ordre | Action |
 |-------|--------|
-| 1 | Appliquer les migrations SQL si besoin (013, **021_product_score_history**, **030_oauth_ephemeral_state**, **031_shared_rate_limits**) — Cloud SQL Proxy ou `./backend-marketing/scripts/run-migrations-one-shot.sh` |
+| 1 | Appliquer les migrations SQL si besoin (013, **021_product_score_history**, **030_oauth_ephemeral_state**, **031_shared_rate_limits**, **040_feeditem_identifiers**) — Cloud SQL Proxy ou `./backend-marketing/scripts/run-migrations-one-shot.sh` |
 | 2 | Lancer le déploiement : `./deploy-backend-marketing.sh` ou `gcloud builds submit --config=cloudbuild-backend-marketing.yaml .` |
 | 3 | Déployer le frontend : `./deploy-frontend.sh` |
 | 4 | Vérifier l’URL Cloud Run et tester l’API / export |

@@ -172,6 +172,10 @@ model FeedItem {
   updatedAt       DateTime?  @map("updatedat")
   contentHash     String     @map("contenthash")
   createdAt       DateTime   @default(now()) @map("createdat")
+  gtin            String?
+  mpn             String?
+  condition       String?
+  customFields    Json?      @map("customfields")
 
   revisions       FeedItemRevision[]
 

@@ -17109,10 +17109,10 @@ app.post('/api/v1/auth/reset-password', smartAuthLimiter, async (req, res) => {
     const users = await prisma.$queryRawUnsafe(`
       SELECT id
       FROM "User"
-      WHERE (resettoken = $1::text OR resettoken = $2::text)
+      WHERE resettoken = $1::text
         AND resettokenexpiry > NOW()
       LIMIT 1
-    `, hashedToken, normalizedToken);
+    `, hashedToken);
 
     if (!users || users.length === 0) {
       return res.status(400).json({ message: 'Token invalide ou expiré' });
@@ -17159,10 +17159,10 @@ app.post('/api/v1/auth/accept-invitation', smartAuthLimiter, async (req, res) =>
     const users = await prisma.$queryRawUnsafe(`
       SELECT id
       FROM "User"
-      WHERE (resettoken = $1::text OR resettoken = $2::text)
+      WHERE resettoken = $1::text
         AND resettokenexpiry > NOW()
       LIMIT 1
-    `, hashedToken, normalizedToken);
+    `, hashedToken);
 
     if (!users || users.length === 0) {
       return res.status(400).json({ message: 'Lien d\'invitation invalide ou expiré' });
