@@ -45,11 +45,10 @@ export const metadata: Metadata = {
   },
   description: "Centralize and synchronize your product catalogs across all channels",
   // Pas de `icons:` explicite → Next.js auto-détecte :
-  //  - src/app/favicon.ico (ICO multi-res, picto "FP" sur fond blanc)
-  //  - src/app/icon.tsx (PNG dynamique 32×32)
-  //  - src/app/apple-icon.tsx (apple-touch-icon)
-  // L'ancien override forçait /app-icon-1200.png comme favicon, taille
-  // trop grande pour être reconnue comme favicon par les browsers → onglet vide.
+  //  - src/app/favicon.ico (ICO multi-res 16/32/48, square mark officiel dark)
+  //  - src/app/icon.png (PNG 512×512, coins arrondis transparents)
+  //  - src/app/apple-icon.png (180×180 full-bleed, iOS applique son propre masque)
+  // Source : FeedPlug Design System — feedplug-mark-1200 (dark primary).
 };
 
 export default async function RootLayout({
