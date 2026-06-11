@@ -115,6 +115,18 @@ export async function exportFeedAsCsvForDestination(
 }
 
 /**
+ * Télécharge le flux d'inventaire local Google (Local Inventory Ads).
+ * Une ligne par produit × magasin ; storeCode optionnel pour limiter à un magasin.
+ */
+export async function exportFeedAsCsvLia(
+  feedId: string,
+  storeCode?: string,
+  filename?: string
+): Promise<void> {
+  return exportFeedAsCsvForPlatform(feedId, 'lia', undefined, filename, undefined, storeCode);
+}
+
+/**
  * Télécharge le flux au format CSV pour un canal Amazon (ex. amazon_fr, amazon_uk).
  */
 export async function exportFeedAsCsvAmazon(
@@ -223,16 +235,17 @@ export async function exportFeedAsCsvGemini(feedId: string, filename?: string): 
   return exportFeedAsCsvForPlatform(feedId, 'gemini', undefined, filename);
 }
 
-export type ExportPlatform = 'gmc' | 'meta' | 'amazon' | 'cdiscount' | 'rakuten' | 'chatgpt' | 'bing' | 'pinterest' | 'tiktok' | 'snapchat' | 'yandex' | 'baidu' | 'perplexity' | 'gemini';
+export type ExportPlatform = 'gmc' | 'lia' | 'meta' | 'amazon' | 'cdiscount' | 'rakuten' | 'chatgpt' | 'bing' | 'pinterest' | 'tiktok' | 'snapchat' | 'yandex' | 'baidu' | 'perplexity' | 'gemini';
 
 async function exportFeedAsCsvForPlatform(
   feedId: string,
   platform: ExportPlatform,
   channel?: string,
   filename?: string,
-  destinationId?: string
+  destinationId?: string,
+  storeCode?: string
 ): Promise<void> {
-  return exportFeedForPlatform(feedId, platform, 'csv', channel, filename, destinationId);
+  return exportFeedForPlatform(feedId, platform, 'csv', channel, filename, destinationId, storeCode);
 }
 
 async function exportFeedForPlatform(
@@ -241,7 +254,8 @@ async function exportFeedForPlatform(
   format: 'csv' | 'json',
   channel?: string,
   filename?: string,
-  destinationId?: string
+  destinationId?: string,
+  storeCode?: string
 ): Promise<void> {
   let url = `${API_BASE}/ingestion/feeds/${feedId}/export?format=${format}&platform=${platform}`;
   if (channel) {
@@ -249,6 +263,9 @@ async function exportFeedForPlatform(
   }
   if (destinationId) {
     url += `&destinationId=${encodeURIComponent(destinationId)}`;
+  }
+  if (storeCode) {
+    url += `&storeCode=${encodeURIComponent(storeCode)}`;
   }
   const response = await fetch(url, { credentials: 'include' });
   if (!response.ok) {

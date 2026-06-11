@@ -17,6 +17,7 @@
 - ✅ **Sentry** : erreurs fiche produit (chargement, sauvegarde, enrichissement) remontées avec tags `area` / `itemId`
 - ✅ **Tests E2E** : Playwright (catalogue + fiche produit + onglets)
 - ✅ **Export des Flux** : Google Merchant Center, Amazon Seller Central, Meta Catalog, Cdiscount, Rakuten, Bing, Pinterest, TikTok, Snapchat, Yandex, Baidu, Perplexity, Gemini
+- ✅ **Local Inventory Ads (LIA)** : magasins par compte (Paramètres → Magasins), inventaire par magasin via API, export du flux d'inventaire local Google (`platform=lia`, une ligne par produit × magasin, fallback stock global)
 - ✅ **Optimisation IA** : Gemini/Mistral API, optimisation titres/descriptions, suggestions dans l'interface, application en masse
 - ✅ **Facturation Stripe** : configurateur (produits × canaux), grille tarifaire, checkout session, billing portal, webhook, factures
 

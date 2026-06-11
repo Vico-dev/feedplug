@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FluxGuide } from "@/components/onboarding/contextual-guide";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import Link from "next/link";
-import { getFeeds, getFeedAudit, updateFeedAutoPush, exportFeedAsCsv,exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
+import { getFeeds, getFeedAudit, updateFeedAutoPush, exportFeedAsCsv,exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvLia, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
 import { getMarkets, type Market } from "@/lib/services/markets.service";
 import { CreateExportModal } from "@/components/forms/create-export-modal";
 import { usePlanCapabilities } from "@/hooks/use-plan-capabilities";
@@ -1428,6 +1428,9 @@ export default function FluxPage() {
                               Google Merchant Center
                             </button>
                           )}
+                          <button type="button" onClick={() => handleExportPlatform(feed.id, 'Google Local Inventory Ads', () => exportFeedAsCsvLia(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
+                            Google Local Inventory Ads (LIA)
+                          </button>
                           <button type="button" onClick={() => handleExportPlatform(feed.id, 'Bing', () => exportFeedAsCsvBing(feed.id))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', color: 'var(--ink)' }}>
                             Bing / Microsoft
                           </button>
