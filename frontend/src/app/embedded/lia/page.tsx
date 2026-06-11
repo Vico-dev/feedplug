@@ -21,6 +21,7 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedT } from "../_locale";
 
 type StoreLocation = {
   id?: string;
@@ -179,6 +180,7 @@ function parsePreview(text: string, knownStoreCodes: Set<string>): CsvPreview {
 export default function EmbeddedLiaPage() {
   const fetchApi = useEmbeddedFetch();
   const shopify = useAppBridge();
+  const t = useEmbeddedT();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [stores, setStores] = useState<StoreLocation[]>([]);
@@ -246,14 +248,14 @@ export default function EmbeddedLiaPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        toast(body?.message || `Erreur ${res.status}`, true);
+        toast(body?.message || `Error ${res.status}`, true);
         return;
       }
-      toast(`Magasin ${storeForm.storeCode} ajouté`);
+      toast(t("lia.toast.storeAdded", { storeCode: storeForm.storeCode }));
       setStoreForm({ storeCode: "", name: "", address: "" });
       await loadAll();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+      toast(err instanceof Error ? err.message : "Network error", true);
     } finally {
       setSavingStore(false);
     }
@@ -264,13 +266,13 @@ export default function EmbeddedLiaPage() {
       const res = await fetchApi(`/platforms/lia/stores/${encodeURIComponent(storeCode)}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        toast(body?.message || `Erreur ${res.status}`, true);
+        toast(body?.message || `Error ${res.status}`, true);
         return;
       }
-      toast(`Magasin ${storeCode} désactivé`);
+      toast(t("lia.toast.storeDisabled", { storeCode }));
       await loadAll();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+      toast(err instanceof Error ? err.message : "Network error", true);
     }
   };
 
@@ -289,7 +291,7 @@ export default function EmbeddedLiaPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        toast(body?.message || `Erreur ${res.status}`, true);
+        toast(body?.message || `Error ${res.status}`, true);
         return;
       }
       const body = (await res.json()) as { message: string };
@@ -298,7 +300,7 @@ export default function EmbeddedLiaPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       await loadAll();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+      toast(err instanceof Error ? err.message : "Network error", true);
     } finally {
       setUploading(false);
     }
@@ -312,12 +314,12 @@ export default function EmbeddedLiaPage() {
       );
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        toast(body?.message || `Erreur ${res.status}`, true);
+        toast(body?.message || `Error ${res.status}`, true);
         return;
       }
       setInventory((curr) => curr.filter((r) => !(r.storeCode === storeCode && r.offerId === offerId)));
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+      toast(err instanceof Error ? err.message : "Network error", true);
     }
   };
 
@@ -334,19 +336,19 @@ export default function EmbeddedLiaPage() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast("URL copiée");
+      toast(t("lia.feedUrl.copied"));
     } catch {
-      toast("Copie impossible — utilisez Cmd+C manuellement", true);
+      toast(t("lia.feedUrl.copyError"), true);
     }
   };
 
   if (loading) {
     return (
       <Page>
-        <TitleBar title="Local Inventory" />
+        <TitleBar title={t("lia.title")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement" size="large" />
+            <Spinner accessibilityLabel={t("lia.loading")} size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -354,17 +356,13 @@ export default function EmbeddedLiaPage() {
   }
 
   return (
-    <Page subtitle="Gérez vos magasins physiques et l'inventaire local pour Google Local Inventory Ads.">
-      <TitleBar title="Local Inventory" />
+    <Page subtitle={t("lia.subtitle")}>
+      <TitleBar title={t("lia.title")} />
       <Layout>
         {/* === Banner explicatif === */}
         <Layout.Section>
           <Banner tone="info">
-            <p>
-              Les Local Inventory Ads de Google Shopping permettent de mettre en avant la disponibilité produit
-              dans vos magasins physiques. Configurez vos points de vente, importez l&apos;inventaire par magasin,
-              puis ajoutez le flux dans Google Merchant Center.
-            </p>
+            <p>{t("lia.banner")}</p>
           </Banner>
         </Layout.Section>
 
@@ -373,24 +371,24 @@ export default function EmbeddedLiaPage() {
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">
-                Magasins ({stores.length})
+                {t("lia.stores.heading", { count: stores.length })}
               </Text>
               <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
                 <TextField
-                  label="Code magasin"
+                  label={t("lia.stores.codeLabel")}
                   value={storeForm.storeCode}
                   onChange={(v) => setStoreForm({ ...storeForm, storeCode: v })}
                   autoComplete="off"
-                  helpText="Identifiant Google Business Profile (ex: STORE_PARIS_01)"
+                  helpText={t("lia.stores.codeHelp")}
                 />
                 <TextField
-                  label="Nom (optionnel)"
+                  label={t("lia.stores.nameLabel")}
                   value={storeForm.name}
                   onChange={(v) => setStoreForm({ ...storeForm, name: v })}
                   autoComplete="off"
                 />
                 <TextField
-                  label="Adresse (optionnel)"
+                  label={t("lia.stores.addressLabel")}
                   value={storeForm.address}
                   onChange={(v) => setStoreForm({ ...storeForm, address: v })}
                   autoComplete="off"
@@ -403,16 +401,13 @@ export default function EmbeddedLiaPage() {
                   loading={savingStore}
                   disabled={!storeForm.storeCode.trim()}
                 >
-                  Ajouter le magasin
+                  {t("lia.stores.addButton")}
                 </Button>
               </InlineStack>
 
               {stores.length === 0 ? (
-                <EmptyState heading="Aucun magasin pour l'instant" image="/embedded-empty.svg">
-                  <p>
-                    Ajoutez au moins un magasin pour démarrer. Le <strong>code magasin</strong> doit correspondre
-                    à votre fiche Google Business Profile.
-                  </p>
+                <EmptyState heading={t("lia.stores.empty.heading")} image="/embedded-empty.svg">
+                  <p>{t("lia.stores.empty.body")}</p>
                 </EmptyState>
               ) : (
                 <BlockStack gap="0">
@@ -430,7 +425,7 @@ export default function EmbeddedLiaPage() {
                           ) : null}
                         </BlockStack>
                         <Button tone="critical" variant="plain" onClick={() => void handleDeleteStore(s.storeCode)}>
-                          Désactiver
+                          {t("lia.stores.disable")}
                         </Button>
                       </InlineStack>
                     </Box>
@@ -446,10 +441,10 @@ export default function EmbeddedLiaPage() {
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">
-                Importer l&apos;inventaire (CSV)
+                {t("lia.inventory.heading")}
               </Text>
               <Text variant="bodyMd" as="p" tone="subdued">
-                Colonnes attendues : <code>storeCode, offerId, quantity, availability, price, salePrice, pickupMethod, pickupSla</code>.
+                {t("lia.inventory.columns")}
               </Text>
               <InlineStack gap="300" wrap>
                 <input
@@ -462,18 +457,18 @@ export default function EmbeddedLiaPage() {
                     if (file) void onFile(file);
                   }}
                 />
-                <Button onClick={downloadTemplate}>Télécharger un modèle</Button>
+                <Button onClick={downloadTemplate}>{t("lia.inventory.template")}</Button>
               </InlineStack>
 
               {preview ? (
                 <Box padding="300" background="bg-surface-secondary" borderRadius="200">
                   <InlineStack align="space-between" blockAlign="center" wrap>
                     <Text variant="bodyMd" as="span">
-                      <strong>{preview.rows.length}</strong> ligne(s) prête(s)
+                      {t("lia.inventory.preview.ready", { count: preview.rows.length })}
                       {preview.errors.length > 0 ? (
                         <Text variant="bodyMd" as="span" tone="critical">
-                          {" · "}
-                          {preview.errors.length} erreur(s) ignorée(s)
+                          {" "}
+                          {t("lia.inventory.preview.errors", { count: preview.errors.length })}
                         </Text>
                       ) : null}
                     </Text>
@@ -483,7 +478,7 @@ export default function EmbeddedLiaPage() {
                       loading={uploading}
                       disabled={preview.rows.length === 0}
                     >
-                      Importer
+                      {t("lia.inventory.import")}
                     </Button>
                   </InlineStack>
                 </Box>
@@ -498,14 +493,14 @@ export default function EmbeddedLiaPage() {
             <Box padding="400">
               <InlineStack align="space-between" blockAlign="center" wrap>
                 <Text variant="headingMd" as="h2">
-                  Inventaire actuel ({inventory.length})
+                  {t("lia.list.heading", { count: inventory.length })}
                 </Text>
                 <Box minWidth="220px">
                   <Select
                     label=""
                     labelHidden
                     options={[
-                      { label: "Tous les magasins", value: "" },
+                      { label: t("lia.list.allStores"), value: "" },
                       ...stores.map((s) => ({ label: s.storeCode, value: s.storeCode })),
                     ]}
                     value={filterStore}
@@ -516,22 +511,22 @@ export default function EmbeddedLiaPage() {
             </Box>
             {inventory.length === 0 ? (
               <Box padding="800">
-                <EmptyState heading="Aucune ligne d'inventaire pour l'instant" image="/embedded-empty.svg">
-                  <p>Importez un CSV pour démarrer le suivi de stock magasin par magasin.</p>
+                <EmptyState heading={t("lia.list.empty.heading")} image="/embedded-empty.svg">
+                  <p>{t("lia.list.empty.body")}</p>
                 </EmptyState>
               </Box>
             ) : (
               <IndexTable
-                resourceName={{ singular: "ligne", plural: "lignes" }}
+                resourceName={{ singular: "row", plural: "rows" }}
                 itemCount={inventory.length}
                 selectable={false}
                 headings={[
-                  { title: "Magasin" },
-                  { title: "Produit" },
-                  { title: "Quantité", alignment: "end" },
-                  { title: "Disponibilité" },
-                  { title: "Prix", alignment: "end" },
-                  { title: "Retrait" },
+                  { title: t("lia.list.col.store") },
+                  { title: t("lia.list.col.product") },
+                  { title: t("lia.list.col.quantity"), alignment: "end" },
+                  { title: t("lia.list.col.availability") },
+                  { title: t("lia.list.col.price"), alignment: "end" },
+                  { title: t("lia.list.col.pickup") },
                   { title: "" },
                 ]}
               >
@@ -569,7 +564,7 @@ export default function EmbeddedLiaPage() {
                         tone="critical"
                         onClick={() => void handleDeleteInventoryRow(row.storeCode, row.offerId)}
                       >
-                        Supprimer
+                        {t("lia.list.delete")}
                       </Button>
                     </IndexTable.Cell>
                   </IndexTable.Row>
@@ -585,20 +580,20 @@ export default function EmbeddedLiaPage() {
             <Card>
               <BlockStack gap="400">
                 <Text variant="headingMd" as="h2">
-                  URL du flux pour Google Merchant Center
+                  {t("lia.feedUrl.heading")}
                 </Text>
                 <Text variant="bodyMd" as="p" tone="subdued">
-                  Collez cette URL dans Google Merchant Center → Feeds → Add primary feed (Scheduled fetch, quotidien).
+                  {t("lia.feedUrl.body")}
                 </Text>
                 <Box padding="300" background="bg-surface-secondary" borderRadius="200">
                   <InlineStack align="space-between" blockAlign="center" wrap>
-                    <Badge tone="info">Global</Badge>
+                    <Badge tone="info">{t("lia.feedUrl.global")}</Badge>
                     <Box minWidth="0" maxWidth="540px">
                       <Text variant="bodySm" as="span" truncate>
                         {feedUrl.globalUrl}
                       </Text>
                     </Box>
-                    <Button onClick={() => void copyToClipboard(feedUrl.globalUrl)}>Copier</Button>
+                    <Button onClick={() => void copyToClipboard(feedUrl.globalUrl)}>{t("lia.feedUrl.copy")}</Button>
                   </InlineStack>
                 </Box>
                 {feedUrl.perStoreUrls.length > 0 ? (
@@ -612,7 +607,7 @@ export default function EmbeddedLiaPage() {
                               {s.url}
                             </Text>
                           </Box>
-                          <Button onClick={() => void copyToClipboard(s.url)}>Copier</Button>
+                          <Button onClick={() => void copyToClipboard(s.url)}>{t("lia.feedUrl.copy")}</Button>
                         </InlineStack>
                       </Box>
                     ))}
@@ -624,9 +619,7 @@ export default function EmbeddedLiaPage() {
         ) : (
           <Layout.Section>
             <Banner tone="warning">
-              <p>
-                Aucun flux actif sur ce compte. Synchronisez d&apos;abord votre catalogue depuis la page Catalogue.
-              </p>
+              <p>{t("lia.feedUrl.noFeedWarning")}</p>
             </Banner>
           </Layout.Section>
         )}

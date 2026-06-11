@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AMAZON_EXPORT_CHANNELS } from "@/lib/services/flux.service";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedT } from "../_locale";
 
 type GmcStatus = {
   connected: boolean;
@@ -125,6 +126,7 @@ export default function EmbeddedChannelsPage() {
   const shopify = useAppBridge();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useEmbeddedT();
 
   const [loading, setLoading] = useState(true);
   const [noAccount, setNoAccount] = useState(false);
@@ -439,11 +441,11 @@ export default function EmbeddedChannelsPage() {
 
   if (loading) {
     return (
-      <Page backAction={{ content: "Accueil", url: "/embedded" }}>
-        <TitleBar title="Canaux" />
+      <Page backAction={{ content: t("nav.home"), url: "/embedded" }}>
+        <TitleBar title={t("nav.channels")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement des canaux" size="large" />
+            <Spinner accessibilityLabel="Loading…" size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -452,18 +454,15 @@ export default function EmbeddedChannelsPage() {
 
   if (noAccount) {
     return (
-      <Page backAction={{ content: "Accueil", url: "/embedded" }}>
-        <TitleBar title="Canaux" />
+      <Page backAction={{ content: t("nav.home"), url: "/embedded" }}>
+        <TitleBar title={t("nav.channels")} />
         <Box paddingBlock="800">
           <EmptyState
-            heading="Votre boutique est encore en cours de préparation"
-            action={{ content: "Recharger", onAction: () => void refreshAll() }}
+            heading={t("sources.notConnected.heading")}
+            action={{ content: t("diagnostic.reload"), onAction: () => void refreshAll() }}
             image="/embedded-empty.svg"
           >
-            <p>
-              FeedPlug termine la liaison entre votre boutique Shopify et votre
-              espace. Rechargez cette page dans quelques secondes pour continuer.
-            </p>
+            <p>{t("sources.notConnected.body")}</p>
           </EmptyState>
         </Box>
       </Page>
@@ -472,12 +471,12 @@ export default function EmbeddedChannelsPage() {
 
   return (
     <Page
-      backAction={{ content: "Accueil", url: "/embedded" }}
-      subtitle="Configurez vos connexions principales sans quitter Shopify Admin."
+      backAction={{ content: t("nav.home"), url: "/embedded" }}
+      subtitle={t("channels.subtitle")}
     >
-      <TitleBar title="Canaux">
+      <TitleBar title={t("nav.channels")}>
         <button variant="primary" onClick={() => void refreshAll()}>
-          Actualiser
+          {t("diagnostic.reload")}
         </button>
       </TitleBar>
 

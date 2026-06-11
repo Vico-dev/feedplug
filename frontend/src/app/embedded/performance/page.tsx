@@ -17,6 +17,7 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedT } from "../_locale";
 import type {
   ChannelStats,
   DashboardData,
@@ -64,6 +65,7 @@ function safeNumber(metrics: Record<string, unknown>, key: string): number | nul
  */
 export default function EmbeddedPerformancePage() {
   const fetchApi = useEmbeddedFetch();
+  const t = useEmbeddedT();
   const shopify = useAppBridge();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -120,10 +122,10 @@ export default function EmbeddedPerformancePage() {
   if (loading) {
     return (
       <Page>
-        <TitleBar title="Performance" />
+        <TitleBar title={t("performance.title")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement des performances" size="large" />
+            <Spinner accessibilityLabel={t("performance.loading")} size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -135,22 +137,18 @@ export default function EmbeddedPerformancePage() {
   if (!hasData) {
     return (
       <Page>
-        <TitleBar title="Performance" />
+        <TitleBar title={t("performance.title")} />
         <Box paddingBlock="800">
           <EmptyState
-            heading="Aucune donnée de performance pour l'instant"
-            action={{ content: "Synchroniser le catalogue", url: "/embedded/sources" }}
+            heading={t("performance.empty.heading")}
+            action={{ content: t("performance.empty.syncCta"), url: "/embedded/sources" }}
             secondaryAction={{
-              content: "Configurer mes canaux",
+              content: t("performance.empty.channelsCta"),
               url: "/embedded/channels",
             }}
             image="/embedded-empty.svg"
           >
-            <p>
-              Les performances apparaissent dès que vous connectez un canal
-              publicitaire (Google Ads, Meta Ads, Amazon). FeedPlug agrège les
-              impressions, clics, revenus et ROAS par produit synchronisé.
-            </p>
+            <p>{t("performance.empty.body")}</p>
           </EmptyState>
         </Box>
       </Page>
@@ -158,19 +156,19 @@ export default function EmbeddedPerformancePage() {
   }
 
   return (
-    <Page subtitle="Agrégats sur les 30 derniers jours">
-      <TitleBar title="Performance" />
+    <Page subtitle={t("performance.subtitle")}>
+      <TitleBar title={t("performance.title")} />
       <Layout>
         <Layout.Section>
           <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
             <StatCard
-              label="Impressions"
+              label={t("performance.stat.impressions")}
               value={formatNumber(totals.impressions)}
             />
-            <StatCard label="Clics" value={formatNumber(totals.clicks)} />
-            <StatCard label="Revenus" value={formatPriceCompact(totals.revenue)} />
+            <StatCard label={t("performance.stat.clicks")} value={formatNumber(totals.clicks)} />
+            <StatCard label={t("performance.stat.revenue")} value={formatPriceCompact(totals.revenue)} />
             <StatCard
-              label="ROAS"
+              label={t("performance.stat.roas")}
               value={formatRoas(totals.roas)}
               tone={roasTone(totals.roas)}
             />
@@ -181,7 +179,7 @@ export default function EmbeddedPerformancePage() {
           <Card padding="0">
             <Box padding="400">
               <Text variant="headingSm" as="h2">
-                Performance par canal
+                {t("performance.channelTable.heading")}
               </Text>
             </Box>
             <ChannelTable channels={data.byChannel} />
@@ -193,7 +191,7 @@ export default function EmbeddedPerformancePage() {
             <Card padding="0">
               <Box padding="400">
                 <Text variant="headingSm" as="h2">
-                  Top produits
+                  {t("performance.topProducts.heading")}
                 </Text>
               </Box>
               <TopProductsTable products={data.topProducts.slice(0, 10)} />
@@ -204,8 +202,7 @@ export default function EmbeddedPerformancePage() {
         <Layout.Section>
           <Box paddingBlock="400">
             <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-              Analyses avancées (séries temporelles, comparatifs, segmentation)
-              disponibles sur{" "}
+              {t("performance.advancedLink")}{" "}
               <a
                 href="https://app.feedplug.com/fr/performance"
                 target="_blank"

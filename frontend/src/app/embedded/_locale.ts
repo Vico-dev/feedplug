@@ -240,6 +240,28 @@ const translations: Translations = {
       "No active feed on this account. Sync your catalog first from the Catalog page.",
     "lia.toast.storeAdded": tpl`Store ${"storeCode" as keyof Vars} added`,
     "lia.toast.storeDisabled": tpl`Store ${"storeCode" as keyof Vars} disabled`,
+
+    // === Performance ===
+    "performance.title": "Performance",
+    "performance.subtitle": "Aggregates over the last 30 days",
+    "performance.loading": "Loading performance data…",
+    "performance.empty.heading": "No performance data yet",
+    "performance.empty.body":
+      "Performance appears as soon as you connect an advertising channel (Google Ads, Meta Ads, Amazon). FeedPlug aggregates impressions, clicks, revenue and ROAS per synced product.",
+    "performance.empty.syncCta": "Sync the catalog",
+    "performance.empty.channelsCta": "Configure my channels",
+    "performance.stat.impressions": "Impressions",
+    "performance.stat.clicks": "Clicks",
+    "performance.stat.revenue": "Revenue",
+    "performance.stat.roas": "ROAS",
+    "performance.channelTable.heading": "Performance by channel",
+    "performance.topProducts.heading": "Top products",
+    "performance.advancedLink":
+      "Advanced analytics (time series, comparisons, segmentation) available on",
+
+    // === Channels ===
+    "channels.title": "Channels",
+    "channels.subtitle": "Connect the marketing destinations where your catalog is pushed.",
   },
   fr: {
     "nav.home": "Accueil",
@@ -440,6 +462,26 @@ const translations: Translations = {
       "Aucun flux actif sur ce compte. Synchronisez d'abord votre catalogue depuis la page Catalogue.",
     "lia.toast.storeAdded": tpl`Magasin ${"storeCode" as keyof Vars} ajouté`,
     "lia.toast.storeDisabled": tpl`Magasin ${"storeCode" as keyof Vars} désactivé`,
+
+    "performance.title": "Performance",
+    "performance.subtitle": "Agrégats sur les 30 derniers jours",
+    "performance.loading": "Chargement des performances…",
+    "performance.empty.heading": "Aucune donnée de performance pour l'instant",
+    "performance.empty.body":
+      "Les performances apparaissent dès que vous connectez un canal publicitaire (Google Ads, Meta Ads, Amazon). FeedPlug agrège les impressions, clics, revenus et ROAS par produit synchronisé.",
+    "performance.empty.syncCta": "Synchroniser le catalogue",
+    "performance.empty.channelsCta": "Configurer mes canaux",
+    "performance.stat.impressions": "Impressions",
+    "performance.stat.clicks": "Clics",
+    "performance.stat.revenue": "Revenus",
+    "performance.stat.roas": "ROAS",
+    "performance.channelTable.heading": "Performance par canal",
+    "performance.topProducts.heading": "Top produits",
+    "performance.advancedLink":
+      "Analyses avancées (séries temporelles, comparatifs, segmentation) disponibles sur",
+
+    "channels.title": "Canaux",
+    "channels.subtitle": "Connectez les destinations marketing vers lesquelles votre catalogue est poussé.",
   },
   es: {
     // ES not yet fully translated — falls back to EN at runtime via the t() helper below.
