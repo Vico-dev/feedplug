@@ -6706,9 +6706,9 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
 
     const limit = Math.min(parseInt(req.query.limit) || 10000, 50000);
 
-    const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
+    const SUPPORTED_PLATFORMS = ['gmc', 'lia', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
     if (!SUPPORTED_PLATFORMS.includes(platform)) {
-      return res.status(400).json({ message: 'Plateforme non supportée. Utilisez platform=gmc|meta|amazon|cdiscount|rakuten|chatgpt|bing|pinterest|tiktok|snapchat|yandex|baidu|perplexity|gemini.' });
+      return res.status(400).json({ message: 'Plateforme non supportée. Utilisez platform=gmc|lia|meta|amazon|cdiscount|rakuten|chatgpt|bing|pinterest|tiktok|snapchat|yandex|baidu|perplexity|gemini.' });
     }
     const jsonPlatforms = ['chatgpt'];
     if (!jsonPlatforms.includes(platform) && format !== 'csv') {
@@ -6724,7 +6724,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     }
 
     // Exclure les produits dont le canal est désactivé (_channelOverrides)
-    const overrideKeyMap = { gmc: 'google', meta: 'meta', amazon: 'amazon', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
+    const overrideKeyMap = { gmc: 'google', lia: 'google', meta: 'meta', amazon: 'amazon', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
     const overrideKey = overrideKeyMap[platform] || null;
     const excludeOverrides = overrideKey && !destinationContext
       ? `AND (customfields->'_channelOverrides'->>'${overrideKey}' IS NULL OR customfields->'_channelOverrides'->>'${overrideKey}' != 'false')`
@@ -6919,6 +6919,34 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         ];
       });
       filename = `feed-gmc-${id}${destinationContext?.slug ? `-${destinationContext.slug}` : ''}.csv`;
+    } else if (platform === 'lia') {
+      // Google Local Inventory Ads : flux d'inventaire local, une ligne par
+      // produit × magasin. Le flux produit principal reste l'export GMC ;
+      // celui-ci ne porte que la dimension magasin (store_code, quantity, ...).
+      const { buildLiaRows } = require('./lib/local-inventory');
+      const requestedStoreCode = String(req.query.storeCode || '').trim();
+      const stores = await prisma.$queryRawUnsafe(`
+        SELECT storecode FROM "StoreLocation"
+        WHERE accountid = $1::text AND isactive = true
+        ORDER BY storecode
+      `, req.accountId);
+      if (!stores || stores.length === 0) {
+        return res.status(400).json({
+          message: 'Aucun magasin configuré. Créez vos magasins (Paramètres → Magasins LIA) avant d\'exporter le flux d\'inventaire local.'
+        });
+      }
+      if (requestedStoreCode && !stores.some(s => s.storecode === requestedStoreCode)) {
+        return res.status(400).json({ message: `Magasin inconnu : ${requestedStoreCode}` });
+      }
+      const inventories = await prisma.$queryRawUnsafe(`
+        SELECT storecode, offerid, quantity, availability, price, saleprice, pickupmethod, pickupsla
+        FROM "LocalInventory"
+        WHERE accountid = $1::text
+      `, req.accountId);
+      const lia = buildLiaRows({ items, stores, inventories, storeCode: requestedStoreCode || null });
+      headers = lia.headers;
+      rows = lia.rows;
+      filename = `feed-lia-${id}${requestedStoreCode ? `-${requestedStoreCode.toLowerCase()}` : ''}.csv`;
     } else if (platform === 'meta') {
       // Meta (Facebook Commerce / Catalogue) : colonnes attendues par le format CSV Meta
       headers = ['id', 'title', 'description', 'link', 'image_link', 'availability', 'condition', 'price', 'brand', 'gtin', 'mpn'];
@@ -13571,6 +13599,167 @@ app.get('/api/v1/platforms/amazon/channels/available', (_req, res) => {
   });
 });
 
+// ===== GOOGLE LOCAL INVENTORY ADS (LIA) — Magasins + inventaire par magasin =====
+// 1. Liste des magasins actifs du compte
+app.get('/api/v1/platforms/lia/stores', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ stores: [] });
+    }
+    const stores = await prisma.$queryRawUnsafe(`
+      SELECT id, storecode AS "storeCode", name, address, isactive AS "isActive", createdat AS "createdAt"
+      FROM "StoreLocation"
+      WHERE accountid = $1::text AND isactive = true
+      ORDER BY storecode
+    `, req.accountId);
+    res.json({ stores: stores || [] });
+  } catch (error) {
+    console.error('LIA stores list error:', error);
+    res.status(500).json({ message: error.message, stores: [] });
+  }
+});
+
+// 2. Créer / mettre à jour un magasin (storeCode = code magasin Google Business Profile)
+app.post('/api/v1/platforms/lia/stores', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateStoreInput } = require('./lib/local-inventory');
+    const validation = validateStoreInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.error });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const { storeCode, name, address } = validation.value;
+    const storeId = crypto.randomUUID();
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "StoreLocation" (id, accountid, storecode, name, address, isactive, createdat, updatedat)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, true, NOW(), NOW())
+      ON CONFLICT (accountid, storecode) DO UPDATE SET
+        name = $4::text,
+        address = $5::text,
+        isactive = true,
+        updatedat = NOW()
+    `, storeId, req.accountId, storeCode, name, address);
+    const [created] = await prisma.$queryRawUnsafe(`
+      SELECT id, storecode AS "storeCode", name, address, isactive AS "isActive", createdat AS "createdAt"
+      FROM "StoreLocation"
+      WHERE accountid = $1::text AND storecode = $2::text
+    `, req.accountId, storeCode);
+    res.status(201).json(created || { storeCode, name, address });
+  } catch (error) {
+    console.error('LIA store create error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 3. Supprimer (désactiver) un magasin
+app.delete('/api/v1/platforms/lia/stores/:storeCode', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const storeCode = normalizeStoreCode(req.params.storeCode);
+    if (!storeCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    await prisma.$executeRawUnsafe(`
+      UPDATE "StoreLocation" SET isactive = false, updatedat = NOW()
+      WHERE accountid = $1::text AND storecode = $2::text
+    `, req.accountId, storeCode);
+    res.json({ message: `Magasin ${storeCode} désactivé` });
+  } catch (error) {
+    console.error('LIA store delete error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 4. Inventaire par magasin — lecture (filtre optionnel ?storeCode=)
+app.get('/api/v1/platforms/lia/inventory', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ inventory: [] });
+    }
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const requestedStoreCode = req.query.storeCode ? normalizeStoreCode(req.query.storeCode) : null;
+    if (req.query.storeCode && !requestedStoreCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    const limit = Math.min(parseInt(req.query.limit) || 1000, 5000);
+    const params = [req.accountId];
+    let where = 'accountid = $1::text';
+    if (requestedStoreCode) {
+      params.push(requestedStoreCode);
+      where += ' AND storecode = $2::text';
+    }
+    params.push(limit);
+    const inventory = await prisma.$queryRawUnsafe(`
+      SELECT storecode AS "storeCode", offerid AS "offerId", quantity, availability,
+             price, saleprice AS "salePrice", pickupmethod AS "pickupMethod", pickupsla AS "pickupSla",
+             updatedat AS "updatedAt"
+      FROM "LocalInventory"
+      WHERE ${where}
+      ORDER BY storecode, offerid
+      LIMIT $${params.length}::int
+    `, ...params);
+    res.json({ inventory: inventory || [] });
+  } catch (error) {
+    console.error('LIA inventory list error:', error);
+    res.status(500).json({ message: error.message, inventory: [] });
+  }
+});
+
+// 5. Inventaire par magasin — upsert en masse { rows: [{ storeCode, offerId, quantity, ... }] }
+app.post('/api/v1/platforms/lia/inventory', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateInventoryRows } = require('./lib/local-inventory');
+    const validation = validateInventoryRows(req.body?.rows);
+    if (!validation.ok) {
+      return res.status(400).json({ message: 'Lignes d\'inventaire invalides', errors: validation.errors.slice(0, 20) });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    // Les codes magasins référencés doivent exister (et être actifs) sur le compte
+    const stores = await prisma.$queryRawUnsafe(`
+      SELECT storecode FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true
+    `, req.accountId);
+    const knownStores = new Set((stores || []).map(s => s.storecode));
+    const unknown = [...new Set(validation.rows.map(r => r.storeCode).filter(code => !knownStores.has(code)))];
+    if (unknown.length > 0) {
+      return res.status(400).json({ message: `Magasins inconnus : ${unknown.slice(0, 10).join(', ')}. Créez-les d'abord.` });
+    }
+    const CHUNK = 500;
+    for (let offset = 0; offset < validation.rows.length; offset += CHUNK) {
+      const chunk = validation.rows.slice(offset, offset + CHUNK);
+      const values = [];
+      const params = [req.accountId];
+      for (const row of chunk) {
+        const base = params.length;
+        params.push(crypto.randomUUID(), row.storeCode, row.offerId, row.quantity, row.availability, row.price, row.salePrice, row.pickupMethod, row.pickupSla);
+        values.push(`($${base + 1}::text, $1::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::int, $${base + 5}::text, $${base + 6}::numeric, $${base + 7}::numeric, $${base + 8}::text, $${base + 9}::text, NOW(), NOW())`);
+      }
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "LocalInventory" (id, accountid, storecode, offerid, quantity, availability, price, saleprice, pickupmethod, pickupsla, createdat, updatedat)
+        VALUES ${values.join(', ')}
+        ON CONFLICT (accountid, storecode, offerid) DO UPDATE SET
+          quantity = EXCLUDED.quantity,
+          availability = EXCLUDED.availability,
+          price = EXCLUDED.price,
+          saleprice = EXCLUDED.saleprice,
+          pickupmethod = EXCLUDED.pickupmethod,
+          pickupsla = EXCLUDED.pickupsla,
+          updatedat = NOW()
+      `, ...params);
+    }
+    res.json({ message: `${validation.rows.length} ligne(s) d'inventaire enregistrée(s)`, upserted: validation.rows.length });
+  } catch (error) {
+    console.error('LIA inventory upsert error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // 5. Connexion Amazon — auth-url pour OAuth LWA
 app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {
@@ -15846,6 +16035,131 @@ app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async
   } catch (err) {
     console.error('Embedded sources sync error:', err);
     return res.status(500).json({ message: 'Erreur déclenchement sync', detail: err?.message });
+  }
+});
+
+// GET /diagnostic/overview — agrégats qualité catalogue Shopify pour l'embedded admin.
+// THE feature : "Vous avez X produits suspendus, top raisons : GTIN manquant, prix nul, ..."
+// C'est ce qui justifie le pricing FeedPlug vs un simple feed builder. Sans cette vue le
+// reviewer BFS flag "incomplete embedded experience".
+app.get('/api/v1/embedded/diagnostic/overview', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.json({
+        connected: false,
+        totalItems: 0,
+        buckets: { critical: 0, error: 0, warning: 0, ok: 0 },
+        averageScore: null,
+        topIssues: [],
+        worstProducts: [],
+      });
+    }
+
+    // Buckets de quality score :
+    //   critical (0-39)  → produit sera rejeté par Google Merchant
+    //   error    (40-59) → champs obligatoires manquants, risque rejet
+    //   warning  (60-79) → améliorations recommandées (titre court, GTIN, etc.)
+    //   ok       (80-100) → conforme
+    const bucketRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE ps.qualityscore < 40) AS critical,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 40 AND ps.qualityscore < 60) AS error,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 60 AND ps.qualityscore < 80) AS warning,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 80) AS ok,
+          COUNT(*) AS total,
+          ROUND(AVG(ps.qualityscore)::numeric, 1) AS avg_score
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        WHERE fi.feedid = $1::text
+      `,
+      feed.feedId
+    );
+    const b = bucketRows?.[0] || {};
+    const totalScored = Number(b.total) || 0;
+
+    // Top 10 raisons : on flatten le tableau jsonb d'issues et on groupe par
+    // champ + sévérité. Le frontend affiche "47 produits sans GTIN" etc.
+    const issueRows = totalScored > 0 ? await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          COALESCE(issue->>'field', 'unknown') AS field,
+          COALESCE(issue->>'severity', 'warning') AS severity,
+          COUNT(*) AS occurrences
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(ps.qualitydetails->'issues', '[]'::jsonb)
+        ) AS issue
+        WHERE fi.feedid = $1::text
+        GROUP BY field, severity
+        ORDER BY occurrences DESC, field ASC
+        LIMIT 10
+      `,
+      feed.feedId
+    ) : [];
+
+    // 20 produits avec les pires scores — ceux que le merchant devrait corriger en priorité.
+    const worstRows = totalScored > 0 ? await prisma.$queryRawUnsafe(
+      `
+        SELECT fi.id, fi.title, fi.imageurl, fi.sku, fi.url,
+               ps.qualityscore, ps.qualitydetails
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        WHERE fi.feedid = $1::text
+        ORDER BY ps.qualityscore ASC, fi.updatedat DESC
+        LIMIT 20
+      `,
+      feed.feedId
+    ) : [];
+
+    const worstProducts = worstRows.map((r) => {
+      const details = typeof r.qualitydetails === 'string'
+        ? (() => { try { return JSON.parse(r.qualitydetails); } catch { return null; } })()
+        : r.qualitydetails;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return {
+        id: r.id,
+        title: r.title,
+        imageUrl: r.imageurl || null,
+        sku: r.sku || null,
+        url: r.url || null,
+        qualityScore: Number(r.qualityscore),
+        topIssues: issues.slice(0, 3).map((iss) => ({
+          field: iss.field || null,
+          severity: iss.severity || 'warning',
+          message: iss.message || '',
+        })),
+      };
+    });
+
+    return res.json({
+      connected: true,
+      feedId: feed.feedId,
+      shop: feed.shop,
+      totalItems: totalScored,
+      buckets: {
+        critical: Number(b.critical) || 0,
+        error: Number(b.error) || 0,
+        warning: Number(b.warning) || 0,
+        ok: Number(b.ok) || 0,
+      },
+      averageScore: b.avg_score != null ? Number(b.avg_score) : null,
+      topIssues: issueRows.map((r) => ({
+        field: r.field,
+        severity: r.severity,
+        occurrences: Number(r.occurrences),
+      })),
+      worstProducts,
+    });
+  } catch (err) {
+    console.error('Embedded diagnostic overview error:', err);
+    return res.status(500).json({ message: 'Erreur récupération diagnostic', detail: err?.message });
   }
 });
 
