@@ -13760,6 +13760,73 @@ app.post('/api/v1/platforms/lia/inventory', authenticateJwtOrShopifySession, asy
   }
 });
 
+// 7. URL publique du flux LIA pour configuration Google Merchant Center.
+// Retourne l'URL d'export prête à coller dans GMC (Feeds → Add primary feed).
+// Une URL globale + une URL par store actif (au cas où le merchant configure
+// un flux par magasin dans GMC).
+app.get('/api/v1/platforms/lia/feed-url', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const feedRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Feed" WHERE accountid = $1::text AND status = 'ACTIVE'::text ORDER BY createdat ASC LIMIT 1`,
+      req.accountId
+    );
+    const feedId = feedRows?.[0]?.id;
+    if (!feedId) {
+      return res.status(404).json({
+        message: 'Aucun flux actif sur ce compte. Synchronisez d\'abord votre catalogue.',
+      });
+    }
+    const stores = await prisma.$queryRawUnsafe(
+      `SELECT storecode AS "storeCode" FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true ORDER BY storecode`,
+      req.accountId
+    );
+    const apiBase = (process.env.API_PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const globalUrl = `${apiBase}/api/v1/ingestion/feeds/${encodeURIComponent(feedId)}/export?platform=lia&format=csv`;
+    const perStoreUrls = (stores || []).map((s) => ({
+      storeCode: s.storeCode,
+      url: `${globalUrl}&storeCode=${encodeURIComponent(s.storeCode)}`,
+    }));
+    return res.json({
+      feedId,
+      globalUrl,
+      perStoreUrls,
+      stores: stores?.length || 0,
+    });
+  } catch (error) {
+    console.error('LIA feed-url error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 6. Inventaire par magasin — DELETE unitaire (1 store × 1 offre)
+app.delete('/api/v1/platforms/lia/inventory/:storeCode/:offerId', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const storeCode = normalizeStoreCode(req.params.storeCode);
+    if (!storeCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    const offerId = String(req.params.offerId || '').trim();
+    if (!offerId) {
+      return res.status(400).json({ message: 'offerId manquant' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM "LocalInventory"
+      WHERE accountid = $1::text AND storecode = $2::text AND offerid = $3::text
+    `, req.accountId, storeCode, offerId);
+    res.json({ message: `Ligne d'inventaire supprimée (${storeCode} × ${offerId})` });
+  } catch (error) {
+    console.error('LIA inventory delete error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // 5. Connexion Amazon — auth-url pour OAuth LWA
 app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {

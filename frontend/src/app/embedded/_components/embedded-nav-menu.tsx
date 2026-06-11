@@ -25,6 +25,7 @@ export function EmbeddedNavMenu() {
       <Link href="/embedded/channels">Canaux</Link>
       <Link href="/embedded/sources">Catalogue</Link>
       <Link href="/embedded/diagnostic">Diagnostic</Link>
+      <Link href="/embedded/lia">Magasins (LIA)</Link>
       <Link href="/embedded/performance">Performance</Link>
     </NavMenu>
   );

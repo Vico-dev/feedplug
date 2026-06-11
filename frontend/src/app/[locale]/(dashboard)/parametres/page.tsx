@@ -18,6 +18,8 @@ import {
   UserPlus,
 } from "lucide-react";
 import { StoreLocationsPanel } from "@/components/lia/store-locations-panel";
+import { LocalInventoryPanel } from "@/components/lia/local-inventory-panel";
+import { FeedUrlPanel } from "@/components/lia/feed-url-panel";
 import {
   DashboardStatGrid,
   DashboardStatCard,
@@ -716,7 +718,13 @@ export default function ParametresPage() {
             </div>
           )}
 
-          {activeTab === "stores" && <StoreLocationsPanel />}
+          {activeTab === "stores" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <StoreLocationsPanel />
+              <LocalInventoryPanel />
+              <FeedUrlPanel />
+            </div>
+          )}
 
           {(activeTab === "notifications" || activeTab === "integrations" || activeTab === "billing") && (
             <div style={{ ...panelStyle, padding: "48px", textAlign: "center", color: "var(--ink-3)" }}>
