@@ -2,6 +2,7 @@
 
 import { NavMenu } from "@shopify/app-bridge-react";
 import Link from "next/link";
+import { useEmbeddedT } from "../_locale";
 
 /**
  * Menu de navigation App Bridge — affiché dans la barre latérale gauche de
@@ -16,17 +17,18 @@ import Link from "next/link";
  * les Web Vitals BFS).
  */
 export function EmbeddedNavMenu() {
+  const t = useEmbeddedT();
   return (
     <NavMenu>
       <Link href="/embedded" rel="home">
-        Accueil
+        {t("nav.home")}
       </Link>
-      <Link href="/embedded/billing">Facturation</Link>
-      <Link href="/embedded/channels">Canaux</Link>
-      <Link href="/embedded/sources">Catalogue</Link>
-      <Link href="/embedded/diagnostic">Diagnostic</Link>
-      <Link href="/embedded/lia">Magasins (LIA)</Link>
-      <Link href="/embedded/performance">Performance</Link>
+      <Link href="/embedded/billing">{t("nav.billing")}</Link>
+      <Link href="/embedded/channels">{t("nav.channels")}</Link>
+      <Link href="/embedded/sources">{t("nav.catalog")}</Link>
+      <Link href="/embedded/diagnostic">{t("nav.diagnostic")}</Link>
+      <Link href="/embedded/lia">{t("nav.lia")}</Link>
+      <Link href="/embedded/performance">{t("nav.performance")}</Link>
     </NavMenu>
   );
 }

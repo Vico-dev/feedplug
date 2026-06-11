@@ -30,6 +30,13 @@ const CancelSubscriptionModal = dynamic(
 );
 import { SHOPIFY_PLANS, type ShopifyPlanHandle } from "./_shopify-plans";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedLocale, useEmbeddedT } from "../_locale";
+
+const LOCALE_TO_INTL: Record<"fr" | "en" | "es", string> = {
+  fr: "fr-FR",
+  en: "en-US",
+  es: "es-ES",
+};
 
 type CurrentSub = {
   active: boolean;
@@ -79,6 +86,22 @@ function formatDateLabel(value?: string | null): string {
 export default function EmbeddedBillingPage() {
   const fetchApi = useEmbeddedFetch();
   const shopify = useAppBridge();
+  const t = useEmbeddedT();
+  const locale = useEmbeddedLocale();
+
+  const formatDateLocale = useCallback(
+    (value?: string | null) => {
+      if (!value) return "—";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return "—";
+      return new Intl.DateTimeFormat(LOCALE_TO_INTL[locale], {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(d);
+    },
+    [locale]
+  );
 
   const [loading, setLoading] = useState(true);
   const [currentSub, setCurrentSub] = useState<CurrentSub | null>(null);
@@ -179,11 +202,11 @@ export default function EmbeddedBillingPage() {
         showToast(body?.message || `Erreur ${response.status}`, true);
         return;
       }
-      showToast("Abonnement annulé. Vous gardez l'accès jusqu'à la fin de la période.");
+      showToast(t("billing.toast.cancelOk"));
       setCancelModalOpen(false);
       await refetchCurrent();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Erreur réseau", true);
+      showToast(err instanceof Error ? err.message : t("billing.toast.networkError"), true);
     } finally {
       setCancelling(false);
     }
@@ -192,11 +215,11 @@ export default function EmbeddedBillingPage() {
   // === Vue gestion (sub active) ===
   if (loading) {
     return (
-      <Page backAction={{ content: "Accueil", url: "/embedded" }}>
-        <TitleBar title="Facturation" />
+      <Page backAction={{ content: t("billing.backToHome"), url: "/embedded" }}>
+        <TitleBar title={t("billing.titleBar")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement de l'abonnement" size="large" />
+            <Spinner accessibilityLabel={t("billing.loading")} size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -207,21 +230,21 @@ export default function EmbeddedBillingPage() {
     const tone = STATUS_TONE[currentSub.status || ""] || "info";
     return (
       <Page
-        backAction={{ content: "Accueil", url: "/embedded" }}
-        subtitle="Gestion de votre abonnement Shopify"
+        backAction={{ content: t("billing.backToHome"), url: "/embedded" }}
+        subtitle={t("billing.subtitle.active")}
       >
-        <TitleBar title="Abonnement actif" />
+        <TitleBar title={t("billing.titleBar.active")} />
         <Layout>
           <Layout.Section>
             <Card>
               <BlockStack gap="500">
                 <InlineStack align="space-between" blockAlign="center">
                   <Text variant="headingMd" as="h2">
-                    Plan {currentSub.planKey || "FeedPlug"}
+                    {t("billing.active.planLabel", { planKey: currentSub.planKey || "FeedPlug" })}
                   </Text>
                   <InlineStack gap="200">
                     {currentSub.testMode ? (
-                      <Badge tone="attention">Test mode</Badge>
+                      <Badge tone="attention">{t("billing.active.testMode")}</Badge>
                     ) : null}
                     <Badge tone={tone}>{currentSub.status || "—"}</Badge>
                   </InlineStack>
@@ -232,7 +255,7 @@ export default function EmbeddedBillingPage() {
                 <BlockStack gap="200">
                   <InlineStack align="space-between">
                     <Text variant="bodyMd" as="p" tone="subdued">
-                      Montant mensuel
+                      {t("billing.active.monthlyAmount")}
                     </Text>
                     <Text variant="bodyMd" as="p">
                       {currentSub.priceAmount?.toFixed(2)} {currentSub.currency}
@@ -241,19 +264,19 @@ export default function EmbeddedBillingPage() {
                   {currentSub.trialEndsAt ? (
                     <InlineStack align="space-between">
                       <Text variant="bodyMd" as="p" tone="subdued">
-                        Fin de la période d&apos;essai
+                        {t("billing.active.trialEnd")}
                       </Text>
                       <Text variant="bodyMd" as="p">
-                        {formatDateLabel(currentSub.trialEndsAt)}
+                        {formatDateLocale(currentSub.trialEndsAt)}
                       </Text>
                     </InlineStack>
                   ) : null}
                   <InlineStack align="space-between">
                     <Text variant="bodyMd" as="p" tone="subdued">
-                      Prochain renouvellement
+                      {t("billing.active.nextRenewal")}
                     </Text>
                     <Text variant="bodyMd" as="p">
-                      {formatDateLabel(currentSub.currentPeriodEnd)}
+                      {formatDateLocale(currentSub.currentPeriodEnd)}
                     </Text>
                   </InlineStack>
                 </BlockStack>
@@ -262,14 +285,14 @@ export default function EmbeddedBillingPage() {
 
                 <InlineStack align="space-between" blockAlign="center" wrap>
                   <Text variant="bodySm" as="p" tone="subdued">
-                    L&apos;annulation prend effet à la fin de la période en cours.
+                    {t("billing.active.cancelNotice")}
                   </Text>
                   <Button
                     variant="primary"
                     tone="critical"
                     onClick={() => setCancelModalOpen(true)}
                   >
-                    Annuler l&apos;abonnement
+                    {t("billing.active.cancelButton")}
                   </Button>
                 </InlineStack>
               </BlockStack>
@@ -283,7 +306,7 @@ export default function EmbeddedBillingPage() {
             onClose={() => setCancelModalOpen(false)}
             onConfirm={handleCancel}
             planLabel={currentSub.planKey}
-            periodEndLabel={formatDateLabel(currentSub.currentPeriodEnd)}
+            periodEndLabel={formatDateLocale(currentSub.currentPeriodEnd)}
             cancelling={cancelling}
           />
         ) : null}
@@ -294,15 +317,14 @@ export default function EmbeddedBillingPage() {
   // === Grille de 4 plans (pas de sub) ===
   return (
     <Page
-      backAction={{ content: "Accueil", url: "/embedded" }}
-      subtitle="Facturation gérée par Shopify Payments — aucune carte à saisir"
+      backAction={{ content: t("billing.backToHome"), url: "/embedded" }}
+      subtitle={t("billing.subtitle")}
     >
-      <TitleBar title="Choisir un plan" />
+      <TitleBar title={t("billing.titleBar")} />
       <Layout>
         <Layout.Section>
           <Text variant="bodyMd" as="p" tone="subdued">
-            14 jours d&apos;essai gratuit sur tous les plans. Aucun engagement, vous pouvez
-            changer ou annuler à tout moment depuis cet écran.
+            {t("billing.intro")}
           </Text>
         </Layout.Section>
 
@@ -320,7 +342,7 @@ export default function EmbeddedBillingPage() {
                     </Text>
                   </BlockStack>
                   {plan.recommended ? (
-                    <Badge tone="success">Recommandé</Badge>
+                    <Badge tone="success">{t("billing.recommended")}</Badge>
                   ) : null}
                 </InlineStack>
 
@@ -330,7 +352,7 @@ export default function EmbeddedBillingPage() {
                   </Text>
                   <Box paddingBlockEnd="100">
                     <Text variant="bodyMd" as="p" tone="subdued">
-                      / mois HT
+                      {t("billing.pricePerMonth")}
                     </Text>
                   </Box>
                 </InlineStack>
@@ -352,12 +374,12 @@ export default function EmbeddedBillingPage() {
                     disabled={submitting !== null && submitting !== plan.handle}
                     onClick={() => handleSubscribe(plan.handle)}
                   >
-                    Choisir {plan.name}
+                    {t("billing.choose", { plan: plan.name })}
                   </Button>
                 </Box>
 
                 <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-                  {plan.trialDays} jours d&apos;essai · annulation à tout moment
+                  {t("billing.trialFooter", { trialDays: plan.trialDays })}
                 </Text>
               </BlockStack>
             </Card>

@@ -18,6 +18,13 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useState } from "react";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedLocale, useEmbeddedT } from "../_locale";
+
+const LOCALE_TO_INTL: Record<"fr" | "en" | "es", string> = {
+  fr: "fr-FR",
+  en: "en-US",
+  es: "es-ES",
+};
 
 type FeedItemSummary = {
   id: string;
@@ -52,11 +59,11 @@ const SOURCE_STATUS_TONE: Record<string, "success" | "warning" | "critical" | "i
   PENDING: "info",
 };
 
-function formatDateTime(value: string | null): string {
+function formatDateTime(value: string | null, locale: "fr" | "en" | "es" = "fr"): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("fr-FR", {
+  return new Intl.DateTimeFormat(LOCALE_TO_INTL[locale], {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -92,6 +99,8 @@ function formatPrice(price: number | null, currency: string | null): string {
 export default function EmbeddedSourcesPage() {
   const fetchApi = useEmbeddedFetch();
   const shopify = useAppBridge();
+  const t = useEmbeddedT();
+  const locale = useEmbeddedLocale();
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<SourceOverview | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -130,17 +139,17 @@ export default function EmbeddedSourcesPage() {
         return;
       }
       if (!response.ok) {
-        showToast(`Erreur ${response.status} en chargeant le catalogue`, true);
+        showToast(`Error ${response.status}`, true);
         return;
       }
       const body = (await response.json()) as SourceOverview;
       setOverview(body);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Erreur réseau", true);
+      showToast(err instanceof Error ? err.message : t("sources.toast.networkError"), true);
     } finally {
       setLoading(false);
     }
-  }, [fetchApi, showToast]);
+  }, [fetchApi, showToast, t]);
 
   useEffect(() => {
     void refetch();
@@ -155,10 +164,10 @@ export default function EmbeddedSourcesPage() {
       });
       if (!response.ok && response.status !== 202) {
         const body = await response.json().catch(() => null);
-        showToast(body?.message || `Erreur ${response.status}`, true);
+        showToast(body?.message || `Error ${response.status}`, true);
         return;
       }
-      showToast("Synchronisation déclenchée. Actualisation dans quelques secondes…");
+      showToast(t("sources.toast.syncTriggered"));
       // Polling léger : on relit l'overview après 8s pour voir le nouveau lastSyncAt
       window.setTimeout(() => {
         void refetch();
@@ -174,10 +183,10 @@ export default function EmbeddedSourcesPage() {
   if (loading) {
     return (
       <Page>
-        <TitleBar title="Catalogue" />
+        <TitleBar title={t("sources.title")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement du catalogue" size="large" />
+            <Spinner accessibilityLabel="Loading…" size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -188,21 +197,17 @@ export default function EmbeddedSourcesPage() {
   if (!overview?.connected) {
     return (
       <Page>
-        <TitleBar title="Catalogue" />
+        <TitleBar title={t("sources.title")} />
         <Box paddingBlock="800">
           <EmptyState
-            heading="Aucune boutique connectée"
+            heading={t("sources.notConnected.heading")}
             action={{
-              content: "Reconnecter Shopify",
+              content: t("sources.notConnected.reconnect"),
               url: "/embedded",
             }}
             image="/embedded-empty.svg"
           >
-            <p>
-              Votre boutique Shopify n&apos;apparaît pas comme connectée à FeedPlug.
-              Cela peut arriver après une réinstallation de l&apos;app. Rechargez
-              l&apos;app ou contactez le support.
-            </p>
+            <p>{t("sources.notConnected.body")}</p>
           </EmptyState>
         </Box>
       </Page>
@@ -210,16 +215,17 @@ export default function EmbeddedSourcesPage() {
   }
 
   const tone = SOURCE_STATUS_TONE[overview.sourceStatus || ""] || "info";
+  const intlLocale = LOCALE_TO_INTL[locale];
 
   return (
     <Page>
-      <TitleBar title="Catalogue">
+      <TitleBar title={t("sources.title")}>
         <button
           variant="primary"
           onClick={handleSync}
           loading={syncing ? "" : undefined}
         >
-          Synchroniser maintenant
+          {t("sources.syncNow")}
         </button>
       </TitleBar>
       <Layout>
@@ -229,10 +235,12 @@ export default function EmbeddedSourcesPage() {
               <InlineStack align="space-between" blockAlign="center" wrap>
                 <BlockStack gap="100">
                   <Text variant="headingMd" as="h2">
-                    {overview.shopName || overview.shop || "Boutique Shopify"}
+                    {overview.shopName || overview.shop || "Shopify store"}
                   </Text>
                   <Text variant="bodySm" as="p" tone="subdued">
-                    Connectée depuis le {formatDateTime(overview.connectedAt)}
+                    {t("sources.connectedSince", {
+                      date: formatDateTime(overview.connectedAt, locale),
+                    })}
                   </Text>
                 </BlockStack>
                 <Badge tone={tone}>{overview.sourceStatus || "—"}</Badge>
@@ -241,18 +249,18 @@ export default function EmbeddedSourcesPage() {
               <InlineStack gap="600" wrap>
                 <BlockStack gap="100">
                   <Text variant="bodySm" as="p" tone="subdued">
-                    Produits synchronisés
+                    {t("sources.productsSynced")}
                   </Text>
                   <Text variant="headingLg" as="p">
-                    {overview.totalItems.toLocaleString("fr-FR")}
+                    {overview.totalItems.toLocaleString(intlLocale)}
                   </Text>
                 </BlockStack>
                 <BlockStack gap="100">
                   <Text variant="bodySm" as="p" tone="subdued">
-                    Dernière synchronisation
+                    {t("sources.lastSync")}
                   </Text>
                   <Text variant="bodyMd" as="p">
-                    {formatDateTime(overview.lastSyncAt)}
+                    {formatDateTime(overview.lastSyncAt, locale)}
                   </Text>
                 </BlockStack>
               </InlineStack>
@@ -264,16 +272,14 @@ export default function EmbeddedSourcesPage() {
           <Card padding="0">
             <Box padding="400">
               <Text variant="headingSm" as="h3">
-                20 produits les plus récemment mis à jour
+                {t("sources.topProducts")}
               </Text>
             </Box>
-            <ProductsTable items={overview.items} />
+            <ProductsTable items={overview.items} t={t} />
             {overview.totalItems > overview.items.length ? (
               <Box padding="400">
                 <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-                  Affichage des 20 derniers produits sur {overview.totalItems.toLocaleString("fr-FR")} synchronisés.
-                  Cette vue Shopify Admin sert à vérifier rapidement la fraîcheur et la qualité
-                  du catalogue sans sortir du workflow principal.
+                  {t("sources.viewMore", { total: overview.totalItems.toLocaleString(intlLocale) })}
                 </Text>
               </Box>
             ) : null}
@@ -284,23 +290,22 @@ export default function EmbeddedSourcesPage() {
   );
 }
 
-function ProductsTable({ items }: { items: FeedItemSummary[] }) {
-  const resourceName = { singular: "produit", plural: "produits" };
+function ProductsTable({
+  items,
+  t,
+}: {
+  items: FeedItemSummary[];
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const resourceName = { singular: "product", plural: "products" };
   const { selectedResources, allResourcesSelected, handleSelectionChange } =
     useIndexResourceState(items.map((i) => ({ id: i.id })));
 
   if (items.length === 0) {
     return (
       <Box padding="800">
-        <EmptyState
-          heading="Aucun produit synchronisé pour l'instant"
-          image="/embedded-empty.svg"
-        >
-          <p>
-            La première synchronisation peut prendre quelques minutes après
-            l&apos;install. Utilisez &quot;Synchroniser maintenant&quot; pour la déclencher
-            immédiatement.
-          </p>
+        <EmptyState heading={t("sources.empty.heading")} image="/embedded-empty.svg">
+          <p>{t("sources.empty.body")}</p>
         </EmptyState>
       </Box>
     );
@@ -313,12 +318,12 @@ function ProductsTable({ items }: { items: FeedItemSummary[] }) {
       selectedItemsCount={allResourcesSelected ? "All" : selectedResources.length}
       onSelectionChange={handleSelectionChange}
       headings={[
-        { title: "Produit" },
-        { title: "Marque" },
-        { title: "SKU" },
-        { title: "Prix", alignment: "end" },
-        { title: "Stock", alignment: "end" },
-        { title: "Mis à jour" },
+        { title: t("sources.tableLabel.product") },
+        { title: t("sources.tableLabel.brand") },
+        { title: t("sources.tableLabel.sku") },
+        { title: t("sources.tableLabel.price"), alignment: "end" },
+        { title: t("sources.tableLabel.stock"), alignment: "end" },
+        { title: t("sources.tableLabel.updated") },
       ]}
     >
       {items.map((item, index) => (

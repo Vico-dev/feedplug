@@ -19,6 +19,13 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
+import { useEmbeddedLocale, useEmbeddedT } from "../_locale";
+
+const LOCALE_TO_INTL: Record<"fr" | "en" | "es", string> = {
+  fr: "fr-FR",
+  en: "en-US",
+  es: "es-ES",
+};
 
 type Buckets = {
   critical: number;
@@ -83,9 +90,27 @@ const FIELD_LABEL_FR: Record<string, string> = {
   unknown: "Autre",
 };
 
-function fieldLabel(field: string | null): string {
-  if (!field) return "Autre";
-  return FIELD_LABEL_FR[field] || field;
+function fieldLabel(
+  field: string | null,
+  t: (key: string, vars?: Record<string, string | number>) => string
+): string {
+  const key = field || "unknown";
+  const localized = t(`diagnostic.field.${key}`);
+  // Si la clé n'existe pas, t() retourne la clé brute. Dans ce cas on tombe
+  // sur la table FR pour les libellés legacy non traduits.
+  if (localized.startsWith("diagnostic.field.")) {
+    return FIELD_LABEL_FR[key] || field || "Other";
+  }
+  return localized;
+}
+
+function severityLabel(
+  severity: string,
+  t: (key: string) => string
+): string {
+  if (severity === "blocking") return t("diagnostic.severity.blocking");
+  if (severity === "error") return t("diagnostic.severity.error");
+  return t("diagnostic.severity.warning");
 }
 
 /**
@@ -103,6 +128,9 @@ function fieldLabel(field: string | null): string {
 export default function EmbeddedDiagnosticPage() {
   const fetchApi = useEmbeddedFetch();
   const shopify = useAppBridge();
+  const t = useEmbeddedT();
+  const locale = useEmbeddedLocale();
+  const intlLocale = LOCALE_TO_INTL[locale];
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DiagnosticOverview | null>(null);
 
@@ -135,13 +163,13 @@ export default function EmbeddedDiagnosticPage() {
         return;
       }
       if (!response.ok) {
-        showToast(`Erreur ${response.status} en chargeant le diagnostic`, true);
+        showToast(`Error ${response.status}`, true);
         return;
       }
       const body = (await response.json()) as DiagnosticOverview;
       setData(body);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Erreur réseau", true);
+      showToast(err instanceof Error ? err.message : "Network error", true);
     } finally {
       setLoading(false);
     }
@@ -168,10 +196,10 @@ export default function EmbeddedDiagnosticPage() {
   if (loading) {
     return (
       <Page>
-        <TitleBar title="Diagnostic" />
+        <TitleBar title={t("diagnostic.title")} />
         <Box paddingBlock="800">
           <InlineStack align="center">
-            <Spinner accessibilityLabel="Chargement du diagnostic" size="large" />
+            <Spinner accessibilityLabel="Loading…" size="large" />
           </InlineStack>
         </Box>
       </Page>
@@ -181,18 +209,14 @@ export default function EmbeddedDiagnosticPage() {
   if (!data?.connected || summary.total === 0) {
     return (
       <Page>
-        <TitleBar title="Diagnostic" />
+        <TitleBar title={t("diagnostic.title")} />
         <Box paddingBlock="800">
           <EmptyState
-            heading="Aucun produit analysé pour l'instant"
-            action={{ content: "Synchroniser le catalogue", url: "/embedded/sources" }}
+            heading={t("diagnostic.empty.heading")}
+            action={{ content: t("diagnostic.empty.action"), url: "/embedded/sources" }}
             image="/embedded-empty.svg"
           >
-            <p>
-              Le diagnostic qualité analyse chaque produit synchronisé selon les règles
-              Google Merchant Center, Microsoft Bing et Amazon. Lancez une synchronisation
-              du catalogue pour voir apparaître ici les erreurs à corriger avant publication.
-            </p>
+            <p>{t("diagnostic.empty.body")}</p>
           </EmptyState>
         </Box>
       </Page>
@@ -200,9 +224,9 @@ export default function EmbeddedDiagnosticPage() {
   }
 
   return (
-    <Page subtitle={`${summary.total.toLocaleString("fr-FR")} produits analysés selon les règles Google Merchant Center`}>
-      <TitleBar title="Diagnostic qualité">
-        <button onClick={() => void refetch()}>Recharger</button>
+    <Page subtitle={t("diagnostic.subtitle", { total: summary.total.toLocaleString(intlLocale) })}>
+      <TitleBar title={t("diagnostic.title")}>
+        <button onClick={() => void refetch()}>{t("diagnostic.reload")}</button>
       </TitleBar>
 
       <Layout>
@@ -210,26 +234,26 @@ export default function EmbeddedDiagnosticPage() {
         <Layout.Section>
           <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
             <ScoreCard
-              label="Score moyen"
+              label={t("diagnostic.scoreCard.avg")}
               value={summary.avgScore != null ? `${summary.avgScore.toFixed(1)}/100` : "—"}
               tone={summary.avgScore != null && summary.avgScore < 60 ? "critical" : summary.avgScore != null && summary.avgScore < 80 ? "warning" : "success"}
             />
             <ScoreCard
-              label="À corriger en urgence"
-              value={summary.buckets.critical.toLocaleString("fr-FR")}
-              hint="Score < 40 — rejet Google certain"
+              label={t("diagnostic.scoreCard.critical")}
+              value={summary.buckets.critical.toLocaleString(intlLocale)}
+              hint={t("diagnostic.scoreCard.criticalHint")}
               tone="critical"
             />
             <ScoreCard
-              label="Erreurs"
-              value={summary.buckets.error.toLocaleString("fr-FR")}
-              hint="Score 40-59 — champ obligatoire manquant"
+              label={t("diagnostic.scoreCard.error")}
+              value={summary.buckets.error.toLocaleString(intlLocale)}
+              hint={t("diagnostic.scoreCard.errorHint")}
               tone="critical"
             />
             <ScoreCard
-              label="Conformes"
-              value={summary.buckets.ok.toLocaleString("fr-FR")}
-              hint={`${summary.okPercent}% du catalogue`}
+              label={t("diagnostic.scoreCard.ok")}
+              value={summary.buckets.ok.toLocaleString(intlLocale)}
+              hint={t("diagnostic.scoreCard.okHint", { percent: summary.okPercent })}
               tone="success"
             />
           </InlineGrid>
@@ -240,32 +264,36 @@ export default function EmbeddedDiagnosticPage() {
           <Card>
             <BlockStack gap="300">
               <Text variant="headingSm" as="h2">
-                Répartition par score
+                {t("diagnostic.distribution.heading")}
               </Text>
               <BlockStack gap="200">
                 <DistributionRow
-                  label="Critique (< 40)"
+                  label={t("diagnostic.distribution.critical")}
                   value={summary.buckets.critical}
                   total={summary.total}
                   tone="critical"
+                  intlLocale={intlLocale}
                 />
                 <DistributionRow
-                  label="Erreurs (40-59)"
+                  label={t("diagnostic.distribution.error")}
                   value={summary.buckets.error}
                   total={summary.total}
                   tone="critical"
+                  intlLocale={intlLocale}
                 />
                 <DistributionRow
-                  label="Avertissements (60-79)"
+                  label={t("diagnostic.distribution.warning")}
                   value={summary.buckets.warning}
                   total={summary.total}
                   tone="warning"
+                  intlLocale={intlLocale}
                 />
                 <DistributionRow
-                  label="Conformes (80+)"
+                  label={t("diagnostic.distribution.ok")}
                   value={summary.buckets.ok}
                   total={summary.total}
                   tone="success"
+                  intlLocale={intlLocale}
                 />
               </BlockStack>
             </BlockStack>
@@ -278,25 +306,26 @@ export default function EmbeddedDiagnosticPage() {
             <Card>
               <BlockStack gap="300">
                 <Text variant="headingSm" as="h2">
-                  Top raisons de rejet ({data.topIssues.length})
+                  {t("diagnostic.topReasons.heading", { count: data.topIssues.length })}
                 </Text>
                 <Text variant="bodySm" as="p" tone="subdued">
-                  Corriger ces champs en masse via votre interface Shopify est le moyen le plus
-                  rapide d'améliorer le score global.
+                  {t("diagnostic.topReasons.body")}
                 </Text>
                 <BlockStack gap="200">
                   {data.topIssues.map((issue) => (
                     <InlineStack key={`${issue.field}-${issue.severity}`} align="space-between" blockAlign="center" wrap>
                       <InlineStack gap="200" blockAlign="center">
                         <Badge tone={SEVERITY_TONE[issue.severity] || "info"}>
-                          {issue.severity === "blocking" ? "Bloquant" : issue.severity === "error" ? "Erreur" : "Warning"}
+                          {severityLabel(issue.severity, t)}
                         </Badge>
                         <Text variant="bodyMd" as="span" fontWeight="semibold">
-                          {fieldLabel(issue.field)}
+                          {fieldLabel(issue.field, t)}
                         </Text>
                       </InlineStack>
                       <Text variant="bodyMd" as="span" tone="subdued">
-                        {issue.occurrences.toLocaleString("fr-FR")} produits
+                        {t("diagnostic.topReasons.products", {
+                          count: issue.occurrences.toLocaleString(intlLocale),
+                        })}
                       </Text>
                     </InlineStack>
                   ))}
@@ -312,12 +341,12 @@ export default function EmbeddedDiagnosticPage() {
             <Card padding="0">
               <Box padding="400">
                 <Text variant="headingSm" as="h2">
-                  20 produits à corriger en priorité
+                  {t("diagnostic.worstProducts.heading")}
                 </Text>
               </Box>
               <BlockStack gap="0">
                 {data.worstProducts.map((product) => (
-                  <WorstProductRow key={product.id} product={product} shop={data.shop || ""} />
+                  <WorstProductRow key={product.id} product={product} shop={data.shop || ""} t={t} />
                 ))}
               </BlockStack>
             </Card>
@@ -327,10 +356,7 @@ export default function EmbeddedDiagnosticPage() {
         <Layout.Section>
           <Box paddingBlock="400">
             <Text variant="bodySm" as="p" tone="subdued" alignment="center">
-              Méthodologie : chaque produit est noté selon les règles officielles Google
-              Merchant Center, Microsoft Bing Shopping et Amazon. Le score considère les
-              champs obligatoires, la qualité de la description, des images et la
-              cohérence des attributs structurés.
+              {t("diagnostic.methodology")}
             </Text>
           </Box>
         </Layout.Section>
@@ -375,11 +401,13 @@ function DistributionRow({
   value,
   total,
   tone,
+  intlLocale,
 }: {
   label: string;
   value: number;
   total: number;
   tone: "success" | "critical" | "warning";
+  intlLocale: string;
 }) {
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
@@ -389,7 +417,7 @@ function DistributionRow({
           {label}
         </Text>
         <Text variant="bodyMd" as="span" tone="subdued">
-          {value.toLocaleString("fr-FR")} ({percent}%)
+          {value.toLocaleString(intlLocale)} ({percent}%)
         </Text>
       </InlineStack>
       <ProgressBar progress={percent} tone={tone === "warning" ? "highlight" : tone === "critical" ? "critical" : "success"} size="small" />
@@ -397,7 +425,15 @@ function DistributionRow({
   );
 }
 
-function WorstProductRow({ product, shop }: { product: WorstProduct; shop: string }) {
+function WorstProductRow({
+  product,
+  shop,
+  t,
+}: {
+  product: WorstProduct;
+  shop: string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
   const shopHandle = shop.replace(/\.myshopify\.com$/i, "");
   const shopifyAdminUrl = shopHandle
     ? `https://admin.shopify.com/store/${shopHandle}/products/${encodeURIComponent(product.id)}`
@@ -410,12 +446,12 @@ function WorstProductRow({ product, shop }: { product: WorstProduct; shop: strin
         <InlineStack gap="300" blockAlign="start" wrap={false}>
           <Thumbnail
             source={product.imageUrl || ""}
-            alt={product.title || "Produit"}
+            alt={product.title || "Product"}
             size="small"
           />
           <BlockStack gap="100">
             <Text variant="bodyMd" as="span" fontWeight="semibold">
-              {product.title || "Sans titre"}
+              {product.title || "Untitled"}
             </Text>
             {product.sku ? (
               <Text variant="bodySm" as="span" tone="subdued">
@@ -426,7 +462,7 @@ function WorstProductRow({ product, shop }: { product: WorstProduct; shop: strin
               <InlineStack gap="100" wrap>
                 {product.topIssues.map((iss, idx) => (
                   <Badge key={`${iss.field}-${idx}`} tone={SEVERITY_TONE[iss.severity] || "info"}>
-                    {`${fieldLabel(iss.field)} — ${iss.message || "à corriger"}`}
+                    {`${fieldLabel(iss.field, t)} — ${iss.message || ""}`}
                   </Badge>
                 ))}
               </InlineStack>
@@ -437,7 +473,7 @@ function WorstProductRow({ product, shop }: { product: WorstProduct; shop: strin
           <Badge tone={scoreTone}>{`${product.qualityScore}/100`}</Badge>
           {shopifyAdminUrl ? (
             <Button url={shopifyAdminUrl} target="_top" size="slim">
-              Corriger
+              {t("diagnostic.worstProducts.fix")}
             </Button>
           ) : null}
         </BlockStack>

@@ -2,6 +2,7 @@
 
 import { Box, EmptyState, Page } from "@shopify/polaris";
 import { useEffect } from "react";
+import { useEmbeddedT } from "./_locale";
 
 /**
  * Error boundary global pour le segment /embedded.
@@ -9,7 +10,7 @@ import { useEffect } from "react";
  * Pourquoi Polaris EmptyState plutôt qu'un message brut :
  *  - cohérence visuelle avec Shopify Admin (BFS audit)
  *  - illustration d'État d'erreur identifiable au premier coup d'œil
- *  - bouton "Réessayer" Polaris exécute le `reset` Next.js qui re-monte
+ *  - bouton "Retry" Polaris exécute le `reset` Next.js qui re-monte
  *    le segment sans recharger l'iframe (gain UX vs F5)
  */
 export default function EmbeddedError({
@@ -19,9 +20,9 @@ export default function EmbeddedError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useEmbeddedT();
+
   useEffect(() => {
-    // En prod, l'erreur remonte déjà à Sentry via le root error boundary.
-    // En dev, on log pour faciliter le debug.
     if (process.env.NODE_ENV !== "production") {
       console.error("[embedded error boundary]", error);
     }
@@ -31,22 +32,23 @@ export default function EmbeddedError({
     <Page>
       <Box paddingBlock="800">
         <EmptyState
-          heading="Une erreur est survenue"
+          heading={t("error.heading")}
           action={{
-            content: "Réessayer",
+            content: t("error.retry"),
             onAction: reset,
           }}
           secondaryAction={{
-            content: "Contacter le support",
+            content: t("error.support"),
             url: "mailto:support@feedplug.com",
             external: true,
           }}
           image="/embedded-empty.svg"
         >
+          <p>{t("error.message")}</p>
           <p>
-            FeedPlug n&apos;a pas pu charger cette page. Si le problème persiste,
-            contactez le support en mentionnant la référence{" "}
-            <code>{error?.digest || "n/a"}</code>.
+            <small>
+              {t("error.reference", { digest: error?.digest || "n/a" })}
+            </small>
           </p>
         </EmptyState>
       </Box>
