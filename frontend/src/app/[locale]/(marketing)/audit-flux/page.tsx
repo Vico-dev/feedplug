@@ -149,7 +149,8 @@ export default function AuditFluxPage() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [companyWebsite, setCompanyWebsite] = useState("");
+  // companyWebsite (honeypot) retiré — il bloquait les vrais prospects à cause
+  // des password managers. Cloudflare Turnstile + risk assessment suffisent.
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [formStartedAt] = useState(() => Date.now());
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
@@ -231,7 +232,6 @@ export default function AuditFluxPage() {
         targetChannels: form.targetChannels,
         goal: "audit_flux",
         captchaToken: captchaToken || undefined,
-        companyWebsite,
         formStartedAt,
       });
       router.push(`/${locale}/audit-flux/${audit.shareToken}?new=1`);
@@ -294,24 +294,12 @@ export default function AuditFluxPage() {
 
             <div style={{ display: "grid", gap: 24, gridTemplateColumns: "minmax(0, 1.25fr) minmax(320px, 0.75fr)", alignItems: "start" }}>
               <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 32, padding: 28, boxShadow: "0 24px 60px rgba(15,23,42,0.08)" }}>
-                <input
-                  type="text"
-                  name="ax_check_value" autoCorrect="off" spellCheck={false}
-                  value={companyWebsite}
-                  onChange={(event) => setCompanyWebsite(event.target.value)}
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    left: "-10000px",
-                    top: "auto",
-                    width: "1px",
-                    height: "1px",
-                    opacity: 0,
-                    pointerEvents: "none",
-                  }}
-                />
+                {/*
+                  Honeypot historique retiré : les gestionnaires de mots de passe
+                  (Dashlane, 1Password) remplissaient le champ caché même hors-écran
+                  et bloquaient les vraies submissions. Cloudflare Turnstile (étape
+                  2) + rate limiter backend + risk assessment couvrent déjà les bots.
+                */}
                 <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 28 }}>
                   {STEPS.map((item) => {
                     const active = item.id === step;
@@ -459,7 +447,16 @@ export default function AuditFluxPage() {
                   </section>
                 ) : null}
 
-                {step === 3 && captchaEnabled ? (
+                {/*
+                  Turnstile sur step 2 (et non step 3) : on profite de la pause
+                  naturelle entre "choisir la source" et "valider les canaux"
+                  pour que Cloudflare fasse son challenge en arrière-plan. Au
+                  moment où l'utilisateur arrive sur la dernière étape, le token
+                  est déjà obtenu — on évite un clic supplémentaire en fin de
+                  parcours. Décision UX validée par le user (régression rétablie
+                  le 2026-06-12).
+                */}
+                {step === 2 && captchaEnabled ? (
                   <div
                     style={{
                       marginTop: 22,
@@ -516,7 +513,7 @@ export default function AuditFluxPage() {
                     <CheckCircle2 size={18} />
                     <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Promesse gratuite</span>
                   </div>
-                  <h3 style={{ margin: "0 0 10px", fontSize: 24, lineHeight: 1.15 }}>Un audit technique gratuit, puis le scoring performance en offre payante.</h3>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 24, lineHeight: 1.15, color: "#fff" }}>Un audit technique gratuit, puis le scoring performance en offre payante.</h3>
                   <p style={{ margin: 0, fontSize: 14, lineHeight: 1.75, color: "rgba(255,255,255,0.74)" }}>
                     Le gratuit porte sur la qualite technique du flux et sa diffusabilite. Le scoring de performance reste reserve a l’offre payante.
                   </p>
