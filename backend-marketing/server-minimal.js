@@ -6148,6 +6148,7 @@ async function generateAuditAfterImage(item) {
 async function generateAuditSampleProducts(items) {
   const samples = selectAuditSampleItems(items);
   const results = [];
+  let heroImageDone = false;
   for (let i = 0; i < samples.length; i += 1) {
     const item = samples[i];
     const before = {
@@ -6162,8 +6163,16 @@ async function generateAuditSampleProducts(items) {
     } catch (aiError) {
       console.warn('Audit before/after IA échouée:', aiError.message);
     }
-    if (i === 0 && after && before.imageUrl) {
-      after.imageUrl = await generateAuditAfterImage(item);
+    // Image lifestyle générée sur le PREMIER sample qui dispose d'une image
+    // source (pas forcément index 0 : si sample[0] n'a pas d'image et que
+    // sample[1] en a une, c'est lui le hero visuel). Un seul appel Vertex
+    // par audit pour contenir coût et latence.
+    if (!heroImageDone && after && before.imageUrl) {
+      const imageUrl = await generateAuditAfterImage(item);
+      if (imageUrl) {
+        after.imageUrl = imageUrl;
+        heroImageDone = true;
+      }
     }
     results.push({ before, after });
   }
@@ -6179,15 +6188,21 @@ async function ensureAuditBeforeAfter(audit) {
   if (audit.status !== 'ready' || !report || !Number.isFinite(Number(report.score))) return audit;
 
   const hasSamples = Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0;
-  const hero = hasSamples ? report.sampleProducts[0] : null;
+  // Le "hero visuel" n'est pas forcément le sample[0] : c'est le premier
+  // sample qui dispose d'une before.imageUrl utilisable. Si sample[0] n'a
+  // pas d'image source, l'image after se génère sur le sample suivant.
+  const heroIndex = hasSamples
+    ? report.sampleProducts.findIndex((s) => s && s.before?.imageUrl)
+    : -1;
+  const heroVisual = heroIndex >= 0 ? report.sampleProducts[heroIndex] : null;
   // 3 cas distincts :
   //  1. Pas de samples → génération complète.
   //  2. Samples avec tous les `after` null = coquilles vides (souvent dû à
   //     un modèle Gemini déprécié lors de la 1re gen) → on regénère tout.
-  //  3. Hero a un after textuel mais pas d'image → backfill image ciblé.
+  //  3. Hero visuel a un after textuel mais pas d'image → backfill image ciblé.
   const allAfterNull = hasSamples && report.sampleProducts.every((s) => !s || !s.after);
   const needsFullRegen = !hasSamples || allAfterNull;
-  const heroNeedsImage = !needsFullRegen && !!(hero && hero.before?.imageUrl && hero.after && !hero.after.imageUrl);
+  const heroNeedsImage = !needsFullRegen && !!(heroVisual && heroVisual.after && !heroVisual.after.imageUrl);
 
   if (!needsFullRegen && !heroNeedsImage) return audit;
 
@@ -6195,16 +6210,17 @@ async function ensureAuditBeforeAfter(audit) {
     const input = typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {});
 
     if (heroNeedsImage) {
-      // Backfill ciblé : on regénère uniquement l'image after du hero, on
-      // garde tout le reste (texte before/after déjà figé, autres samples).
+      // Backfill ciblé : on regénère uniquement l'image after du hero visuel
+      // (= 1er sample avec before.imageUrl, pas forcément index 0), tout
+      // le reste reste figé (texte before/after, autres samples).
       const fetched = await fetchAuditItems(audit, input);
       const heroItem = (fetched?.items || []).find((it) =>
-        (it.title || '').trim() === (hero.before.title || '').trim()
+        (it.title || '').trim() === (heroVisual.before.title || '').trim()
       );
       if (heroItem) {
         const imageUrl = await generateAuditAfterImage(heroItem);
         if (imageUrl) {
-          report.sampleProducts[0].after.imageUrl = imageUrl;
+          report.sampleProducts[heroIndex].after.imageUrl = imageUrl;
         }
       }
     } else {
