@@ -6098,7 +6098,14 @@ Prix : ${item.price != null ? item.price : '(vide)'} ${item.currency || ''}`.tri
     false
   );
   const parsed = parseAiJsonResponse(response?.text);
-  if (!parsed || !parsed.title) return null;
+  if (!parsed || !parsed.title) {
+    console.warn('[audit_before_after] parse fail. textLen=%d preview=%s parsed=%s',
+      (response?.text || '').length,
+      String(response?.text || '').slice(0, 220).replace(/\s+/g, ' '),
+      parsed ? `keys=${Object.keys(parsed).join(',')}` : 'null'
+    );
+    return null;
+  }
   return {
     title: String(parsed.title).slice(0, 200),
     description: String(parsed.description || '').slice(0, 600),

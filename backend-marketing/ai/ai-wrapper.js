@@ -99,7 +99,10 @@ async function callAIWithCache(prisma, operation, inputs, systemPrompt, userProm
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 500,
+            // 2.5 plus verbeux que 2.0 — 500 tronquait le JSON et cassait
+            // le parse côté caller. 2000 couvre largement nos opérations
+            // (audit before/after, enrichment) sans surcoût notable.
+            maxOutputTokens: 2000,
           }
         })
       }
