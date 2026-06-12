@@ -966,6 +966,7 @@ async function runShopifyPostSyncHooks(feedId, accountId) {
   }
 
   scheduleAutoGmcPush(accountId, feedId, 'webhook Shopify');
+  scheduleAutoLiaSync(accountId, 'webhook Shopify');
 }
 
 async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }) {
@@ -3870,6 +3871,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
       `, runAt, feed.sourceid);
 
       scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion Shopify');
+      scheduleAutoLiaSync(req.accountId, 'ingestion Shopify');
       return res.status(201).json({ message: 'Ingestion Shopify effectuée', ...result });
     }
 
@@ -4605,6 +4607,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
           }
           results.executed++;
           scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié Shopify');
+          scheduleAutoLiaSync(feed.accountid, 'run planifié Shopify');
           console.log(`✅ Feed Shopify ${feed.feed_name} exécuté avec succès`);
           continue;
         }
@@ -6170,9 +6173,16 @@ async function ensureAuditBeforeAfter(audit) {
 
   const hasSamples = Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0;
   const hero = hasSamples ? report.sampleProducts[0] : null;
-  const heroNeedsImage = !!(hero && hero.before?.imageUrl && hero.after && !hero.after.imageUrl);
+  // 3 cas distincts :
+  //  1. Pas de samples → génération complète.
+  //  2. Samples avec tous les `after` null = coquilles vides (souvent dû à
+  //     un modèle Gemini déprécié lors de la 1re gen) → on regénère tout.
+  //  3. Hero a un after textuel mais pas d'image → backfill image ciblé.
+  const allAfterNull = hasSamples && report.sampleProducts.every((s) => !s || !s.after);
+  const needsFullRegen = !hasSamples || allAfterNull;
+  const heroNeedsImage = !needsFullRegen && !!(hero && hero.before?.imageUrl && hero.after && !hero.after.imageUrl);
 
-  if (hasSamples && !heroNeedsImage) return audit;
+  if (!needsFullRegen && !heroNeedsImage) return audit;
 
   try {
     const input = typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {});
@@ -13909,6 +13919,274 @@ app.delete('/api/v1/platforms/lia/inventory/:storeCode/:offerId', authenticateJw
   }
 });
 
+// ===== LIA × SHOPIFY POS — stock par emplacement Shopify =====
+// Le marchand lie ses emplacements Shopify (POS) à ses codes magasins Google
+// Business Profile ; le stock "available" par emplacement est ensuite
+// synchronisé dans LocalInventory (à la demande + après chaque sync Shopify).
+// Nécessite les scopes optionnels read_locations + read_inventory.
+
+// Résout l'accès Admin API Shopify du compte (boutique + token déchiffré).
+async function getShopifyAdminAccessForAccount(accountId) {
+  const feed = await findShopifyFeedForAccount(accountId);
+  if (!feed || !feed.shop || !feed.credentialId) return null;
+  const credRows = await prisma.$queryRawUnsafe(
+    `SELECT secretjson FROM "Credential" WHERE id = $1::text LIMIT 1`,
+    feed.credentialId
+  );
+  if (!credRows?.length) return null;
+  const secret = decryptObjectSecrets(
+    typeof credRows[0].secretjson === 'string' ? JSON.parse(credRows[0].secretjson) : credRows[0].secretjson
+  );
+  const accessToken = secret.accessToken || secret.access_token;
+  if (!accessToken) return null;
+  return { shop: feed.shop, accessToken, feedId: feed.feedId };
+}
+
+async function shopifyAdminGraphql({ shop, accessToken, query, variables }) {
+  const response = await fetch(buildShopifyAdminGraphqlUrl(shop), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
+    body: JSON.stringify({ query, variables: variables || {} }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const err = new Error(`Shopify Admin API a répondu ${response.status}`);
+    err.statusCode = 502;
+    throw err;
+  }
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    const message = data.errors.map((e) => e?.message).filter(Boolean).join(' | ');
+    const accessDenied = data.errors.some(
+      (e) => e?.extensions?.code === 'ACCESS_DENIED' || /access denied/i.test(String(e?.message || ''))
+    );
+    const err = new Error(message || 'Erreur GraphQL Shopify');
+    err.statusCode = accessDenied ? 403 : 502;
+    err.scopeMissing = accessDenied;
+    throw err;
+  }
+  return data?.data || {};
+}
+
+function respondLiaScopeMissing(res) {
+  return res.status(403).json({
+    code: 'SCOPE_MISSING',
+    message: 'FeedPlug a besoin des autorisations Shopify "read_locations" et "read_inventory" pour lire le stock par emplacement.',
+    requiredScopes: ['read_locations', 'read_inventory'],
+  });
+}
+
+// 8. Emplacements Shopify du marchand + mapping actuel vers les magasins LIA.
+app.get('/api/v1/platforms/lia/shopify/locations', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const access = await getShopifyAdminAccessForAccount(req.accountId);
+    if (!access) {
+      return res.status(404).json({ message: 'Aucune boutique Shopify connectée à ce compte.' });
+    }
+    const data = await shopifyAdminGraphql({
+      ...access,
+      query: `
+        query LiaLocations {
+          locations(first: 50, includeInactive: false) {
+            edges { node { id name fulfillsOnlineOrders address { formatted } } }
+          }
+        }
+      `,
+    });
+    const mappings = await prisma.$queryRawUnsafe(
+      `SELECT storecode, shopifylocationid FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true AND shopifylocationid IS NOT NULL`,
+      req.accountId
+    );
+    const storeCodeByLocation = new Map((mappings || []).map((m) => [m.shopifylocationid, m.storecode]));
+    const locations = (data?.locations?.edges || []).map(({ node }) => ({
+      id: node.id,
+      name: node.name || '',
+      address: Array.isArray(node.address?.formatted) ? node.address.formatted.join(', ') : '',
+      fulfillsOnlineOrders: node.fulfillsOnlineOrders === true,
+      storeCode: storeCodeByLocation.get(node.id) || null,
+    }));
+    res.json({ locations });
+  } catch (error) {
+    if (error?.scopeMissing) return respondLiaScopeMissing(res);
+    console.error('LIA shopify locations error:', error);
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+// 9. Lier un emplacement Shopify à un code magasin Google Business Profile.
+app.post('/api/v1/platforms/lia/shopify/locations/link', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateStoreInput } = require('./lib/local-inventory');
+    const locationId = String(req.body?.locationId || '').trim();
+    if (!/^gid:\/\/shopify\/Location\/\d+$/.test(locationId)) {
+      return res.status(400).json({ message: 'locationId Shopify invalide.' });
+    }
+    const validation = validateStoreInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.error });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const { storeCode, name, address } = validation.value;
+    // Un emplacement Shopify ne peut alimenter qu'un seul magasin LIA :
+    // on détache l'éventuel mapping précédent avant l'upsert.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "StoreLocation" SET shopifylocationid = NULL, updatedat = NOW() WHERE accountid = $1::text AND shopifylocationid = $2::text AND storecode <> $3::text`,
+      req.accountId, locationId, storeCode
+    );
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "StoreLocation" (id, accountid, storecode, name, address, shopifylocationid, isactive, createdat, updatedat)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, true, NOW(), NOW())
+      ON CONFLICT (accountid, storecode) DO UPDATE SET
+        name = COALESCE($4::text, "StoreLocation".name),
+        address = COALESCE($5::text, "StoreLocation".address),
+        shopifylocationid = $6::text,
+        isactive = true,
+        updatedat = NOW()
+    `, crypto.randomUUID(), req.accountId, storeCode, name, address, locationId);
+    res.status(201).json({ storeCode, locationId });
+  } catch (error) {
+    console.error('LIA shopify link error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Récupère le stock "available" par emplacement Shopify et l'upserte dans
+// LocalInventory pour les magasins liés. offerId = FeedItem.originid (GID
+// variant sans le préfixe gid://shopify/), identique au push GMC.
+async function executeLiaShopifySync(accountId) {
+  const mappings = await prisma.$queryRawUnsafe(
+    `SELECT storecode, shopifylocationid FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true AND shopifylocationid IS NOT NULL`,
+    accountId
+  );
+  if (!mappings || mappings.length === 0) {
+    return { synced: 0, stores: 0 };
+  }
+  const access = await getShopifyAdminAccessForAccount(accountId);
+  if (!access) {
+    const err = new Error('Aucune boutique Shopify connectée à ce compte.');
+    err.statusCode = 404;
+    throw err;
+  }
+  const storeCodeByLocation = new Map(mappings.map((m) => [m.shopifylocationid, m.storecode]));
+
+  const rows = [];
+  let cursor = null;
+  let hasNextPage = true;
+  let pages = 0;
+  while (hasNextPage && pages < 200) {
+    pages += 1;
+    const data = await shopifyAdminGraphql({
+      ...access,
+      query: `
+        query LiaInventory($first: Int!, $after: String) {
+          productVariants(first: $first, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            edges { node {
+              id
+              inventoryItem {
+                inventoryLevels(first: 50) {
+                  edges { node {
+                    location { id }
+                    quantities(names: ["available"]) { name quantity }
+                  } }
+                }
+              }
+            } }
+          }
+        }
+      `,
+      variables: { first: 100, after: cursor },
+    });
+    const connection = data?.productVariants;
+    for (const edge of connection?.edges || []) {
+      const node = edge?.node;
+      const offerId = String(node?.id || '').replace(/^gid:\/\/shopify\//, '').substring(0, 50);
+      if (!offerId) continue;
+      for (const levelEdge of node?.inventoryItem?.inventoryLevels?.edges || []) {
+        const level = levelEdge?.node;
+        const storeCode = storeCodeByLocation.get(level?.location?.id);
+        if (!storeCode) continue;
+        const available = (level?.quantities || []).find((q) => q?.name === 'available');
+        const quantity = Number(available?.quantity);
+        if (!Number.isFinite(quantity)) continue;
+        rows.push({ storeCode, offerId, quantity: Math.max(0, Math.trunc(quantity)) });
+      }
+    }
+    hasNextPage = connection?.pageInfo?.hasNextPage === true;
+    cursor = connection?.pageInfo?.endCursor || null;
+  }
+
+  const CHUNK = 500;
+  for (let offset = 0; offset < rows.length; offset += CHUNK) {
+    const chunk = rows.slice(offset, offset + CHUNK);
+    const values = [];
+    const params = [accountId];
+    for (const row of chunk) {
+      const base = params.length;
+      params.push(crypto.randomUUID(), row.storeCode, row.offerId, row.quantity);
+      values.push(`($${base + 1}::text, $1::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::int, NOW(), NOW())`);
+    }
+    // availability remis à NULL : pour une ligne pilotée par le stock POS, la
+    // disponibilité doit se déduire de la quantité (buildLiaRows), pas d'un
+    // ancien import CSV qui dirait "in stock" avec un stock à zéro.
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "LocalInventory" (id, accountid, storecode, offerid, quantity, createdat, updatedat)
+      VALUES ${values.join(', ')}
+      ON CONFLICT (accountid, storecode, offerid) DO UPDATE SET
+        quantity = EXCLUDED.quantity,
+        availability = NULL,
+        updatedat = NOW()
+    `, ...params);
+  }
+  return { synced: rows.length, stores: mappings.length };
+}
+
+// Sync LIA automatique (fire-and-forget, débouncée par compte) après les
+// ingestions Shopify. No-op si aucun emplacement n'est lié.
+const autoLiaSyncTimers = new Map();
+function scheduleAutoLiaSync(accountId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
+  if (!accountId) return;
+  const existing = autoLiaSyncTimers.get(accountId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoLiaSyncTimers.delete(accountId);
+    try {
+      const result = await executeLiaShopifySync(accountId);
+      if (result.synced > 0) {
+        console.log(`🏬 Sync LIA auto (${reason}) : ${result.synced} lignes de stock sur ${result.stores} magasin(s)`);
+      }
+    } catch (err) {
+      console.warn(`⚠️ Sync LIA auto (${reason}) échouée pour account ${accountId}:`, err?.message || err);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoLiaSyncTimers.set(accountId, timer);
+}
+
+// 10. Sync manuelle du stock POS → inventaire LIA.
+app.post('/api/v1/platforms/lia/shopify/sync', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const result = await executeLiaShopifySync(req.accountId);
+    res.json({
+      message: result.stores === 0
+        ? 'Aucun emplacement Shopify lié à un magasin. Liez vos emplacements d\'abord.'
+        : `${result.synced} ligne(s) de stock synchronisée(s) depuis ${result.stores} emplacement(s) Shopify`,
+      ...result,
+    });
+  } catch (error) {
+    if (error?.scopeMissing) return respondLiaScopeMissing(res);
+    console.error('LIA shopify sync error:', error);
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 // 5. Connexion Amazon — auth-url pour OAuth LWA
 app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {
@@ -16282,6 +16560,7 @@ app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async
         );
         console.log('✅ Embedded sync done for shop=' + feed.shop + ' accountid=' + accountId);
         scheduleAutoGmcPush(accountId, feed.feedId, 'sync embedded');
+        scheduleAutoLiaSync(accountId, 'sync embedded');
       } catch (asyncErr) {
         console.error('Embedded sync async error:', asyncErr?.message || asyncErr);
       }

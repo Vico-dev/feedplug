@@ -81,9 +81,11 @@ async function callAIWithCache(prisma, operation, inputs, systemPrompt, userProm
     
     console.log('✅ Clé Gemini trouvée, appel API...');
     
-    // Appeler Gemini 2.0 Flash (rapide + économique)
+    // Gemini 2.5 Flash : 2.0-flash a été déprécié par Google en 2026 (404
+    // "This model is no longer available"). 2.5-flash est le successeur
+    // rapide/économique compatible avec la même API generateContent.
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
