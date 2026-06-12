@@ -434,6 +434,55 @@ export default function MarketingAuditReportPage() {
                       ))}
                     </div>
 
+                    {(() => {
+                      const score = audit.report?.score ?? 0;
+                      const potentialScore = audit.report?.potentialScore ?? 0;
+                      const scoreDelta = Math.max(0, potentialScore - score);
+                      if (scoreDelta <= 0) return null;
+                      // Projections cohérentes basées sur le delta de score :
+                      // - impressions : utilise le gain de visibilité déjà calculé backend
+                      // - CTR : corrections titre/description/image améliorent direct le clic
+                      // - Quality Score : feed propre = +1 à +3 points (fourchette Google Ads)
+                      // - ROAS : combiné impressions × CTR (effet multiplicatif)
+                      const impressionsLift = Math.max(audit.report?.estimatedVisibilityLiftPct ?? 0, Math.round(scoreDelta * 1.1));
+                      const ctrLift = Math.max(8, Math.round(scoreDelta * 0.55));
+                      const qsLift = Math.max(1, Math.min(3, Math.round(scoreDelta / 18)));
+                      const roasLift = Math.round((impressionsLift * 0.5) + (ctrLift * 0.55));
+                      const kpis = [
+                        { label: "Impressions", value: `+${impressionsLift}%`, accent: "#2A6FE8", bg: "#E8EFFB", hint: "Plus de produits diffusables = plus de requêtes captées sur Google Shopping et les marketplaces." },
+                        { label: "Taux de clic (CTR)", value: `+${ctrLift}%`, accent: "#15803D", bg: "#ECFDF3", hint: "Titres clairs, images Shopping-ready et attributs alignés sur l'intention d'achat améliorent mécaniquement le clic." },
+                        { label: "Quality Score", value: `+${qsLift} pts`, accent: "#7C3AED", bg: "#F3E8FF", hint: "Google Ads pénalise les fiches incomplètes. Un QS plus haut = enchères mieux placées et coût-par-clic plus bas." },
+                        { label: "ROAS estimé", value: `+${roasLift}%`, accent: "#EA580C", bg: "#FFF1E8", hint: "Plus d'impressions × CTR amélioré × CPC plus bas → retour sur dépense publicitaire en hausse." },
+                      ];
+                      return (
+                        <div style={{ marginTop: 22, padding: 26, borderRadius: 24, border: "1px solid var(--line)", background: "linear-gradient(180deg, #FAFBFE 0%, #ffffff 100%)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
+                            <h2 style={{ margin: 0, fontSize: 22, color: "var(--ink)" }}>Impact projeté sur vos performances payantes</h2>
+                            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent)" }}>
+                              Score {score} → {potentialScore}
+                            </span>
+                          </div>
+                          <p style={{ margin: "0 0 18px", fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                            Corriger les blocages identifiés, c'est mécaniquement plus d'impressions, un CTR plus haut et un Quality Score qui monte — donc des clics moins chers et un ROAS amélioré. Voici la projection sur votre flux.
+                          </p>
+                          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                            {kpis.map((k) => (
+                              <div key={k.label} style={{ border: "1px solid var(--line)", borderRadius: 18, padding: 18, background: "#fff" }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>{k.label}</div>
+                                <div style={{ display: "inline-flex", alignItems: "center", padding: "6px 12px", borderRadius: 999, background: k.bg, color: k.accent, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 12 }}>
+                                  {k.value}
+                                </div>
+                                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{k.hint}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <p style={{ margin: "16px 0 0", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55 }}>
+                            Projection basée sur le delta entre votre score actuel et votre potentiel. Les résultats réels dépendent de votre catégorie produit, vos prix et la concurrence sur vos requêtes cibles.
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     {audit.report?.scoreBand ? (
                       <div style={{ marginTop: 18, padding: 22, borderRadius: 22, border: "1px solid var(--accent-bg)", background: "#f8fbff" }}>
                         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 8 }}>
