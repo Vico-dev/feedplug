@@ -148,9 +148,20 @@ async function uploadGeneratedImageToGCS(imageBuffer, mimeType = 'image/png') {
   const bucket = storage.bucket(bucketName);
   const file = bucket.file(name);
   await file.save(imageBuffer, {
-    metadata: { contentType: mimeType },
+    metadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000' },
     resumable: false,
   });
+  // makePublic() obligatoire pour que l'URL https://storage.googleapis.com/...
+  // soit accessible sans signature. Sans ça, le PDF d'audit récupère un 403
+  // et l'image après ne s'affiche pas (cas observé sur audit 646fadf2 le
+  // 12 juin 2026). Catch silencieux : si le bucket est passé en uniform
+  // bucket-level access plus tard, makePublic throw et c'est le bucket IAM
+  // qui gère la visibilité — on laisse l'upload réussir quand même.
+  try {
+    await file.makePublic();
+  } catch (aclErr) {
+    console.warn('makePublic ignoré (bucket uniform access ?):', aclErr.message);
+  }
   return `https://storage.googleapis.com/${bucketName}/${name}`;
 }
 
