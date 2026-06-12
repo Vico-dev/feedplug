@@ -522,6 +522,71 @@ export default function MarketingAuditReportPage() {
                         })}
                       </div>
                     </div>
+
+                    {(() => {
+                      const samples = audit.report?.sampleProducts || [];
+                      const hero = samples.find((s) => s?.before?.imageUrl && s?.after?.imageUrl) || samples.find((s) => s?.after);
+                      if (!hero) return null;
+                      const issueLabels: Record<string, string> = {
+                        title: "Titre",
+                        description: "Description",
+                        image: "Image",
+                        brand: "Marque",
+                        category: "Catégorie",
+                        identifier: "Identifiant (GTIN/MPN)",
+                      };
+                      const showImages = !!(hero.before?.imageUrl && hero.after?.imageUrl);
+                      return (
+                        <div style={{ marginTop: 28 }}>
+                          <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--ink)" }}>Aperçu produit optimisé</h2>
+                          <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--ink-3)", lineHeight: 1.6 }}>
+                            Une fiche de votre catalogue, retravaillée par FeedPlug — visuel reposé, titre clair, attributs structurés pour la diffusion Shopping.
+                          </p>
+                          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+                            <div style={{ borderRadius: 22, padding: 22, background: "#FEF1F1", border: "1px solid #FECACA" }}>
+                              {showImages ? (
+                                <div style={{ width: "100%", height: 200, borderRadius: 14, background: "#fff", overflow: "hidden", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={hero.before!.imageUrl!} alt="Image actuelle du produit" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                                </div>
+                              ) : null}
+                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#B42318", marginBottom: 8 }}>Avant</div>
+                              <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--ink)", lineHeight: 1.35 }}>{hero.before?.title || "(titre vide)"}</h3>
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)" }}>{hero.before?.description || "(description vide)"}</p>
+                              {hero.before?.issues?.length ? (
+                                <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                  {hero.before.issues.map((key) => (
+                                    <span key={key} style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: "#fff", border: "1px solid #FECACA", color: "#B42318" }}>
+                                      ✕ {issueLabels[key] || key}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div style={{ borderRadius: 22, padding: 22, background: "#ECFDF3", border: "1px solid #BBF7D0" }}>
+                              {showImages ? (
+                                <div style={{ width: "100%", height: 200, borderRadius: 14, background: "#fff", overflow: "hidden", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={hero.after!.imageUrl!} alt="Aperçu optimisé par FeedPlug" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                                </div>
+                              ) : null}
+                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#15803D", marginBottom: 8 }}>Après — corrigé par FeedPlug</div>
+                              <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--ink)", lineHeight: 1.35 }}>{hero.after?.title}</h3>
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)" }}>{hero.after?.description}</p>
+                              {hero.after?.attributes?.length ? (
+                                <div style={{ marginTop: 12, display: "grid", gap: 4 }}>
+                                  {hero.after.attributes.map((a) => (
+                                    <div key={a.label} style={{ fontSize: 12.5, color: "var(--ink)", lineHeight: 1.5 }}>
+                                      <strong style={{ color: "#15803D" }}>{a.label} :</strong> {a.value}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
 
