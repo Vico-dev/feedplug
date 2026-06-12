@@ -964,6 +964,8 @@ async function runShopifyPostSyncHooks(feedId, accountId) {
   } catch (enrichErr) {
     console.warn('⚠️ Enrichissement non appliqué après webhook Shopify:', enrichErr.message);
   }
+
+  scheduleAutoGmcPush(accountId, feedId, 'webhook Shopify');
 }
 
 async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }) {
@@ -1706,7 +1708,10 @@ app.use('/api/v1/ingestion', requireAuth);
 app.use('/api/v1/enrichment', requireAuth);
 app.use('/api/v1/optimization', requireAuth);
 app.use('/api/v1/rules', requireAuth);
-app.use('/api/v1/performance', requireAuth);
+// Auth mixte sur /performance : le dashboard standalone envoie un JWT, l'app
+// Shopify embedded un session token App Bridge. requireAuth (JWT only) rendait
+// toutes les routes performance inaccessibles depuis l'app embedded (401).
+app.use('/api/v1/performance', authenticateJwtOrShopifySession);
 
 // Middleware auto-vérification d'ownership pour les routes feeds/:id/*.
 // Fail-closed : si on ne PEUT pas vérifier (pas d'accountId, DB indispo), on bloque.
@@ -3768,6 +3773,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion CSV');
       return res.status(201).json({ message: 'Ingestion CSV effectuée', ...result });
     }
 
@@ -3863,6 +3869,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion Shopify');
       return res.status(201).json({ message: 'Ingestion Shopify effectuée', ...result });
     }
 
@@ -3926,6 +3933,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion PrestaShop');
       return res.status(201).json({ message: 'Ingestion Prestashop effectuée', ...result });
     }
 
@@ -4596,6 +4604,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
             sendSyncCompleteEmail(email, feed.feed_name || feedObj.name, stats).catch(err => console.warn('Email sync terminée (scheduler) non envoyé:', err.message));
           }
           results.executed++;
+          scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié Shopify');
           console.log(`✅ Feed Shopify ${feed.feed_name} exécuté avec succès`);
           continue;
         }
@@ -4633,6 +4642,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
             sendSyncCompleteEmail(email, feed.feed_name || feedObj.name, stats).catch(err => console.warn('Email sync terminée (scheduler) non envoyé:', err.message));
           }
           results.executed++;
+          scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié PrestaShop');
           console.log(`✅ Feed Prestashop ${feed.feed_name} exécuté avec succès`);
           continue;
         }
@@ -4717,6 +4727,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
         }
         
         results.executed++;
+        scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié CSV');
         console.log(`✅ Feed ${feed.feed_name} exécuté avec succès`);
       } catch (error) {
         console.error(`❌ Erreur lors de l'exécution du feed ${feed.feed_name}:`, error.message);
@@ -6097,11 +6108,38 @@ Prix : ${item.price != null ? item.price : '(vide)'} ${item.currency || ''}`.tri
   };
 }
 
+// Génère une image "after" lifestyle (fond studio premium, qualité Shopping)
+// à partir de l'image originale du produit. Retourne l'URL GCS publique ou
+// null si l'image source manque ou si la gen Vertex échoue. Coût ~$0.02
+// par image (Gemini 2.5 Flash Image), latence 3-7s — appliqué uniquement
+// sur le 1er sample (hero) pour contenir budget et délai.
+async function generateAuditAfterImage(item) {
+  const sourceUrl = auditFieldHasValue(item.imageUrl) ? String(item.imageUrl).trim() : '';
+  if (!sourceUrl) return null;
+  try {
+    const productContext = [item.brand, item.category || item.googleProductCategory || item.productType]
+      .filter(Boolean).join(' · ').slice(0, 120);
+    const productDescription = auditExcerpt(item.descriptionText || item.descriptionHtml || '', 200) || (item.title || '');
+    const result = await generateLifestyleImage(sourceUrl, PRESET_SCENES.neutral, {
+      productContext,
+      productDescription,
+    });
+    return result?.url || null;
+  } catch (imgError) {
+    console.warn('Audit after-image gen échouée:', imgError.message);
+    return null;
+  }
+}
+
 // Construit jusqu'à 3 paires before/after pour le PDF d'audit.
+// Sur le 1er sample (hero), on génère aussi une image "after" Vertex pour
+// montrer le rendu Shopping/Amazon optimisé. Les autres samples restent
+// en texte-only (économie + latence).
 async function generateAuditSampleProducts(items) {
   const samples = selectAuditSampleItems(items);
   const results = [];
-  for (const item of samples) {
+  for (let i = 0; i < samples.length; i += 1) {
+    const item = samples[i];
     const before = {
       title: String(item.title || '').trim(),
       description: auditExcerpt(item.descriptionText || item.descriptionHtml || '', 240),
@@ -6114,23 +6152,50 @@ async function generateAuditSampleProducts(items) {
     } catch (aiError) {
       console.warn('Audit before/after IA échouée:', aiError.message);
     }
+    if (i === 0 && after && before.imageUrl) {
+      after.imageUrl = await generateAuditAfterImage(item);
+    }
     results.push({ before, after });
   }
   return results;
 }
 
 // Backfill : génère l'échantillon before/after si un audit "ready" ne l'a pas.
+// Inclut aussi le backfill ciblé de l'image "after" du sample hero pour les
+// audits générés avant l'ajout du visuel avant/après (rétrocompatibilité).
 async function ensureAuditBeforeAfter(audit) {
   if (!audit || !prismaReady || !prisma) return audit;
   const report = typeof audit.reportjson === 'string' ? JSON.parse(audit.reportjson || '{}') : (audit.reportjson || {});
   if (audit.status !== 'ready' || !report || !Number.isFinite(Number(report.score))) return audit;
-  if (Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0) return audit;
+
+  const hasSamples = Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0;
+  const hero = hasSamples ? report.sampleProducts[0] : null;
+  const heroNeedsImage = !!(hero && hero.before?.imageUrl && hero.after && !hero.after.imageUrl);
+
+  if (hasSamples && !heroNeedsImage) return audit;
 
   try {
     const input = typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {});
-    const fetched = await fetchAuditItems(audit, input);
-    if (!fetched || !Array.isArray(fetched.items)) return audit;
-    report.sampleProducts = await generateAuditSampleProducts(fetched.items);
+
+    if (heroNeedsImage) {
+      // Backfill ciblé : on regénère uniquement l'image after du hero, on
+      // garde tout le reste (texte before/after déjà figé, autres samples).
+      const fetched = await fetchAuditItems(audit, input);
+      const heroItem = (fetched?.items || []).find((it) =>
+        (it.title || '').trim() === (hero.before.title || '').trim()
+      );
+      if (heroItem) {
+        const imageUrl = await generateAuditAfterImage(heroItem);
+        if (imageUrl) {
+          report.sampleProducts[0].after.imageUrl = imageUrl;
+        }
+      }
+    } else {
+      const fetched = await fetchAuditItems(audit, input);
+      if (!fetched || !Array.isArray(fetched.items)) return audit;
+      report.sampleProducts = await generateAuditSampleProducts(fetched.items);
+    }
+
     await prisma.$executeRawUnsafe(`
       UPDATE marketing_audits SET reportjson = $1::jsonb, "updatedAt" = NOW() WHERE id = $2::text
     `, JSON.stringify(report), audit.id);
@@ -8895,10 +8960,12 @@ async function validateMarketingSubmission({
   requireCaptcha = false,
   extraFields = [],
 }) {
-  const companyWebsite = String(req.body?.companyWebsite || '').trim();
-  if (companyWebsite.length > 0) {
-    return { ok: false, status: 400, message: 'Demande refusée', reason: 'honeypot_filled' };
-  }
+  // Honeypot historique (companyWebsite) supprimé : les gestionnaires de mots
+  // de passe (Dashlane, 1Password, Chrome autofill agressif) remplissent
+  // l'input même caché et bloquaient de vraies submissions de prospects
+  // (regression vue en prod 2026-06-12 sur honeypot_filled). On garde les
+  // autres protections : Cloudflare Turnstile + rate limiter + spam risk
+  // assessment + form age check ci-dessous.
 
   const startedAtMs = Number(req.body?.formStartedAt);
   if (Number.isFinite(startedAtMs)) {
@@ -9581,12 +9648,17 @@ function buildAuditReportHtml(audit) {
       ? before.issues.map((k) => AUDIT_PDF_FIELD_LABELS_FR[k] || k)
       : [];
     const afterAttrs = after && Array.isArray(after.attributes) ? after.attributes : [];
+    // Images affichées uniquement si on a l'après (sample hero only),
+    // sinon on garde une mise en page symétrique full-texte.
+    const showImages = !!(before.imageUrl && after && after.imageUrl);
+    const imgStyle = 'display:block;width:100%;height:130px;object-fit:contain;background:#FFFFFF;border-radius:14px;margin-bottom:10px;';
     return `
     <div class="ba-block">
       <div class="eyebrow" style="margin-bottom:9px;">Fiche produit ${idx + 1}</div>
       <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
         <td style="width:50%;vertical-align:top;padding-right:8px;">
           <div class="ba-card" style="background:#FEF1F1;border:1px solid #FECACA;">
+            ${showImages ? `<img src="${esc(before.imageUrl)}" style="${imgStyle}" alt="Avant">` : ''}
             <div class="ba-tag" style="color:#B42318;">Avant</div>
             <div class="ba-title">${esc(before.title) || '<span style="color:#B0B0B0;">(titre vide)</span>'}</div>
             <div class="ba-desc">${esc(before.description) || '<span style="color:#B0B0B0;">(description vide)</span>'}</div>
@@ -9595,6 +9667,7 @@ function buildAuditReportHtml(audit) {
         </td>
         <td style="width:50%;vertical-align:top;padding-left:8px;">
           <div class="ba-card" style="background:#ECFDF3;border:1px solid #BBF7D0;">
+            ${showImages ? `<img src="${esc(after.imageUrl)}" style="${imgStyle}" alt="Après">` : ''}
             <div class="ba-tag" style="color:#15803D;">Après — corrigé par FeedPlug</div>
             ${after ? `
             <div class="ba-title">${esc(after.title)}</div>
@@ -9635,12 +9708,15 @@ function buildAuditReportHtml(audit) {
     font-family:'Hanken Grotesk',ui-sans-serif,system-ui,-apple-system,sans-serif;
     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .display { font-family:'Bricolage Grotesque','Hanken Grotesk',sans-serif; }
-  .cover { padding:46px 48px 30px; border-bottom:1px solid #E5E5E5; }
-  .wrap { padding:32px 48px 44px; }
+  .cover { padding:46px 56px 30px; border-bottom:1px solid #E5E5E5; }
+  .wrap { padding:36px 56px 48px; }
   .eyebrow { font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#2A6FE8; }
-  h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:19px; font-weight:700; color:#0A0A0A; margin:0 0 14px; letter-spacing:-0.01em; }
+  /* Empêcher un titre h2 d'être laissé seul en bas de page sans son contenu.
+     break-after:avoid est la prop moderne, page-break-after:avoid le fallback
+     historique encore lu par Chromium / Skia PDF. */
+  h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:19px; font-weight:700; color:#0A0A0A; margin:0 0 14px; letter-spacing:-0.01em; page-break-after:avoid; break-after:avoid; }
   .section { margin-bottom:28px; }
-  .card { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:22px; }
+  .card { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:22px; page-break-inside:avoid; }
   .issue { border-radius:20px; padding:18px 20px; margin-bottom:12px; page-break-inside:avoid; }
   .ba-block { margin-bottom:16px; page-break-inside:avoid; }
   .ba-card { border-radius:20px; padding:16px 17px; min-height:148px; }
@@ -9707,7 +9783,7 @@ function buildAuditReportHtml(audit) {
       ${issuesHtml || '<div class="card">Aucun blocage majeur détecté.</div>'}
     </div>
 
-    ${samples.length ? `<div class="section" style="page-break-before:always;padding-top:6px;">
+    ${samples.length ? `<div class="section">
       <h2>Avant / Après sur votre catalogue</h2>
       <p style="font-size:13px;color:#6F6F6F;margin:0 0 16px;line-height:1.6;">Un échantillon de vos fiches, corrigées par FeedPlug — titres, descriptions et attributs.</p>
       ${samplesHtml}
@@ -12584,7 +12660,7 @@ try {
 // ====== PERFORMANCE PAR CANAL (historique + purge) ======
 // GET /api/v1/performance/dashboard — agrégats par plateforme, top produits, par catégorie (ROAS, coût, revenus)
 // Auth mixte : JWT cookie (dashboard standalone via proxy Next) ou session token Shopify (embedded).
-app.get('/api/v1/performance/dashboard', authenticateJwtOrShopifySession, async (req, res) => {
+app.get('/api/v1/performance/dashboard', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
     const accountId = req.accountId;
@@ -13142,6 +13218,9 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         email,
         scope: tokens.scope || '',
       });
+      // Premier push immédiat : le marchand attend de voir ses produits dans
+      // Merchant Center dès la connexion, sans passer par la page Flux.
+      scheduleAutoGmcPush(accountId, null, 'connexion GMC', 0);
     }
     
     if (prismaReady && prisma && auditShareToken) {
@@ -13327,6 +13406,9 @@ app.post('/api/v1/platforms/gmc/select-merchant', authenticateJwtOrShopifySessio
       provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
       flow: OAUTH_EPHEMERAL_FLOW_GMC_SELECTION,
     });
+
+    // Premier push immédiat après le choix du compte Merchant Center.
+    scheduleAutoGmcPush(req.accountId, null, 'connexion GMC', 0);
 
     res.json({
       connected: true,
@@ -14929,6 +15011,52 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
   };
 }
 
+// ===== Push GMC automatique (fire-and-forget) =====
+// Déclenché à la connexion GMC et après chaque ingestion réussie, pour que le
+// Merchant Center reste synchronisé sans action manuelle. Best-effort : no-op
+// si GMC n'est pas connecté, erreurs en log + ExportLog (via executeGmcPush),
+// jamais remontées à l'appelant. Débouncé par feed pour absorber les rafales
+// de webhooks produits.
+const autoGmcPushTimers = new Map();
+const AUTO_GMC_PUSH_DEBOUNCE_MS = Number(process.env.AUTO_GMC_PUSH_DEBOUNCE_MS || 30_000);
+
+async function resolveDefaultFeedIdForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT f.id
+      FROM "Feed" f
+      WHERE f.accountid = $1::text
+      ORDER BY (SELECT COUNT(*) FROM "FeedItem" fi WHERE fi.feedid = f.id) DESC, f.createdat ASC
+      LIMIT 1
+    `,
+    accountId
+  );
+  return rows?.[0]?.id || null;
+}
+
+function scheduleAutoGmcPush(accountId, feedId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
+  if (!accountId) return;
+  const key = `${accountId}:${feedId || 'default'}`;
+  const existing = autoGmcPushTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoGmcPushTimers.delete(key);
+    try {
+      const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
+      if (!conn || !conn.merchantid) return;
+      const targetFeedId = feedId || await resolveDefaultFeedIdForAccount(accountId);
+      if (!targetFeedId) return;
+      const result = await executeGmcPush({ accountId, userId: null, feedId: targetFeedId });
+      console.log(`🔄 Push GMC auto (${reason}) : feed ${targetFeedId} → ${result.succeeded} envoyés, ${result.failed} erreurs`);
+    } catch (err) {
+      console.warn(`⚠️ Push GMC auto (${reason}) échoué pour account ${accountId}:`, err?.message || err);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoGmcPushTimers.set(key, timer);
+}
+
 // Push produits vers Amazon SP-API (Listings Items API)
 app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) => {
   try {
@@ -14959,7 +15087,7 @@ app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) 
 });
 
 // Push produits vers Google Merchant Center
-app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/gmc/push/:feedId', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const { feedId } = req.params;
     if (!prismaReady || !prisma) {
@@ -14973,7 +15101,7 @@ app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => 
       : null;
     const result = await executeGmcPush({
       accountId: req.accountId,
-      userId: req.user.id,
+      userId: req.user?.id || null,
       feedId,
       destinationContext,
     });
@@ -14984,6 +15112,66 @@ app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => 
       message: error.message,
       reconnect: error.reconnect === true || undefined,
     });
+  }
+});
+
+// Variante sans feedId : pousse le feed par défaut du compte. Utilisée par
+// l'app Shopify embedded, qui ne connaît pas les ids de feeds (les routes
+// /ingestion sont réservées au dashboard JWT).
+app.post('/api/v1/platforms/gmc/push', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const feedId = await resolveDefaultFeedIdForAccount(req.accountId);
+    if (!feedId) {
+      return res.status(404).json({ message: 'Aucun flux produit trouvé pour ce compte.' });
+    }
+    const result = await executeGmcPush({
+      accountId: req.accountId,
+      userId: req.user?.id || null,
+      feedId,
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('GMC push (default feed) error:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message,
+      reconnect: error.reconnect === true || undefined,
+    });
+  }
+});
+
+// Dernier push GMC du compte (pour afficher l'état de sync dans l'app embedded).
+app.get('/api/v1/platforms/gmc/last-push', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ lastPush: null });
+    }
+    const rows = await prisma.$queryRawUnsafe(
+      `
+        SELECT status, totalproducts, succeeded, failed, errormessage, createdat
+        FROM "ExportLog"
+        WHERE accountid = $1::text AND platform = 'gmc'
+        ORDER BY createdat DESC
+        LIMIT 1
+      `,
+      req.accountId
+    );
+    const row = rows?.[0];
+    res.json({
+      lastPush: row
+        ? {
+            status: row.status,
+            total: row.totalproducts,
+            succeeded: row.succeeded,
+            failed: row.failed,
+            createdAt: row.createdat,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -16093,6 +16281,7 @@ app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async
           feed.sourceId
         );
         console.log('✅ Embedded sync done for shop=' + feed.shop + ' accountid=' + accountId);
+        scheduleAutoGmcPush(accountId, feed.feedId, 'sync embedded');
       } catch (asyncErr) {
         console.error('Embedded sync async error:', asyncErr?.message || asyncErr);
       }
