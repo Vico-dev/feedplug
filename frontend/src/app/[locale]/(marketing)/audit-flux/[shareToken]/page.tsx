@@ -252,7 +252,7 @@ export default function MarketingAuditReportPage() {
                       <div className="audit-card" style={{ border: "1px solid var(--line)", borderRadius: 22, padding: 24, background: "var(--ink)", color: "#fff" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                           <BarChart3 size={18} />
-                          <h2 style={{ margin: 0, fontSize: 20 }}>Ce qui reste payant</h2>
+                          <h2 style={{ margin: 0, fontSize: 20, color: "#fff" }}>Ce qui reste payant</h2>
                         </div>
                         <p style={{ margin: "0 0 10px", fontSize: 14, lineHeight: 1.7, color: "rgba(255,255,255,0.76)" }}>
                           Le scoring performance n’est pas dans l’audit gratuit.
@@ -408,7 +408,7 @@ export default function MarketingAuditReportPage() {
                       <div className="audit-card" style={{ border: "1px solid var(--line)", borderRadius: 22, padding: 24, background: "var(--ink)", color: "#fff" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                           <BarChart3 size={18} />
-                          <h2 style={{ margin: 0, fontSize: 20 }}>Synthese commerciale</h2>
+                          <h2 style={{ margin: 0, fontSize: 20, color: "#fff" }}>Synthese commerciale</h2>
                         </div>
                         {(audit.report?.opportunities || []).map((opportunity) => (
                           <div key={opportunity.label} style={{ padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
