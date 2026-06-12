@@ -220,9 +220,16 @@ async function proxyRequest(
   try {
     const res = await fetch(backendUrl, init);
     const contentType = res.headers.get("content-type") || "";
-    const responseText = await res.text();
+    // Lire en arrayBuffer (pas text()) pour préserver les bytes binaires :
+    // res.text() décode en UTF-8 et corrompt les PDF / images / CSV avec accents.
+    // Bug historique : PDF audit-flux retourné comme texte UTF-8 → bytes massacrés
+    // → Chrome affichait une page blanche malgré un content-type application/pdf.
+    const responseBuffer = await res.arrayBuffer();
     const responseHeaders = new Headers();
     if (contentType) responseHeaders.set("Content-Type", contentType);
+    // Preserve Content-Disposition pour les téléchargements (attachments).
+    const disposition = res.headers.get("content-disposition");
+    if (disposition) responseHeaders.set("Content-Disposition", disposition);
 
     if (path === LOGOUT_PATH) {
       responseHeaders.append("Set-Cookie", buildExpiredCookie(ACCESS_COOKIE, request));
@@ -236,6 +243,7 @@ async function proxyRequest(
     }
 
     if (AUTH_TOKEN_PATHS.has(path) && contentType.includes("application/json")) {
+      const responseText = new TextDecoder().decode(responseBuffer);
       let payload: unknown;
       try {
         payload = responseText ? JSON.parse(responseText) : {};
@@ -263,7 +271,7 @@ async function proxyRequest(
     }
 
     applyNoStore(responseHeaders);
-    return new Response(responseText, {
+    return new Response(responseBuffer, {
       status: res.status,
       statusText: res.statusText,
       headers: responseHeaders,
