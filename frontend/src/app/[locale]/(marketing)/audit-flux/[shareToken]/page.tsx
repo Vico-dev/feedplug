@@ -84,11 +84,19 @@ export default function MarketingAuditReportPage() {
 
   const handleShopifyConnect = async () => {
     if (!audit?.shareToken) return;
-    const shopRaw = window.prompt("Nom de boutique Shopify (ex: ma-boutique ou ma-boutique.myshopify.com)");
-    if (!shopRaw) return;
+    // Le shopUrl a été collecté au step 2 du formulaire d'audit. On le réutilise
+    // pour éviter un window.prompt redondant. Fallback prompt si l'utilisateur
+    // a sauté ce champ (legacy audits avant la collecte systématique).
+    let shopRaw = (audit.shopUrl || "").trim();
+    if (!shopRaw) {
+      const fromPrompt = window.prompt("Nom de boutique Shopify (ex: ma-boutique ou ma-boutique.myshopify.com)");
+      if (!fromPrompt) return;
+      shopRaw = fromPrompt.trim();
+      if (!shopRaw) return;
+    }
     try {
       setConnecting("file");
-      const url = await getMarketingAuditShopifyAuthUrl(audit.shareToken, shopRaw.trim());
+      const url = await getMarketingAuditShopifyAuthUrl(audit.shareToken, shopRaw);
       window.location.href = url;
     } catch (connectError) {
       setError(connectError instanceof Error ? connectError.message : "Connexion Shopify indisponible");
