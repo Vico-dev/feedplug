@@ -103,6 +103,12 @@ async function callAIWithCache(prisma, operation, inputs, systemPrompt, userProm
             // le parse côté caller. 2000 couvre largement nos opérations
             // (audit before/after, enrichment) sans surcoût notable.
             maxOutputTokens: 2000,
+            // Gemini 2.5 produit parfois des littéraux \n DANS les strings
+            // JSON (invalid au sens strict), ce qui faisait échouer
+            // JSON.parse côté caller. responseMimeType=application/json
+            // force le modèle à produire du JSON valide directement, sans
+            // wrapping markdown ```json ... ``` ni newlines littérales.
+            responseMimeType: 'application/json',
           }
         })
       }
