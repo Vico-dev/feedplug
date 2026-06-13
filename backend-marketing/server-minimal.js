@@ -14213,8 +14213,10 @@ app.post('/api/v1/platforms/lia/shopify/sync', authenticateJwtOrShopifySession, 
 // 5. Connexion Amazon — auth-url pour OAuth LWA
 app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {
-    return res.status(503).json({
-      message: 'Connexion Amazon OAuth non configurée. Définissez AMAZON_APPLICATION_ID, AMAZON_REDIRECT_URI, AMAZON_LOGIN_URI.',
+    // État normal (Amazon SP-API pas encore activé), pas une erreur
+    // serveur : 200 + configured:false. Cf /connect-init pour la raison.
+    return res.status(200).json({
+      message: 'Amazon OAuth non configuré',
       configured: false
     });
   }
@@ -14374,7 +14376,10 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
 // 5d. Init connexion — retourne l'URL à visiter pour lancer le flow OAuth
 app.get('/api/v1/platforms/amazon/connect-init', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID) {
-    return res.status(503).json({ configured: false, message: 'Amazon OAuth non configuré' });
+    // État normal (Amazon SP-API pas encore activé côté infra), pas une
+    // erreur serveur : 200 + flag configured:false. Évite que les clics
+    // répétés du merchant ne polluent les alertes Cloud Monitoring 5xx.
+    return res.status(200).json({ configured: false, message: 'Amazon OAuth non configuré' });
   }
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
   const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
