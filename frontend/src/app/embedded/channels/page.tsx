@@ -30,6 +30,14 @@ type GmcStatus = {
   connectedAt?: string;
 };
 
+type GmcLastPush = {
+  status: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  createdAt?: string;
+};
+
 type GoogleAdsStatus = {
   connected: boolean;
   customerId?: string;
@@ -136,8 +144,10 @@ export default function EmbeddedChannelsPage() {
   const [amazonStatus, setAmazonStatus] = useState<AmazonStatus>({ connected: false });
   const [amazonChannels, setAmazonChannels] = useState<AmazonChannel[]>([]);
   const [gmcSelection, setGmcSelection] = useState<GmcSelectionState | null>(null);
+  const [gmcLastPush, setGmcLastPush] = useState<GmcLastPush | null>(null);
 
   const [gmcLoading, setGmcLoading] = useState(false);
+  const [gmcSyncing, setGmcSyncing] = useState(false);
   const [googleAdsLoading, setGoogleAdsLoading] = useState(false);
   const [amazonLoading, setAmazonLoading] = useState(false);
   const [marketplaceLoadingKey, setMarketplaceLoadingKey] = useState<string | null>(null);
@@ -180,17 +190,24 @@ export default function EmbeddedChannelsPage() {
     setLoading(true);
     setNoAccount(false);
 
-    const [gmcResult, googleAdsResult, amazonResult, channelsResult] = await Promise.allSettled([
+    const [gmcResult, googleAdsResult, amazonResult, channelsResult, lastPushResult] = await Promise.allSettled([
       requestJson<GmcStatus>("/platforms/gmc/status"),
       requestJson<GoogleAdsStatus>("/platforms/google-ads/status"),
       requestJson<AmazonStatus>("/platforms/amazon/status"),
       requestJson<{ channels: AmazonChannel[] }>("/platforms/amazon/channels"),
+      requestJson<{ lastPush: GmcLastPush | null }>("/platforms/gmc/last-push"),
     ]);
 
     if (gmcResult.status === "fulfilled" && gmcResult.value) {
       setGmcStatus(gmcResult.value);
     } else if (gmcResult.status === "rejected") {
       setGmcStatus({ connected: false });
+    }
+
+    if (lastPushResult.status === "fulfilled" && lastPushResult.value) {
+      setGmcLastPush(lastPushResult.value.lastPush ?? null);
+    } else if (lastPushResult.status === "rejected") {
+      setGmcLastPush(null);
     }
 
     if (googleAdsResult.status === "fulfilled" && googleAdsResult.value) {
@@ -346,18 +363,58 @@ export default function EmbeddedChannelsPage() {
     }
   };
 
+  const handleSyncGmc = async () => {
+    setGmcSyncing(true);
+    try {
+      const result = await requestJson<{ message?: string; succeeded?: number; failed?: number; reconnect?: boolean }>(
+        "/platforms/gmc/push",
+        { method: "POST" }
+      );
+      if (result) {
+        const failed = result.failed ?? 0;
+        const succeeded = result.succeeded ?? 0;
+        showToast(
+          result.message || `Synchronisation terminée : ${succeeded} produits envoyés, ${failed} erreurs.`,
+          failed > 0 && succeeded === 0
+        );
+      }
+      const payload = await requestJson<{ lastPush: GmcLastPush | null }>("/platforms/gmc/last-push");
+      setGmcLastPush(payload?.lastPush ?? null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Synchronisation Merchant Center impossible.", true);
+    } finally {
+      setGmcSyncing(false);
+    }
+  };
+
   const handleConnectAmazon = async () => {
     setAmazonLoading(true);
     try {
-      const payload = await requestJson<{ connectUrl?: string; message?: string }>(
+      const payload = await requestJson<{ connectUrl?: string; message?: string; configured?: boolean }>(
         "/platforms/amazon/connect-init?surface=embedded&returnTo=%2Fembedded%2Fchannels"
       );
       if (!payload?.connectUrl) {
+        // configured=false côté backend = AMAZON_APPLICATION_ID env non setté :
+        // Amazon SP-API n'est juste pas encore activé sur cette instance. Pas
+        // une erreur côté merchant → toast neutre "bientôt" au lieu d'un
+        // toast rouge intrusif.
+        if (payload?.configured === false) {
+          showToast("La connexion Amazon Seller Central arrive bientôt sur FeedPlug.", false);
+          return;
+        }
         throw new Error(payload?.message || "URL de connexion Amazon indisponible.");
       }
       open(payload.connectUrl, "_top");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Connexion Amazon impossible.", true);
+      const message = error instanceof Error ? error.message : "Connexion Amazon impossible.";
+      // Le backend renvoie 503 + "Amazon OAuth non configuré" quand
+      // AMAZON_APPLICATION_ID n'est pas en env. requestJson le throw avec ce
+      // message → on l'intercepte aussi ici pour basculer en info "à venir".
+      if (/oauth\s*non\s*configur/i.test(message)) {
+        showToast("La connexion Amazon Seller Central arrive bientôt sur FeedPlug.", false);
+      } else {
+        showToast(message, true);
+      }
     } finally {
       setAmazonLoading(false);
     }
@@ -595,14 +652,29 @@ export default function EmbeddedChannelsPage() {
                 <Text variant="bodySm" as="p" tone="subdued">
                   Connecté le: {formatDateTime(gmcStatus.connectedAt)}
                 </Text>
+                {gmcStatus.connected ? (
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Dernier envoi:{" "}
+                    {gmcLastPush
+                      ? `${formatDateTime(gmcLastPush.createdAt)} — ${gmcLastPush.succeeded} produits envoyés${
+                          gmcLastPush.failed > 0 ? `, ${gmcLastPush.failed} erreurs` : ""
+                        }`
+                      : "aucun pour le moment"}
+                  </Text>
+                ) : null}
                 {gmcStatus.tokenExpired ? (
                   <Badge tone="warning">Le token a expiré, reconnectez le compte Google.</Badge>
                 ) : null}
                 <InlineStack gap="300" wrap>
                   {gmcStatus.connected ? (
-                    <Button tone="critical" loading={gmcLoading} onClick={() => void handleDisconnectGmc()}>
-                      Déconnecter
-                    </Button>
+                    <>
+                      <Button variant="primary" loading={gmcSyncing} onClick={() => void handleSyncGmc()}>
+                        Synchroniser maintenant
+                      </Button>
+                      <Button tone="critical" loading={gmcLoading} onClick={() => void handleDisconnectGmc()}>
+                        Déconnecter
+                      </Button>
+                    </>
                   ) : (
                     <Button variant="primary" loading={gmcLoading} onClick={() => void handleConnectGmc()}>
                       Connecter GMC
