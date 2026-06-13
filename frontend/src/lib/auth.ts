@@ -40,6 +40,9 @@ export interface AuthResponse {
   user: User;
   accessToken?: string;
   refreshToken?: string;
+  // Présent uniquement sur /auth/google : true au premier sign-in Google sur
+  // un compte initialement créé avec mot de passe (lien fait à la volée).
+  linked?: boolean;
 }
 
 export interface RefreshTokenResponse {

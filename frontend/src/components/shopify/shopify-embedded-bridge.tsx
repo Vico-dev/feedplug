@@ -1,8 +1,7 @@
 "use client";
 
-import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 declare global {
   interface Window {
@@ -12,7 +11,6 @@ declare global {
   }
 }
 
-const SHOPIFY_APP_BRIDGE_SRC = "https://cdn.shopify.com/shopifycloud/app-bridge.js";
 const SHOPIFY_API_KEY = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || "";
 
 function isEmbeddedFrame(): boolean {
@@ -24,37 +22,37 @@ function isEmbeddedFrame(): boolean {
   }
 }
 
+/**
+ * Le script App Bridge est chargé par le root layout via next/script
+ * strategy="beforeInteractive" (seule manière de garantir un <script> non-async,
+ * requis par App Bridge).
+ *
+ * Ce composant ne fait plus que probe le session token Shopify pour les routes
+ * NON-/embedded (le segment /embedded gère son auth via useEmbeddedFetch).
+ * Utile pour les pages standalone qui doivent détecter un contexte Shopify
+ * (ex: une page d'audit publique ouverte depuis Shopify Admin).
+ */
 export function ShopifyEmbeddedBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [scriptReady, setScriptReady] = useState(false);
   const searchKey = searchParams.toString();
   const currentSearchParams = useMemo(() => new URLSearchParams(searchKey), [searchKey]);
   const host = currentSearchParams.get("host") || "";
 
-  const shouldLoadBridge = useMemo(() => {
+  const shouldProbe = useMemo(() => {
     if (!SHOPIFY_API_KEY) return false;
+    // Le segment /embedded gère son propre flow (useEmbeddedFetch).
+    if (pathname?.startsWith("/embedded")) return false;
     return (
       Boolean(currentSearchParams.get("host")) ||
       currentSearchParams.get("embedded") === "1" ||
       Boolean(currentSearchParams.get("shop")) ||
       isEmbeddedFrame()
     );
-  }, [currentSearchParams]);
+  }, [currentSearchParams, pathname]);
 
   useEffect(() => {
-    if (!SHOPIFY_API_KEY) return;
-    let meta = document.querySelector('meta[name="shopify-api-key"]') as HTMLMetaElement | null;
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.setAttribute("name", "shopify-api-key");
-      document.head.appendChild(meta);
-    }
-    meta.setAttribute("content", SHOPIFY_API_KEY);
-  }, []);
-
-  useEffect(() => {
-    if (!shouldLoadBridge) return;
+    if (!shouldProbe) return;
 
     let cancelled = false;
     let retryHandle: number | null = null;
@@ -96,7 +94,7 @@ export function ShopifyEmbeddedBridge() {
       }
     };
 
-    void probeSessionToken(scriptReady ? 0 : 1);
+    void probeSessionToken();
 
     return () => {
       cancelled = true;
@@ -104,18 +102,7 @@ export function ShopifyEmbeddedBridge() {
         window.clearTimeout(retryHandle);
       }
     };
-  }, [host, pathname, scriptReady, shouldLoadBridge]);
+  }, [host, pathname, shouldProbe]);
 
-  if (!shouldLoadBridge) {
-    return null;
-  }
-
-  return (
-    <Script
-      id="shopify-app-bridge"
-      src={SHOPIFY_APP_BRIDGE_SRC}
-      strategy="afterInteractive"
-      onLoad={() => setScriptReady(true)}
-    />
-  );
+  return null;
 }

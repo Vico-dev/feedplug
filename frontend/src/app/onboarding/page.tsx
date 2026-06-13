@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api";
 import { SESSION_API_CACHE_KEYS, readSessionApiCache, writeSessionApiCache } from "@/lib/session-api-cache";
-import { ArrowRight, Building2, Phone, Mail, MapPin, Database, Package, Filter, Sparkles, FileText, BarChart3, Receipt, Hash } from "lucide-react";
+import { ArrowRight, Building2, Phone, Mail, MapPin, Database, Sparkles, FileText, Receipt, Hash, ChevronDown } from "lucide-react";
 import { COUNTRY_DIAL_CODES, buildE164 } from "@/data/country-dial-codes";
 import { buildLocalizedPath, getLocalePrefixFromPathname } from "@/lib/locale-navigation";
 import { appendShopifyEmbeddedParams } from "@/lib/shopify-navigation";
@@ -45,6 +45,7 @@ function OnboardingPageContent() {
   const [siren, setSiren] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showBillingDetails, setShowBillingDetails] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -103,56 +104,49 @@ function OnboardingPageContent() {
     e.preventDefault();
     setSubmitError("");
     const name = companyName.trim();
-    const dial = phoneCountryDial === "OTHER" ? phoneCustomDial.trim() : phoneCountryDial;
-    if (!dial && phoneCountryDial === "OTHER") {
-      setSubmitError("Indicatif pays requis pour « Autre ».");
+    if (!name) {
+      setSubmitError("Le nom de l'entreprise est requis.");
       return;
     }
-    const e164 = buildE164(dial, phoneNational);
-    if (!e164 || e164.length < 10) {
-      setSubmitError("Numéro de téléphone invalide (avec indicatif pays).");
-      return;
+    // Téléphone, TVA, SIREN et adresse sont optionnels à l'onboarding
+    // (collectés au moment du paiement). On valide seulement le format si fournis.
+    let e164 = "";
+    if (phoneNational.trim()) {
+      const dial = phoneCountryDial === "OTHER" ? phoneCustomDial.trim() : phoneCountryDial;
+      if (!dial) {
+        setSubmitError("Indicatif pays requis pour « Autre ».");
+        return;
+      }
+      e164 = buildE164(dial, phoneNational);
+      if (!e164 || e164.length < 10) {
+        setSubmitError("Numéro de téléphone invalide (avec indicatif pays).");
+        return;
+      }
     }
     const email = billingEmail.trim();
-    if (!email) {
-      setSubmitError("Email de facturation requis.");
-      return;
-    }
-    if (!name) {
-      setSubmitError("Nom de l'entreprise requis.");
-      return;
-    }
     const vat = vatNumber.trim();
-    if (!vat) {
-      setSubmitError("Le numéro de TVA intracommunautaire est requis.");
-      return;
-    }
     const sirenClean = siren.trim().replace(/\s/g, "");
-    if (!sirenClean || sirenClean.length !== 9) {
-      setSubmitError("Le SIREN est requis (9 chiffres).");
+    if (sirenClean && sirenClean.length !== 9) {
+      setSubmitError("Le SIREN doit comporter 9 chiffres.");
       return;
     }
     const addr1 = addressLine1.trim();
     const postal = postalCode.trim();
     const cityVal = city.trim();
     const countryVal = country.trim() || "FR";
-    if (!addr1 || !postal || !cityVal || !countryVal) {
-      setSubmitError("L'adresse de facturation est obligatoire (adresse, code postal, ville, pays).");
-      return;
-    }
     setSubmitting(true);
     try {
       await apiClient.put("/account/company-info", {
         companyName: name,
-        phoneE164: e164,
-        billingEmail: email,
-        addressLine1: addr1,
+        phoneE164: e164 || undefined,
+        billingEmail: email || undefined,
+        addressLine1: addr1 || undefined,
         addressLine2: addressLine2.trim() || undefined,
-        postalCode: postal,
-        city: cityVal,
+        postalCode: postal || undefined,
+        city: cityVal || undefined,
         country: countryVal,
-        vatNumber: vat,
-        siren: sirenClean,
+        vatNumber: vat || undefined,
+        siren: sirenClean || undefined,
       });
       setCompanyInfo({
         companyName: name,
@@ -198,8 +192,8 @@ function OnboardingPageContent() {
     router.push(appendShopifyEmbeddedParams(path, searchParams));
   };
 
+  const handleConnectSource = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/sources", localePrefix));
   const handleStartTour = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/dashboard?startTour=1", localePrefix));
-  const handleContinue = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/dashboard", localePrefix));
 
   if (!mounted || isLoading || !isAuthenticated) {
     return (
@@ -248,10 +242,11 @@ function OnboardingPageContent() {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--paper-2)", padding: "24px" }}>
         <div style={{ maxWidth: "480px", width: "100%" }}>
           <h1 style={{ fontSize: "24px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
-            Informations entreprise
+            Créons votre espace FeedPlug
           </h1>
-          <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px" }}>
-            Ces informations nous permettent de personnaliser votre essai et de vous contacter si besoin.
+          <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px", lineHeight: 1.6 }}>
+            Un nom d&apos;entreprise suffit pour démarrer — vous y êtes presque.
+            Les informations de facturation s&apos;ajoutent plus tard, au moment du paiement.
           </p>
 
           <form onSubmit={handleSubmitCompanyInfo} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -276,10 +271,22 @@ function OnboardingPageContent() {
               />
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowBillingDetails((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: "6px", alignSelf: "flex-start", background: "none", border: "none", padding: 0, fontSize: "14px", fontWeight: 500, color: "var(--accent)", cursor: "pointer" }}
+            >
+              <ChevronDown style={{ width: "16px", height: "16px", transition: "transform 0.15s", transform: showBillingDetails ? "rotate(180deg)" : "none" }} />
+              {showBillingDetails ? "Masquer les informations de facturation" : "Ajouter mes informations de facturation (optionnel)"}
+            </button>
+
+            {showBillingDetails && (
+              <>
             <div>
               <label style={labelStyle}>
                 <Phone style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                Téléphone (avec indicatif pays) <span style={{ color: "var(--danger)" }}>*</span>
+                Téléphone (avec indicatif pays){" "}
+                <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>(optionnel)</span>
               </label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <select
@@ -304,7 +311,6 @@ function OnboardingPageContent() {
                   type="tel"
                   value={phoneNational}
                   onChange={(e) => setPhoneNational(e.target.value)}
-                  required
                   placeholder="6 12 34 56 78"
                   style={{ ...inputStyle, flex: 1, minWidth: "140px" }}
                 />
@@ -315,13 +321,13 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Mail style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                Email de facturation <span style={{ color: "var(--danger)" }}>*</span>
+                Email de facturation{" "}
+                <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>(optionnel)</span>
               </label>
               <input
                 type="email"
                 value={billingEmail}
                 onChange={(e) => setBillingEmail(e.target.value)}
-                required
                 placeholder="facturation@entreprise.com"
                 style={inputStyle}
               />
@@ -330,7 +336,8 @@ function OnboardingPageContent() {
             <div>
               <label style={labelStyle}>
                 <Receipt style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                N° de TVA intracommunautaire <span style={{ color: "var(--danger)" }}>*</span>
+                N° de TVA intracommunautaire{" "}
+                <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>(optionnel)</span>
               </label>
               <input
                 type="text"
@@ -338,14 +345,13 @@ function OnboardingPageContent() {
                 onChange={(e) => setVatNumber(e.target.value)}
                 placeholder="FR12345678901"
                 style={inputStyle}
-                required
               />
             </div>
 
             <div>
               <label style={labelStyle}>
                 <Hash style={{ width: "16px", height: "16px", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
-                SIREN <span style={{ color: "var(--danger)" }}>*</span>
+                SIREN <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>(optionnel)</span>
               </label>
               <input
                 type="text"
@@ -353,7 +359,6 @@ function OnboardingPageContent() {
                 onChange={(e) => setSiren(e.target.value.replace(/\D/g, "").slice(0, 9))}
                 placeholder="SIREN (9 chiffres)"
                 style={inputStyle}
-                required
               />
               <p style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "4px" }}>Numéro SIREN à 9 chiffres.</p>
             </div>
@@ -361,18 +366,21 @@ function OnboardingPageContent() {
             <div style={{ borderTop: "1px solid var(--line)", paddingTop: "16px", marginTop: "8px" }}>
               <p style={{ fontSize: "13px", fontWeight: "500", color: "var(--ink-2)", marginBottom: "12px" }}>
                 <MapPin style={{ width: "14px", height: "14px", display: "inline-block", verticalAlign: "middle", marginRight: "4px" }} />
-                Adresse de facturation <span style={{ color: "var(--danger)" }}>*</span>
+                Adresse de facturation{" "}
+                <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>(optionnel)</span>
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Adresse ligne 1 *" style={inputStyle} required />
-                <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} placeholder="Ligne 2 (optionnel)" style={inputStyle} />
+                <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Adresse ligne 1" style={inputStyle} />
+                <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} placeholder="Ligne 2" style={inputStyle} />
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="Code postal *" style={{ ...inputStyle, flex: 1 }} required />
-                  <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville *" style={{ ...inputStyle, flex: 2 }} required />
+                  <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="Code postal" style={{ ...inputStyle, flex: 1 }} />
+                  <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville" style={{ ...inputStyle, flex: 2 }} />
                 </div>
-                <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Pays (ex. FR) *" style={{ ...inputStyle, maxWidth: "100px" }} required />
+                <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Pays (ex. FR)" style={{ ...inputStyle, maxWidth: "100px" }} />
               </div>
             </div>
+              </>
+            )}
 
             <button
               type="submit"
@@ -402,13 +410,22 @@ function OnboardingPageContent() {
     );
   }
 
-  const features = [
-    { icon: Database, label: "Sources", desc: "Connectez Shopify, CSV, API ou autres" },
-    { icon: Package, label: "Catalogue", desc: "Vos produits centralisés, score qualité et mapping" },
-    { icon: Filter, label: "Règles & optimisation", desc: "Titres, descriptions, A/B par canal" },
-    { icon: Sparkles, label: "IA", desc: "Enrichissement et optimisation assistés par l'IA" },
-    { icon: FileText, label: "Flux d'export", desc: "GMC, Meta, Amazon, TikTok, ChatGPT, etc." },
-    { icon: BarChart3, label: "Rapports & scoring", desc: "Score catalogue et canaux" },
+  const steps = [
+    {
+      icon: Database,
+      title: "Connectez votre catalogue",
+      desc: "Shopify, PrestaShop, CSV ou flux XML — FeedPlug importe vos produits en quelques secondes.",
+    },
+    {
+      icon: Sparkles,
+      title: "FeedPlug analyse et optimise",
+      desc: "Score qualité par produit, titres et descriptions retravaillés, enrichissement assisté par l'IA.",
+    },
+    {
+      icon: FileText,
+      title: "Diffusez sur tous vos canaux",
+      desc: "Un flux propre et adapté pour Google, Meta, Amazon, TikTok, ChatGPT et plus encore.",
+    },
   ];
 
   return (
@@ -443,55 +460,66 @@ function OnboardingPageContent() {
         <h1 style={{ fontSize: "28px", fontWeight: "600", color: "#0a0a0a", marginBottom: "8px" }}>
           Bienvenue{user?.firstName ? ` ${user.firstName}` : ""} !
         </h1>
-        <p style={{ fontSize: "16px", color: "var(--ink-3)", marginBottom: "8px", lineHeight: 1.6 }}>
-          FeedPlug centralise, optimise et distribue vos fiches produit sur tous vos canaux.
-        </p>
-        <p style={{ fontSize: "14px", color: "var(--ink-4)", marginBottom: "24px" }}>
-          Découvrez les fonctionnalités en 2 minutes ou allez directement au tableau de bord.
+        <p style={{ fontSize: "16px", color: "var(--ink-3)", marginBottom: "24px", lineHeight: 1.6 }}>
+          FeedPlug transforme votre catalogue en flux produit propres et optimisés,
+          prêts à diffuser sur tous vos canaux de vente.
         </p>
 
-        <div style={{ marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "var(--ink-2)" }}>
-          Ce que vous pouvez faire avec FeedPlug
+        <div style={{ marginBottom: "12px", fontSize: "14px", fontWeight: "600", color: "var(--ink-2)" }}>
+          Comment ça marche
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "12px",
-            marginBottom: "32px",
-          }}
-        >
-          {features.map(({ icon: Icon, label, desc }) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "28px" }}>
+          {steps.map(({ icon: Icon, title, desc }, index) => (
             <div
-              key={label}
+              key={title}
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: "12px",
-                padding: "14px",
+                gap: "14px",
+                padding: "16px",
                 border: "1px solid var(--line)",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 backgroundColor: "#ffffff",
               }}
             >
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  backgroundColor: "var(--accent-bg)",
-                  color: "var(--accent)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Icon style={{ width: "18px", height: "18px" }} />
+              <div style={{ position: "relative", width: "40px", height: "40px", flexShrink: 0 }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "var(--accent-bg)",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon style={{ width: "20px", height: "20px" }} />
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-7px",
+                    left: "-7px",
+                    width: "21px",
+                    height: "21px",
+                    borderRadius: "999px",
+                    backgroundColor: "#0a0a0a",
+                    color: "#ffffff",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {index + 1}
+                </div>
               </div>
               <div>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#0a0a0a" }}>{label}</div>
-                <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "2px" }}>{desc}</div>
+                <div style={{ fontSize: "15px", fontWeight: "600", color: "#0a0a0a" }}>{title}</div>
+                <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "3px", lineHeight: 1.55 }}>{desc}</div>
               </div>
             </div>
           ))}
@@ -500,7 +528,7 @@ function OnboardingPageContent() {
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <button
             type="button"
-            onClick={handleStartTour}
+            onClick={handleConnectSource}
             style={{
               width: "100%",
               padding: "14px 24px",
@@ -517,12 +545,12 @@ function OnboardingPageContent() {
               gap: "8px",
             }}
           >
-            Découvrir l&apos;outil (visite guidée 2 min)
+            Connecter ma première source
             <ArrowRight style={{ width: "18px", height: "18px" }} />
           </button>
           <button
             type="button"
-            onClick={handleContinue}
+            onClick={handleStartTour}
             style={{
               width: "100%",
               padding: "12px 24px",
@@ -535,7 +563,7 @@ function OnboardingPageContent() {
               cursor: "pointer",
             }}
           >
-            Aller au tableau de bord
+            Faire la visite guidée (2 min)
           </button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
-import { ArrowRight, BarChart3, CheckCircle2, Copy, Download, ExternalLink, Link2, Share2 } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Copy, Download, ExternalLink, Link2, Loader2, Share2 } from "lucide-react";
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import {
   connectMarketingAuditFile,
@@ -84,11 +84,19 @@ export default function MarketingAuditReportPage() {
 
   const handleShopifyConnect = async () => {
     if (!audit?.shareToken) return;
-    const shopRaw = window.prompt("Nom de boutique Shopify (ex: ma-boutique ou ma-boutique.myshopify.com)");
-    if (!shopRaw) return;
+    // Le shopUrl a été collecté au step 2 du formulaire d'audit. On le réutilise
+    // pour éviter un window.prompt redondant. Fallback prompt si l'utilisateur
+    // a sauté ce champ (legacy audits avant la collecte systématique).
+    let shopRaw = (audit.shopUrl || "").trim();
+    if (!shopRaw) {
+      const fromPrompt = window.prompt("Nom de boutique Shopify (ex: ma-boutique ou ma-boutique.myshopify.com)");
+      if (!fromPrompt) return;
+      shopRaw = fromPrompt.trim();
+      if (!shopRaw) return;
+    }
     try {
       setConnecting("file");
-      const url = await getMarketingAuditShopifyAuthUrl(audit.shareToken, shopRaw.trim());
+      const url = await getMarketingAuditShopifyAuthUrl(audit.shareToken, shopRaw);
       window.location.href = url;
     } catch (connectError) {
       setError(connectError instanceof Error ? connectError.message : "Connexion Shopify indisponible");
@@ -151,12 +159,85 @@ export default function MarketingAuditReportPage() {
           main { background: white !important; }
           .audit-shell, .audit-card { box-shadow: none !important; border-color: var(--line-strong) !important; }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes audit-shimmer {
+          0% { background-position: -480px 0; }
+          100% { background-position: 480px 0; }
+        }
+        @keyframes audit-pulse-dot {
+          0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+          40% { opacity: 1; transform: scale(1); }
+        }
+        .audit-skel {
+          background: linear-gradient(90deg, #EFF2F7 0%, #F6F8FB 50%, #EFF2F7 100%);
+          background-size: 960px 100%;
+          animation: audit-shimmer 1.6s linear infinite;
+          border-radius: 10px;
+        }
+        .audit-dot {
+          display: inline-block; width: 7px; height: 7px; margin-right: 4px;
+          background: #2A6FE8; border-radius: 50%;
+          animation: audit-pulse-dot 1.3s ease-in-out infinite both;
+        }
+        .audit-dot:nth-child(2) { animation-delay: 0.18s; }
+        .audit-dot:nth-child(3) { animation-delay: 0.36s; }
       ` }} />
       <MarketingHeader />
       <main style={{ background: "linear-gradient(180deg, var(--paper-2) 0%, #ffffff 100%)", minHeight: "100vh", padding: "124px 24px 48px" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           {loading ? (
-            <div className="audit-shell" style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 28, padding: 32 }}>Chargement de l audit...</div>
+            <>
+              <section className="audit-shell" style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 28, padding: 28, boxShadow: "0 20px 48px rgba(15,23,42,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 360px", minWidth: 280 }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 12px", borderRadius: 999, background: "#E8EFFB", color: "#2A6FE8", fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 }}>
+                      <span className="audit-dot"></span>
+                      <span className="audit-dot"></span>
+                      <span className="audit-dot"></span>
+                      Préparation
+                    </div>
+                    <div className="audit-skel" style={{ height: 48, width: "78%", marginBottom: 12 }} />
+                    <div className="audit-skel" style={{ height: 18, width: "62%", marginBottom: 8 }} />
+                    <div className="audit-skel" style={{ height: 18, width: "44%" }} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+                    <div className="audit-skel" style={{ height: 44, width: 140, borderRadius: 14 }} />
+                    <div className="audit-skel" style={{ height: 44, width: 168, borderRadius: 14 }} />
+                  </div>
+                </div>
+              </section>
+
+              <section style={{ marginTop: 22, padding: "20px 24px", borderRadius: 22, border: "1px solid var(--line)", background: "#F8FAFD", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, background: "#E8EFFB", color: "#2A6FE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Loader2 size={20} style={{ animation: "spin 1.1s linear infinite" }} />
+                </div>
+                <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>
+                    Nous préparons votre rapport
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
+                    Analyse du flux • génération des aperçus produits • optimisation des images. Cela prend généralement <strong style={{ color: "var(--ink)" }}>15 à 30 secondes</strong>.
+                  </div>
+                </div>
+              </section>
+
+              <div style={{ marginTop: 22, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} style={{ padding: 22, borderRadius: 22, border: "1px solid var(--line)", background: "#fff" }}>
+                    <div className="audit-skel" style={{ height: 12, width: "55%", marginBottom: 14 }} />
+                    <div className="audit-skel" style={{ height: 32, width: "70%", marginBottom: 10 }} />
+                    <div className="audit-skel" style={{ height: 12, width: "85%" }} />
+                  </div>
+                ))}
+              </div>
+
+              <section style={{ marginTop: 22, padding: 28, borderRadius: 28, border: "1px solid var(--line)", background: "#fff" }}>
+                <div className="audit-skel" style={{ height: 22, width: 240, marginBottom: 20 }} />
+                <div className="audit-skel" style={{ height: 16, width: "100%", marginBottom: 10 }} />
+                <div className="audit-skel" style={{ height: 16, width: "92%", marginBottom: 10 }} />
+                <div className="audit-skel" style={{ height: 16, width: "78%" }} />
+              </section>
+            </>
           ) : error || !audit ? (
             <div className="audit-shell" style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 28, padding: 32, color: "var(--danger)" }}>{error || "Audit introuvable"}</div>
           ) : (
@@ -252,7 +333,7 @@ export default function MarketingAuditReportPage() {
                       <div className="audit-card" style={{ border: "1px solid var(--line)", borderRadius: 22, padding: 24, background: "var(--ink)", color: "#fff" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                           <BarChart3 size={18} />
-                          <h2 style={{ margin: 0, fontSize: 20 }}>Ce qui reste payant</h2>
+                          <h2 style={{ margin: 0, fontSize: 20, color: "#fff" }}>Ce qui reste payant</h2>
                         </div>
                         <p style={{ margin: "0 0 10px", fontSize: 14, lineHeight: 1.7, color: "rgba(255,255,255,0.76)" }}>
                           Le scoring performance n’est pas dans l’audit gratuit.
@@ -353,6 +434,55 @@ export default function MarketingAuditReportPage() {
                       ))}
                     </div>
 
+                    {(() => {
+                      const score = audit.report?.score ?? 0;
+                      const potentialScore = audit.report?.potentialScore ?? 0;
+                      const scoreDelta = Math.max(0, potentialScore - score);
+                      if (scoreDelta <= 0) return null;
+                      // Projections cohérentes basées sur le delta de score :
+                      // - impressions : utilise le gain de visibilité déjà calculé backend
+                      // - CTR : corrections titre/description/image améliorent direct le clic
+                      // - Quality Score : feed propre = +1 à +3 points (fourchette Google Ads)
+                      // - ROAS : combiné impressions × CTR (effet multiplicatif)
+                      const impressionsLift = Math.max(audit.report?.estimatedVisibilityLiftPct ?? 0, Math.round(scoreDelta * 1.1));
+                      const ctrLift = Math.max(8, Math.round(scoreDelta * 0.55));
+                      const qsLift = Math.max(1, Math.min(3, Math.round(scoreDelta / 18)));
+                      const roasLift = Math.round((impressionsLift * 0.5) + (ctrLift * 0.55));
+                      const kpis = [
+                        { label: "Impressions", value: `+${impressionsLift}%`, accent: "#2A6FE8", bg: "#E8EFFB", hint: "Plus de produits diffusables = plus de requêtes captées sur Google Shopping et les marketplaces." },
+                        { label: "Taux de clic (CTR)", value: `+${ctrLift}%`, accent: "#15803D", bg: "#ECFDF3", hint: "Titres clairs, images Shopping-ready et attributs alignés sur l'intention d'achat améliorent mécaniquement le clic." },
+                        { label: "Quality Score", value: `+${qsLift} pts`, accent: "#7C3AED", bg: "#F3E8FF", hint: "Google Ads pénalise les fiches incomplètes. Un QS plus haut = enchères mieux placées et coût-par-clic plus bas." },
+                        { label: "ROAS estimé", value: `+${roasLift}%`, accent: "#EA580C", bg: "#FFF1E8", hint: "Plus d'impressions × CTR amélioré × CPC plus bas → retour sur dépense publicitaire en hausse." },
+                      ];
+                      return (
+                        <div style={{ marginTop: 22, padding: 26, borderRadius: 24, border: "1px solid var(--line)", background: "linear-gradient(180deg, #FAFBFE 0%, #ffffff 100%)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
+                            <h2 style={{ margin: 0, fontSize: 22, color: "var(--ink)" }}>Impact projeté sur vos performances payantes</h2>
+                            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent)" }}>
+                              Score {score} → {potentialScore}
+                            </span>
+                          </div>
+                          <p style={{ margin: "0 0 18px", fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                            Corriger les blocages identifiés, c'est mécaniquement plus d'impressions, un CTR plus haut et un Quality Score qui monte — donc des clics moins chers et un ROAS amélioré. Voici la projection sur votre flux.
+                          </p>
+                          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                            {kpis.map((k) => (
+                              <div key={k.label} style={{ border: "1px solid var(--line)", borderRadius: 18, padding: 18, background: "#fff" }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>{k.label}</div>
+                                <div style={{ display: "inline-flex", alignItems: "center", padding: "6px 12px", borderRadius: 999, background: k.bg, color: k.accent, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 12 }}>
+                                  {k.value}
+                                </div>
+                                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{k.hint}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <p style={{ margin: "16px 0 0", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55 }}>
+                            Projection basée sur le delta entre votre score actuel et votre potentiel. Les résultats réels dépendent de votre catégorie produit, vos prix et la concurrence sur vos requêtes cibles.
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     {audit.report?.scoreBand ? (
                       <div style={{ marginTop: 18, padding: 22, borderRadius: 22, border: "1px solid var(--accent-bg)", background: "#f8fbff" }}>
                         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 8 }}>
@@ -408,7 +538,7 @@ export default function MarketingAuditReportPage() {
                       <div className="audit-card" style={{ border: "1px solid var(--line)", borderRadius: 22, padding: 24, background: "var(--ink)", color: "#fff" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                           <BarChart3 size={18} />
-                          <h2 style={{ margin: 0, fontSize: 20 }}>Synthese commerciale</h2>
+                          <h2 style={{ margin: 0, fontSize: 20, color: "#fff" }}>Synthese commerciale</h2>
                         </div>
                         {(audit.report?.opportunities || []).map((opportunity) => (
                           <div key={opportunity.label} style={{ padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
@@ -441,6 +571,71 @@ export default function MarketingAuditReportPage() {
                         })}
                       </div>
                     </div>
+
+                    {(() => {
+                      const samples = audit.report?.sampleProducts || [];
+                      const hero = samples.find((s) => s?.before?.imageUrl && s?.after?.imageUrl) || samples.find((s) => s?.after);
+                      if (!hero) return null;
+                      const issueLabels: Record<string, string> = {
+                        title: "Titre",
+                        description: "Description",
+                        image: "Image",
+                        brand: "Marque",
+                        category: "Catégorie",
+                        identifier: "Identifiant (GTIN/MPN)",
+                      };
+                      const showImages = !!(hero.before?.imageUrl && hero.after?.imageUrl);
+                      return (
+                        <div style={{ marginTop: 28 }}>
+                          <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--ink)" }}>Aperçu produit optimisé</h2>
+                          <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--ink-3)", lineHeight: 1.6 }}>
+                            Une fiche de votre catalogue, retravaillée par FeedPlug — visuel reposé, titre clair, attributs structurés pour la diffusion Shopping.
+                          </p>
+                          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+                            <div style={{ borderRadius: 22, padding: 22, background: "#FEF1F1", border: "1px solid #FECACA" }}>
+                              {showImages ? (
+                                <div style={{ width: "100%", height: 200, borderRadius: 14, background: "#fff", overflow: "hidden", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={hero.before!.imageUrl!} alt="Image actuelle du produit" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                                </div>
+                              ) : null}
+                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#B42318", marginBottom: 8 }}>Avant</div>
+                              <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--ink)", lineHeight: 1.35 }}>{hero.before?.title || "(titre vide)"}</h3>
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)" }}>{hero.before?.description || "(description vide)"}</p>
+                              {hero.before?.issues?.length ? (
+                                <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                  {hero.before.issues.map((key) => (
+                                    <span key={key} style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: "#fff", border: "1px solid #FECACA", color: "#B42318" }}>
+                                      ✕ {issueLabels[key] || key}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div style={{ borderRadius: 22, padding: 22, background: "#ECFDF3", border: "1px solid #BBF7D0" }}>
+                              {showImages ? (
+                                <div style={{ width: "100%", height: 200, borderRadius: 14, background: "#fff", overflow: "hidden", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={hero.after!.imageUrl!} alt="Aperçu optimisé par FeedPlug" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                                </div>
+                              ) : null}
+                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#15803D", marginBottom: 8 }}>Après — corrigé par FeedPlug</div>
+                              <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--ink)", lineHeight: 1.35 }}>{hero.after?.title}</h3>
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)" }}>{hero.after?.description}</p>
+                              {hero.after?.attributes?.length ? (
+                                <div style={{ marginTop: 12, display: "grid", gap: 4 }}>
+                                  {hero.after.attributes.map((a) => (
+                                    <div key={a.label} style={{ fontSize: 12.5, color: "var(--ink)", lineHeight: 1.5 }}>
+                                      <strong style={{ color: "#15803D" }}>{a.label} :</strong> {a.value}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
 

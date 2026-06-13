@@ -1,7 +1,15 @@
 FROM node:20-slim
 
-# node:20-slim inclut déjà OpenSSL, mais on installe les dépendances nécessaires pour Prisma
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# OpenSSL pour Prisma + Chromium (rendu PDF de l'audit via puppeteer-core).
+# Chromium est installé AVEC ses recommends pour garantir toutes ses libs runtime.
+RUN apt-get update && apt-get install -y \
+    openssl \
+    chromium \
+    fonts-liberation \
+    fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV CHROMIUM_PATH=/usr/bin/chromium
 
 WORKDIR /app
 

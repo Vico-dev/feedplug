@@ -98,6 +98,20 @@ export interface MarketingAuditReport {
     scoring: string;
     estimation: string;
   };
+  sampleProducts?: Array<{
+    before: {
+      title: string;
+      description: string;
+      imageUrl: string | null;
+      issues: string[];
+    };
+    after: {
+      title: string;
+      description: string;
+      attributes: Array<{ label: string; value: string }>;
+      imageUrl?: string;
+    } | null;
+  }>;
 }
 
 export interface MarketingAudit {

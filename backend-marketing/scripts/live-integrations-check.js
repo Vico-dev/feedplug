@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { decryptSecret, decryptObjectSecrets } = require('../lib/secret-crypto');
+const { buildShopifyAdminGraphqlUrl } = require('../domains/shopify/config');
 
 const prisma = new PrismaClient();
 
@@ -45,18 +46,20 @@ async function testShopify() {
     }
 
     try {
-      const res = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
+      const res = await fetch(buildShopifyAdminGraphqlUrl(shop), {
+        method: 'POST',
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ query: '{ shop { name primaryDomain { url } } }' }),
       });
       out.httpStatus = res.status;
       if (res.ok) {
         const data = await res.json();
         out.ok = true;
-        out.shopName = data?.shop?.name || null;
-        out.domain = data?.shop?.domain || null;
+        out.shopName = data?.data?.shop?.name || null;
+        out.domain = data?.data?.shop?.primaryDomain?.url || null;
       } else {
         out.error = trim(await res.text());
       }

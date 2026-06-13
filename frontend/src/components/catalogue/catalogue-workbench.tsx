@@ -531,6 +531,7 @@ export function CatalogueWorkbench() {
 
   const [feedsList, setFeedsList] = useState<FeedOption[]>([]);
   const [destinationOptions, setDestinationOptions] = useState<CatalogueDestinationOption[]>([]);
+  const [catalogueMarkets, setCatalogueMarkets] = useState<Market[]>([]);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [locationSearch, setLocationSearch] = useState(() => (typeof window !== "undefined" ? window.location.search : ""));
   const [loading, setLoading] = useState(true);
@@ -590,6 +591,8 @@ export function CatalogueWorkbench() {
   const [bulkOptimizeTitles, setBulkOptimizeTitles] = useState(true);
   const [bulkOptimizeDescriptions, setBulkOptimizeDescriptions] = useState(true);
   const [bulkOptimizeHighlights, setBulkOptimizeHighlights] = useState(false);
+  const [bulkMarketCode, setBulkMarketCode] = useState<string>("");
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [bulkEditField, setBulkEditField] = useState<BulkEditField>("google_product_category");
   const [bulkApplyMode, setBulkApplyMode] = useState<BulkApplyMode>("only_empty");
@@ -944,12 +947,14 @@ export function CatalogueWorkbench() {
       const markets = await getMarkets();
       const nextOptions = buildCatalogueDestinationOptions(markets, locale);
       setDestinationOptions(nextOptions);
+      setCatalogueMarkets(markets);
       setSelectedDestinationId((current) => {
         if (current === "all") return current;
         return nextOptions.some((option) => option.id === current) ? current : "all";
       });
     } catch {
       setDestinationOptions([]);
+      setCatalogueMarkets([]);
       setSelectedDestinationId("all");
     }
   };
@@ -1264,6 +1269,34 @@ export function CatalogueWorkbench() {
       setBulkAiPlatform(selectedDestinationOption.platformKey);
     }
   }, [selectedDestinationOption]);
+
+  // Marchés sélectionnables dans l'optimisation en masse : uniquement ceux qui
+  // ont une destination activée pour la plateforme cible (la langue est alors
+  // adaptée via le contexte de cette destination).
+  const bulkMarketOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { marketCode: string; label: string; destinationId: string }[] = [];
+    for (const option of destinationOptions) {
+      if (option.platformKey !== bulkAiPlatform) continue;
+      if (seen.has(option.marketCode)) continue;
+      seen.add(option.marketCode);
+      const market = catalogueMarkets.find((entry) => entry.code === option.marketCode);
+      const localeSuffix = option.localeCode ? ` · ${formatLocaleLabel(locale, option.localeCode)}` : "";
+      options.push({
+        marketCode: option.marketCode,
+        label: `${market?.name || option.marketCode}${localeSuffix}`,
+        destinationId: option.id,
+      });
+    }
+    return options;
+  }, [destinationOptions, bulkAiPlatform, catalogueMarkets, locale]);
+
+  // Si le marché choisi n'a pas de destination pour la nouvelle plateforme, on réinitialise.
+  useEffect(() => {
+    if (bulkMarketCode && !bulkMarketOptions.some((option) => option.marketCode === bulkMarketCode)) {
+      setBulkMarketCode("");
+    }
+  }, [bulkMarketCode, bulkMarketOptions]);
 
   const searchSuggestions = useMemo(
     () => getSearchSuggestions(items, searchQuery, searchFocused),
@@ -2238,40 +2271,70 @@ export function CatalogueWorkbench() {
       showToast("Selectionnez au moins un contenu a optimiser.", "error");
       return;
     }
+
+    // Destination effective : une destination imposée par la page prime ;
+    // sinon le marché choisi dans le modal ; sinon la destination de page.
+    const bulkMarketOption = bulkMarketCode
+      ? bulkMarketOptions.find((option) => option.marketCode === bulkMarketCode)
+      : null;
+    let effectiveDestinationId: string | undefined;
+    if (selectedDestinationOption) {
+      effectiveDestinationId = selectedDestinationId;
+    } else if (bulkMarketOption) {
+      effectiveDestinationId = bulkMarketOption.destinationId;
+    } else if (selectedDestinationId !== "all") {
+      effectiveDestinationId = selectedDestinationId;
+    }
+
+    const itemIds = selectedItemIds;
+    const optimizeContent = bulkOptimizeTitles || bulkOptimizeDescriptions;
+    const totalSteps =
+      (optimizeContent ? itemIds.length : 0) + (bulkOptimizeHighlights ? itemIds.length : 0);
+
     try {
       setBulkActionLoading("ai");
+      setBulkProgress({ done: 0, total: totalSteps });
       let savedTitles = 0;
       let savedDescriptions = 0;
       let savedHighlights = 0;
 
-      if (bulkOptimizeTitles || bulkOptimizeDescriptions) {
-        const response = await apiClient.post<{
-          saved?: { titles?: number; descriptions?: number };
-        }>("/enrichment/batch", {
-          itemIds: selectedItemIds,
-          optimizations: {
-            titles: bulkOptimizeTitles,
-            descriptions: bulkOptimizeDescriptions,
-          },
-          platform: bulkAiPlatform,
-          saveToCatalog: true,
-          saveDestinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
-        });
-        savedTitles = response.data.saved?.titles ?? 0;
-        savedDescriptions = response.data.saved?.descriptions ?? 0;
+      // Titres / descriptions : traités par lots pour une progression réelle.
+      if (optimizeContent) {
+        const CHUNK_SIZE = 10;
+        for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
+          const chunk = itemIds.slice(i, i + CHUNK_SIZE);
+          const response = await apiClient.post<{
+            saved?: { titles?: number; descriptions?: number };
+          }>("/enrichment/batch", {
+            itemIds: chunk,
+            optimizations: {
+              titles: bulkOptimizeTitles,
+              descriptions: bulkOptimizeDescriptions,
+            },
+            platform: bulkAiPlatform,
+            saveToCatalog: true,
+            saveDestinationId: effectiveDestinationId,
+          });
+          savedTitles += response.data.saved?.titles ?? 0;
+          savedDescriptions += response.data.saved?.descriptions ?? 0;
+          setBulkProgress((current) =>
+            current ? { ...current, done: current.done + chunk.length } : current
+          );
+        }
       }
 
       if (bulkOptimizeHighlights) {
-        for (const itemId of selectedItemIds) {
+        for (const itemId of itemIds) {
           const response = await apiClient.post<{ highlights?: string[] }>("/enrichment/generate-highlights", {
             itemId,
             platform: bulkAiPlatform,
             savePlatform: bulkAiPlatform,
-            saveDestinationId: selectedDestinationId !== "all" ? selectedDestinationId : undefined,
+            saveDestinationId: effectiveDestinationId,
           });
           if (Array.isArray(response.data.highlights) && response.data.highlights.length > 0) {
             savedHighlights += 1;
           }
+          setBulkProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
         }
       }
 
@@ -2289,6 +2352,7 @@ export function CatalogueWorkbench() {
       showToast(getErrorMessage(err, "Impossible de lancer l'optimisation IA"), "error");
     } finally {
       setBulkActionLoading(null);
+      setBulkProgress(null);
     }
   };
 
@@ -3481,7 +3545,7 @@ export function CatalogueWorkbench() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">Plateforme cible</label>
-              <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} disabled={Boolean(selectedDestinationOption)}>
+              <Select value={bulkAiPlatform} onChange={(event) => setBulkAiPlatform(event.target.value as BulkPlatform)} disabled={Boolean(selectedDestinationOption) || bulkActionLoading === "ai"}>
                 <option value="gmc">Google Merchant Center</option>
                 <option value="meta">Meta</option>
                 <option value="amazon">Amazon</option>
@@ -3494,20 +3558,53 @@ export function CatalogueWorkbench() {
               )}
             </div>
 
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">Marché de destination</label>
+              <Select
+                value={selectedDestinationOption ? selectedDestinationOption.marketCode : bulkMarketCode}
+                onChange={(event) => setBulkMarketCode(event.target.value)}
+                disabled={Boolean(selectedDestinationOption) || bulkActionLoading === "ai" || bulkMarketOptions.length === 0}
+              >
+                <option value="">Marché source (langue d&apos;origine)</option>
+                {bulkMarketOptions.map((option) => (
+                  <option key={option.marketCode} value={option.marketCode}>{option.label}</option>
+                ))}
+              </Select>
+              {selectedDestinationOption ? (
+                <p className="mt-2 text-xs text-muted-foreground">Marché imposé par la destination choisie.</p>
+              ) : bulkMarketOptions.length === 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">Aucun marché activé pour cette plateforme — optimisation dans la langue source.</p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Le contenu IA est généré dans la langue du marché choisi.</p>
+              )}
+            </div>
+
             <div className="space-y-3">
               <label className="flex items-center gap-3 text-sm text-foreground">
-                <input type="checkbox" className="rounded" checked={bulkOptimizeTitles} onChange={(event) => setBulkOptimizeTitles(event.target.checked)} />
+                <input type="checkbox" className="rounded" checked={bulkOptimizeTitles} disabled={bulkActionLoading === "ai"} onChange={(event) => setBulkOptimizeTitles(event.target.checked)} />
                 Optimiser les titres
               </label>
               <label className="flex items-center gap-3 text-sm text-foreground">
-                <input type="checkbox" className="rounded" checked={bulkOptimizeDescriptions} onChange={(event) => setBulkOptimizeDescriptions(event.target.checked)} />
+                <input type="checkbox" className="rounded" checked={bulkOptimizeDescriptions} disabled={bulkActionLoading === "ai"} onChange={(event) => setBulkOptimizeDescriptions(event.target.checked)} />
                 Optimiser les descriptions
               </label>
               <label className="flex items-center gap-3 text-sm text-foreground">
-                <input type="checkbox" className="rounded" checked={bulkOptimizeHighlights} onChange={(event) => setBulkOptimizeHighlights(event.target.checked)} />
+                <input type="checkbox" className="rounded" checked={bulkOptimizeHighlights} disabled={bulkActionLoading === "ai"} onChange={(event) => setBulkOptimizeHighlights(event.target.checked)} />
                 Generer les product highlights
               </label>
             </div>
+
+            {bulkActionLoading === "ai" && bulkProgress && (
+              <div className="space-y-1.5 rounded-xl border border-border bg-muted/20 p-4">
+                <Progress
+                  value={Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100)}
+                  size="sm"
+                />
+                <div className="text-xs text-muted-foreground">
+                  Optimisation en cours… {bulkProgress.done} / {bulkProgress.total} produit{bulkProgress.total > 1 ? "s" : ""} traité{bulkProgress.done > 1 ? "s" : ""}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowBulkAiModal(false)} disabled={bulkActionLoading === "ai"}>

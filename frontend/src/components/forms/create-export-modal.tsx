@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, Facebook, ShoppingCart, Zap, Globe, TrendingUp, Check, Sparkles, Camera, type LucideIcon } from "lucide-react";
+import { X, Search, Facebook, ShoppingCart, Zap, Globe, TrendingUp, Check, Sparkles, Camera, MapPin, type LucideIcon } from "lucide-react";
 
 /** Canaux pour lesquels l'export fichier est déjà disponible (page Flux). */
-const EXPORT_READY_IDS = ['gmc', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
+const EXPORT_READY_IDS = ['gmc', 'lia', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
 
 interface Platform {
   id: string;
@@ -38,6 +38,16 @@ const EXPORT_CATEGORIES: Category[] = [
         color: '#4285f4',
         bgColor: '#e8f0fe',
         features: ['Google Shopping', 'Google Search', 'YouTube Shopping']
+      },
+      {
+        id: 'lia',
+        name: 'Google Local Inventory Ads',
+        description: 'Affichez vos stocks en magasin sur Google et Maps',
+        icon: MapPin,
+        available: true,
+        color: '#34a853',
+        bgColor: '#e6f4ea',
+        features: ['Annonces produits en magasin', 'Inventaire par magasin', 'Drive-to-store']
       },
       {
         id: 'bing',

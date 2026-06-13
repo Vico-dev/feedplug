@@ -127,6 +127,60 @@ export default function DashboardPage() {
       (d.scoreEvolution[0]?.avgScore ?? 0)
     : 0;
 
+  // État vide : compte neuf sans aucune source → on guide vers la première
+  // action utile au lieu d'un dashboard à zéro (score 0/100 anxiogène).
+  if (d.sources.total === 0 && d.totalProducts === 0) {
+    return (
+      <PageLayout>
+        <PageHeader title={t("nav.dashboard")} subtitle={t("dashboardPage.subtitle")} />
+        <PageCard>
+          <div style={{ textAlign: "center", padding: "48px 24px", maxWidth: 460, margin: "0 auto" }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "var(--r-md)",
+                backgroundColor: "var(--accent-bg)",
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+              }}
+            >
+              <Database style={{ width: 28, height: 28 }} />
+            </div>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, color: "var(--ink)", margin: "0 0 8px" }}>
+              Connectez votre première source
+            </h2>
+            <p style={{ fontSize: 14, color: "var(--ink-3)", margin: "0 0 24px", lineHeight: 1.6 }}>
+              Importez votre catalogue depuis Shopify, un fichier CSV ou une URL. Vous verrez
+              aussitôt le score qualité de vos produits et pourrez les optimiser.
+            </p>
+            <a
+              href={`${localePrefix}/sources`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "14px 24px",
+                backgroundColor: "var(--accent)",
+                color: "#fff",
+                borderRadius: "var(--r-md)",
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 500,
+              }}
+            >
+              Connecter une source
+              <ArrowRight style={{ width: 18, height: 18 }} />
+            </a>
+          </div>
+        </PageCard>
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout>
       <PageHeader

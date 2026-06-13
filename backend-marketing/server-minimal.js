@@ -80,12 +80,40 @@ const {
   sendPasswordResetEmail,
   sendInvitationEmail,
   sendMarketingNurtureEmail,
+  sendMarketingAuditNurtureEmail,
   sendMarketingAuditEmail,
   notifyInternalMarketingFormSubmission,
+  notifyInternalAlert,
   syncMarketingContact,
   verifyMarketingClickToken,
   verifyMarketingUnsubscribeToken,
+  getEmailLocale,
 } = require('./email/email-service');
+const {
+  isComplianceTopic: isShopifyComplianceTopic,
+  processComplianceWebhook: processShopifyComplianceWebhook,
+} = require('./domains/shopify/compliance');
+const {
+  SHOPIFY_ADMIN_API_VERSION,
+  SHOPIFY_SCOPES: DEFAULT_SHOPIFY_SCOPES,
+  buildShopifyAdminGraphqlUrl,
+} = require('./domains/shopify/config');
+const shopifyBilling = require('./domains/shopify/billing');
+const shopifyProvisioning = require('./domains/shopify/provisioning');
+const {
+  exchangeSessionTokenForAccessToken: exchangeShopifySessionToken,
+} = require('./domains/shopify/token-exchange');
+const shopifyManagedPricing = require('./domains/shopify/managed-pricing');
+const {
+  handleAppUninstalled: shopifyHandleAppUninstalled,
+  matchPendingSubscriptionToWebhook: shopifyMatchPendingSubToWebhook,
+} = require('./domains/shopify/lifecycle');
+const {
+  getPriceEur: getPlanPriceEur,
+  getPlanLabel: getPlanLabel,
+  tierIdFromProductTier,
+} = require('./lib/pricing');
+const { callAIWithCache } = require('./ai/ai-wrapper');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const { Storage } = require('@google-cloud/storage');
@@ -242,7 +270,12 @@ let prismaInitPromise = null;
 let rulesRoutesRegistered = false;
 // Ingestion handlers
 const { ingestCsvFromUrl } = require('./ingestion/csv');
-const { ingestShopifyFromApi, fetchAllShopifyProducts } = require('./ingestion/shopify');
+const {
+  ingestShopifyFromApi,
+  fetchAllShopifyProducts,
+  ingestShopifyProductFromWebhook,
+  shouldUseFullSyncForWebhookPayload,
+} = require('./ingestion/shopify');
 const { ingestPrestashopFromApi, fetchPrestashopProducts } = require('./ingestion/prestashop');
 // Scoring handlers - Nouveau système avancé multi-dimensionnel
 const { 
@@ -282,6 +315,25 @@ const { syncMetaAdsPerformance } = require('./performance/sync-meta-ads');
 const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const { createSharedAbuseProtection } = require('./lib/shared-abuse-store');
 const { assertColumnsExist, assertTableExists } = require('./lib/schema-guards');
+const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quota');
+const { createNotification } = require('./lib/notifications');
+
+// Soft cap IA : enregistre la consommation et alerte (Sentry) à 80 % / 100 %.
+// Fire-and-forget — ne bloque jamais la réponse IA, ne lève jamais.
+function trackAiUsage(accountId, count = 1) {
+  if (!prismaReady || !prisma || !accountId) return;
+  recordAiUsage(prisma, accountId, count)
+    .then((r) => {
+      if (r && r.threshold) {
+        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence (${r.used}/${r.softCap}, période ${r.period}).`;
+        console.warn('⚠️  ' + msg);
+        try {
+          require('@sentry/node').captureMessage(msg, r.threshold >= 100 ? 'warning' : 'info');
+        } catch (_) {}
+      }
+    })
+    .catch((e) => console.warn('trackAiUsage error:', e?.message));
+}
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SECRET_ENCRYPTION_KEY = process.env.FEEDPLUG_SECRET_ENCRYPTION_KEY || process.env.SECRET_ENCRYPTION_KEY || process.env.PLATFORM_SECRET_ENCRYPTION_KEY || '';
@@ -543,8 +595,15 @@ function isHealthRequest(req) {
   return req.path === '/health' || req.path === '/healthz';
 }
 
-const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+// Access token court (30 min) pour limiter l'impact d'un token volé. Le frontend
+// rafraîchit via /auth/refresh + cookie HttpOnly. Override possible via JWT_EXPIRES_IN
+// si un besoin spécifique justifie une autre valeur.
+const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30m';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
+
+// Whitelist d'algorithmes JWT (anti alg-confusion / "none"). HS256 = HMAC-SHA256
+// avec un secret partagé, cohérent avec jwt.sign(secret).
+const JWT_VERIFY_OPTIONS = Object.freeze({ algorithms: ['HS256'] });
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your-google-client-id';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback';
@@ -564,9 +623,21 @@ const APP_URL = process.env.APP_URL || 'https://app.feedplug.com';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || '';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_products,read_inventory,read_locations';
+// Scopes alignés sur shopify.app.toml (source de vérité pour Shopify Partners).
+// Toute divergence déclenche un re-consent lors de l'install ou un warning App Store.
+const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || DEFAULT_SHOPIFY_SCOPES;
 const SHOPIFY_CALLBACK_URL = process.env.SHOPIFY_CALLBACK_URL || 'https://api.feedplug.com/api/v1/connectors/shopify/callback';
 const SHOPIFY_WEBHOOK_PATH = '/api/v1/webhooks/shopify';
+const SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS = Math.max(
+  0,
+  Number(process.env.SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS || 5 * 60 * 1000)
+);
+const SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS = Math.max(
+  0,
+  Number(process.env.SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS || 30 * 1000)
+);
+const SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS = new Set(['products/create', 'products/update']);
+const SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS = new Set(['products/delete']);
 
 const {
   smartAuthLimiter,
@@ -635,6 +706,8 @@ const OAUTH_EPHEMERAL_PROVIDER_SHOPIFY = 'shopify';
 const OAUTH_EPHEMERAL_FLOW_AMAZON_STATE = 'amazon_oauth_state';
 const OAUTH_EPHEMERAL_FLOW_AMAZON_CONNECT = 'amazon_connect_code';
 const OAUTH_EPHEMERAL_FLOW_GMC_SELECTION = 'gmc_selection';
+const OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE = 'gmc_oauth_state';
+const OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE = 'google_ads_oauth_state';
 const OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE = 'shopify_oauth_state';
 const AMAZON_STATE_TTL_MS = 15 * 60 * 1000;
 const AMAZON_CONNECT_CODE_TTL_MS = 5 * 60 * 1000;
@@ -745,14 +818,26 @@ function normalizeShopifyShop(shop) {
 }
 
 function verifyShopifyInstallHmac(query, secret) {
-  const { hmac, ...rest } = query;
-  if (!hmac || !secret) return false;
-  const message = Object.keys(rest)
+  if (!query || !secret) return false;
+  const rawHmac = Array.isArray(query.hmac) ? query.hmac[0] : query.hmac;
+  if (typeof rawHmac !== 'string' || !rawHmac) return false;
+  const message = Object.keys(query)
+    .filter((key) => key !== 'hmac' && key !== 'signature')
     .sort()
-    .map((k) => `${k}=${rest[k]}`)
+    .flatMap((key) => {
+      const value = query[key];
+      if (Array.isArray(value)) {
+        return value.map((entry) => `${key}=${String(entry ?? '')}`);
+      }
+      if (value == null) {
+        return [];
+      }
+      return [`${key}=${String(value)}`];
+    })
     .join('&');
   const computed = crypto.createHmac('sha256', secret).update(message).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(hmac, 'utf8'), Buffer.from(computed, 'utf8'));
+  if (computed.length !== rawHmac.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(rawHmac, 'utf8'), Buffer.from(computed, 'utf8'));
 }
 
 function verifyShopifyWebhookHmac(rawBody, hmacHeader, secret) {
@@ -788,26 +873,179 @@ function verifyShopifySessionToken(token) {
   };
 }
 
+function shouldRefreshShopifyTokenExchange(row) {
+  if (!row || SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS <= 0) {
+    return true;
+  }
+  const updatedAt = new Date(row.updatedat || 0).getTime();
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return true;
+  }
+  return (Date.now() - updatedAt) >= SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS;
+}
+
 async function handleShopifyAppUninstalled(shopDomain) {
+  if (!prismaReady || !prisma) return;
+  const result = await shopifyHandleAppUninstalled({ prisma, shopDomain });
+  if (!result.ok && result.error) {
+    console.warn('Shopify uninstall cleanup skipped:', result.error);
+  }
+}
+
+async function listShopifyFeedsForShop(shopDomain) {
+  if (!shopDomain || !prismaReady || !prisma) {
+    return [];
+  }
+
+  return prisma.$queryRawUnsafe(
+    `
+      SELECT
+        f.id AS feed_id,
+        f.name AS feed_name,
+        f.accountid,
+        f.mappingjson,
+        s.id AS source_id,
+        s.lastrunat,
+        c.id AS credential_id,
+        c.secretjson
+      FROM "Feed" f
+      JOIN "FeedSource" s ON s.id = f.sourceid
+      JOIN "Credential" c ON c.id = s.credentialid
+      WHERE f.status = 'ACTIVE'::text
+        AND s.status = 'ACTIVE'::text
+        AND s.connector = 'SHOPIFY'::text
+        AND c.connector = 'SHOPIFY'::text
+        AND c.secretjson->>'shop' = $1::text
+      ORDER BY f.createdat DESC
+    `,
+    shopDomain
+  );
+}
+
+async function hasRunningIngestion(feedId) {
+  if (!feedId || !prismaReady || !prisma) {
+    return false;
+  }
+
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT 1
+      FROM "IngestionRun"
+      WHERE feedid = $1::text
+        AND status = 'RUNNING'::text
+      LIMIT 1
+    `,
+    feedId
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+function hasRecentShopifyWebhookSync(lastRunAt) {
+  if (!lastRunAt || SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS <= 0) {
+    return false;
+  }
+  const lastRunTs = new Date(lastRunAt).getTime();
+  if (!Number.isFinite(lastRunTs) || lastRunTs <= 0) {
+    return false;
+  }
+  return (Date.now() - lastRunTs) < SHOPIFY_WEBHOOK_SYNC_DEBOUNCE_MS;
+}
+
+async function runShopifyPostSyncHooks(feedId, accountId) {
+  try {
+    const { applyRulesOnIngestion } = require('./rules/engine');
+    await applyRulesOnIngestion(prisma, feedId, accountId, createRevision);
+  } catch (rulesErr) {
+    console.warn('⚠️ Règles non appliquées après webhook Shopify:', rulesErr.message);
+  }
+
+  try {
+    await applyEnrichmentSources(prisma, feedId, accountId, storage);
+  } catch (enrichErr) {
+    console.warn('⚠️ Enrichissement non appliqué après webhook Shopify:', enrichErr.message);
+  }
+
+  scheduleAutoOptimization(accountId, feedId, 'webhook Shopify');
+  scheduleAutoLiaSync(accountId, 'webhook Shopify');
+}
+
+async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }) {
   if (!shopDomain || !prismaReady || !prisma) {
     return;
   }
 
-  try {
-    await prisma.$executeRawUnsafe(`
-      UPDATE "FeedSource"
-      SET status = 'INACTIVE'::text,
-          updatedat = NOW()
-      WHERE connector = 'SHOPIFY'::text
-        AND credentialid IN (
-          SELECT id
-          FROM "Credential"
-          WHERE connector = 'SHOPIFY'::text
-            AND secretjson->>'shop' = $1::text
-        )
-    `, shopDomain);
-  } catch (error) {
-    console.warn('Shopify uninstall cleanup skipped:', error?.message || error);
+  const feeds = await listShopifyFeedsForShop(shopDomain);
+  if (!feeds.length) {
+    return;
+  }
+
+  for (const feed of feeds) {
+    if (await hasRunningIngestion(feed.feed_id)) {
+      console.log(`ℹ️ Shopify webhook ${topic}: sync déjà en cours pour feed ${feed.feed_id}, skip`);
+      continue;
+    }
+    if (hasRecentShopifyWebhookSync(feed.lastrunat)) {
+      console.log(`ℹ️ Shopify webhook ${topic}: feed ${feed.feed_id} encore dans la fenêtre de debounce, skip`);
+      continue;
+    }
+
+    let secretData;
+    try {
+      secretData = decryptObjectSecrets(
+        typeof feed.secretjson === 'string' ? JSON.parse(feed.secretjson) : feed.secretjson
+      );
+    } catch (error) {
+      console.warn(`⚠️ Shopify webhook ${topic}: secretjson invalide pour feed ${feed.feed_id}:`, error?.message || error);
+      continue;
+    }
+
+    const accessToken = secretData?.accessToken || secretData?.access_token || '';
+    if (!accessToken) {
+      console.warn(`⚠️ Shopify webhook ${topic}: token manquant pour feed ${feed.feed_id}`);
+      continue;
+    }
+
+    const feedContext = {
+      id: feed.feed_id,
+      name: feed.feed_name,
+      sourceId: feed.source_id,
+      mappingJson: feed.mappingjson || {},
+    };
+
+    try {
+      let result;
+      const prefersFullSync = SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS.has(topic)
+        || shouldUseFullSyncForWebhookPayload(payload);
+
+      if (prefersFullSync) {
+        result = await ingestShopifyFromApi({
+          prisma,
+          feed: feedContext,
+          shop: shopDomain,
+          accessToken,
+        });
+      } else if (SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS.has(topic)) {
+        result = await ingestShopifyProductFromWebhook({
+          prisma,
+          feed: feedContext,
+          shop: shopDomain,
+          payload,
+        });
+      } else {
+        continue;
+      }
+
+      await runShopifyPostSyncHooks(feed.feed_id, feed.accountid);
+      console.log(`✅ Shopify webhook ${topic}: sync appliquée pour ${shopDomain}`, {
+        feedId: feed.feed_id,
+        totalFetched: result?.totalFetched ?? 0,
+        totalInserted: result?.totalInserted ?? 0,
+        totalUpdated: result?.totalUpdated ?? 0,
+        totalDeleted: result?.totalDeleted ?? 0,
+      });
+    } catch (error) {
+      console.error(`Shopify webhook ${topic} sync failed for ${shopDomain} / feed ${feed.feed_id}:`, error);
+    }
   }
 }
 
@@ -942,6 +1180,7 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
 
   const topic = String(req.get('x-shopify-topic') || '').trim().toLowerCase();
   const shopDomain = normalizeShopifyShop(req.get('x-shopify-shop-domain') || '');
+  const webhookId = String(req.get('x-shopify-webhook-id') || '').trim();
   const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   let payload = null;
   try {
@@ -950,15 +1189,123 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
     payload = null;
   }
 
+  // Idempotency : Shopify rejoue les webhooks en cas de 5xx/timeout. Sans dedup,
+  // app_subscriptions/update UPDATE Account plusieurs fois et customers/redact
+  // tente de re-supprimer. On insère l'id ; conflit = déjà traité, on répond 200.
+  if (webhookId && prismaReady && prisma) {
+    try {
+      const inserted = await prisma.$executeRawUnsafe(
+        `INSERT INTO shopify_processed_webhooks (webhook_id, topic, shop_domain)
+         VALUES ($1::text, $2::text, $3::text)
+         ON CONFLICT (webhook_id) DO NOTHING`,
+        webhookId,
+        topic,
+        shopDomain || null
+      );
+      if (inserted === 0) {
+        // Déjà traité auparavant — 200 silencieux pour que Shopify arrête les retries.
+        return res.status(200).json({ ok: true, topic, duplicate: true });
+      }
+    } catch (idemErr) {
+      // Si la table n'existe pas encore (migration pas appliquée), on log et on
+      // poursuit plutôt que de bloquer. À retirer une fois la migration 039 en prod.
+      if (!/shopify_processed_webhooks|42P01/i.test(idemErr?.message || '')) {
+        console.warn('Shopify webhook idempotency check failed:', idemErr?.message);
+      }
+    }
+  }
+
   try {
     if (topic === 'app/uninstalled') {
       await handleShopifyAppUninstalled(shopDomain);
-    } else if (
-      topic === 'customers/data_request' ||
-      topic === 'customers/redact' ||
-      topic === 'shop/redact'
-    ) {
-      console.log('✅ Shopify compliance webhook received:', { topic, shopDomain });
+    } else if (SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS.has(topic) || SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS.has(topic)) {
+      if (shopDomain) {
+        setImmediate(() => {
+          triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }).catch((error) => {
+            console.error(`Shopify webhook async sync failed (${topic} / ${shopDomain}):`, error);
+          });
+        });
+      }
+    } else if (topic === 'app_subscriptions/update') {
+      // Sync l'état de l'abonnement Shopify (ACTIVE/CANCELLED/EXPIRED/FROZEN/DECLINED)
+      // déclenché à chaque transition côté Shopify.
+      const sub = payload?.app_subscription || payload || {};
+      const shopifySubscriptionId = sub.admin_graphql_api_id || sub.id || '';
+      const subName = String(sub.name || '').trim();
+      const status = String(sub.status || '').toUpperCase();
+      if (shopifySubscriptionId && status && prismaReady && prisma) {
+        try {
+          // Managed Pricing : le 1er webhook ACTIVE arrive avec un subscription_id
+          // que nous n'avons jamais vu (on avait stocké un id provisoire "pending_..."
+          // au moment du clic). matchPendingSubscriptionToWebhook trouve la row
+          // PENDING locale par shop + plan name et la promeut avec le vrai id.
+          await shopifyMatchPendingSubToWebhook({
+            prisma,
+            shopifySubscriptionId: String(shopifySubscriptionId),
+            shopDomain,
+            subscriptionName: subName,
+            status,
+          });
+          await shopifyBilling.markShopifySubscriptionStatus({
+            prisma,
+            shopifySubscriptionId: String(shopifySubscriptionId),
+            status,
+            currentPeriodEnd: sub.current_period_end || null,
+            cancelled: status === 'CANCELLED',
+          });
+          const accountRow = await prisma.$queryRawUnsafe(
+            `SELECT accountid, plan_key FROM shopify_subscriptions WHERE shopify_subscription_id = $1::text LIMIT 1`,
+            String(shopifySubscriptionId)
+          );
+          const accountId = accountRow?.[0]?.accountid;
+          const planKey = accountRow?.[0]?.plan_key;
+          if (accountId) {
+            if (status === 'ACTIVE') {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
+                accountId,
+                planKey
+              );
+            } else if (status === 'CANCELLED' || status === 'EXPIRED' || status === 'FROZEN' || status === 'DECLINED') {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Account" SET billingstatus = $2::text, updatedat = NOW() WHERE id = $1::text`,
+                accountId,
+                status === 'FROZEN' ? 'payment_failed' : 'pending'
+              );
+            }
+          }
+          console.log('✅ Shopify app_subscriptions/update appliqué:', { shopifySubscriptionId, status });
+        } catch (subErr) {
+          console.error('Shopify app_subscriptions/update sync failed:', subErr?.message || subErr);
+          return res.status(500).send('Subscription sync failed');
+        }
+      }
+    } else if (isShopifyComplianceTopic(topic)) {
+      // Topics GDPR obligatoires (App Store) :
+      //  - customers/data_request : SLA 30j
+      //  - customers/redact       : SLA 30j après uninstall
+      //  - shop/redact            : SLA 48h après réception (déclenché 48h après uninstall)
+      if (!prismaReady || !prisma) {
+        console.error('Shopify compliance webhook reçu sans DB disponible:', { topic, shopDomain });
+        return res.status(503).send('Database unavailable, will retry');
+      }
+      try {
+        const result = await processShopifyComplianceWebhook({
+          prisma,
+          topic,
+          shopDomain,
+          payload,
+          notifyAdmin: notifyInternalAlert,
+        });
+        console.log('✅ Shopify compliance webhook processed:', { topic, shopDomain, ...result });
+      } catch (complianceErr) {
+        console.error('Shopify compliance webhook processing failed:', {
+          topic,
+          shopDomain,
+          error: complianceErr?.message || complianceErr,
+        });
+        return res.status(500).send('Compliance webhook processing failed');
+      }
     } else {
       console.log('ℹ️ Shopify webhook received:', { topic, shopDomain });
     }
@@ -1050,14 +1397,247 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
-    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = user;
     req.accountId = user.accountId;
+    if (!req.accountId) {
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
     const accessAllowed = await enforceAccountAccess(req, res);
     if (accessAllowed !== true) return accessAllowed;
     next();
   } catch (err) {
     return res.status(403).json({ message: 'Token invalide' });
+  }
+};
+
+/**
+ * Middleware d'authentification mixte JWT + Shopify session token.
+ * Utilisé sur les routes accessibles depuis l'app embedded Shopify Admin où
+ * le merchant n'a pas forcément de JWT FeedPlug (cas BFS : install Shopify →
+ * choix de plan → souscription, sans détour par feedplug.com/register).
+ *
+ * Stratégie :
+ *  1. Si le token décrypte comme JWT FeedPlug → comportement classique
+ *  2. Sinon, tente verifyShopifySessionToken → identifie le shop → résout
+ *     l'Account via le Credential Shopify lié au shop
+ *  3. Si aucun Account associé au shop, retourne 409 NO_ACCOUNT_FOR_SHOP
+ *     (le frontend peut alors guider vers l'auto-provisioning Shopify-native)
+ */
+const authenticateJwtOrShopifySession = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Token d\'accès requis' });
+  }
+
+  // 1) JWT FeedPlug
+  try {
+    const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
+    if (!user?.accountId) {
+      // Token JWT bien signé mais sans accountId : on rejette plutôt que de
+      // basculer sur Shopify (risque de routage cross-tenant si on tentait
+      // l'auto-provisioning derrière).
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
+    req.user = user;
+    req.accountId = user.accountId;
+    const accessAllowed = await enforceAccountAccess(req, res);
+    if (accessAllowed !== true) return accessAllowed;
+    return next();
+  } catch {
+    // Bascule sur session token Shopify
+  }
+
+  // 2) Shopify session token
+  if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    return res.status(403).json({ message: 'Token invalide' });
+  }
+  let shopifyAuth;
+  try {
+    shopifyAuth = verifyShopifySessionToken(token);
+  } catch {
+    return res.status(403).json({ message: 'Token invalide' });
+  }
+
+  const shop = shopifyAuth.shop;
+  if (!shop) {
+    return res.status(403).json({ message: 'Session Shopify invalide' });
+  }
+
+  // 3) Résolution Account via Credential.shop
+  if (!prismaReady || !prisma) {
+    return res.status(503).json({ message: 'Service indisponible' });
+  }
+  try {
+    // On limite le token exchange Shopify à une fois toutes les quelques
+    // minutes par boutique pour éviter un aller-retour Admin OAuth à chaque
+    // requête embedded, tout en gardant un refresh fréquent en cas de
+    // réinstallation ou rotation de token.
+    try {
+      const credRefreshRows = await prisma.$queryRawUnsafe(
+        `SELECT id, updatedat FROM "Credential" WHERE connector = 'SHOPIFY'::text AND secretjson->>'shop' = $1::text ORDER BY createdat DESC LIMIT 1`,
+        shop
+      );
+      if (credRefreshRows && credRefreshRows.length > 0 && shouldRefreshShopifyTokenExchange(credRefreshRows[0])) {
+        const refreshed = await exchangeShopifySessionToken({
+          shop,
+          sessionToken: token,
+          clientId: SHOPIFY_API_KEY,
+          clientSecret: SHOPIFY_API_SECRET,
+        });
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Credential" SET secretjson = $2::jsonb, updatedat = NOW() WHERE id = $1::text`,
+          credRefreshRows[0].id,
+          stringifyEncryptedJson({
+            accessToken: refreshed.accessToken,
+            scope: refreshed.scope,
+            shop,
+          })
+        );
+      }
+    } catch (refreshErr) {
+      // Token Exchange peut échouer transitoirement (réseau Shopify, etc.) ;
+      // on ne bloque pas l'auth, on continue avec le token existant en DB.
+      console.warn(`⚠️ Shopify token refresh skipped for ${shop}: ${refreshErr?.message || refreshErr}`);
+    }
+    const rows = await prisma.$queryRawUnsafe(
+      `
+        SELECT s.accountid, a.plan, a.trialendsat, a.billingstatus, a.paymentgraceuntil
+        FROM "Credential" c
+        JOIN "FeedSource" s ON s.credentialid = c.id
+        JOIN "Account" a ON a.id = s.accountid
+        WHERE c.connector = 'SHOPIFY'::text
+          AND c.secretjson->>'shop' = $1::text
+        ORDER BY c.createdat DESC
+        LIMIT 1
+      `,
+      shop
+    );
+    if (!rows || rows.length === 0) {
+      // Fallback : tente l'auto-provisioning à la volée si une Credential
+      // existe pour ce shop (cas merchant installé AVANT le déploiement de
+      // l'eager provisioning, ou échec transitoire au callback OAuth).
+      const credRows = await prisma.$queryRawUnsafe(
+        `
+          SELECT id, secretjson
+          FROM "Credential"
+          WHERE connector = 'SHOPIFY'::text
+            AND secretjson->>'shop' = $1::text
+          ORDER BY createdat DESC
+          LIMIT 1
+        `,
+        shop
+      );
+      const credRow = credRows?.[0];
+      if (credRow) {
+        try {
+          const secret = decryptObjectSecrets(
+            typeof credRow.secretjson === 'string' ? JSON.parse(credRow.secretjson) : credRow.secretjson
+          );
+          const accessToken = secret.accessToken || secret.access_token;
+          if (accessToken) {
+            const provision = await shopifyProvisioning.provisionAccountFromShopify({
+              prisma,
+              shop,
+              accessToken,
+              credentialId: credRow.id,
+            });
+            if (provision.accountId) {
+              // Re-lookup pour récupérer les colonnes Account fraîches
+              const reRows = await prisma.$queryRawUnsafe(
+                `SELECT id AS accountid, plan, trialendsat, billingstatus, paymentgraceuntil FROM "Account" WHERE id = $1::text LIMIT 1`,
+                provision.accountId
+              );
+              if (reRows?.length) {
+                rows.push(reRows[0]);
+                console.log('🔁 Shopify lazy provisioning effectué pour ' + shop + ' (account: ' + provision.accountId + ')');
+              }
+            }
+          }
+        } catch (lazyErr) {
+          console.warn('⚠️ Shopify lazy provisioning échoué:', lazyErr?.message || lazyErr);
+        }
+      } else {
+        // Managed Installation : Shopify n'appelle plus notre callback OAuth,
+        // donc aucune Credential n'a été créée à l'install. Le seul moyen
+        // d'obtenir un access_token est le Token Exchange à partir du session
+        // token App Bridge (déjà vérifié plus haut). On crée la Credential
+        // chiffrée puis on provisionne Account/User/Source/Feed.
+        try {
+          const exchanged = await exchangeShopifySessionToken({
+            shop,
+            sessionToken: token,
+            clientId: SHOPIFY_API_KEY,
+            clientSecret: SHOPIFY_API_SECRET,
+          });
+          const credId = crypto.randomUUID();
+          const now = new Date().toISOString();
+          const secretData = stringifyEncryptedJson({
+            accessToken: exchanged.accessToken,
+            scope: exchanged.scope,
+            shop,
+          });
+          await prisma.$executeRawUnsafe(
+            `
+              INSERT INTO "Credential" (id, name, connector, secretjson, createdat, updatedat)
+              VALUES ($1::text, $2::text, 'SHOPIFY'::text, $3::jsonb, $4::timestamptz, $4::timestamptz)
+            `,
+            credId,
+            `Shopify - ${shop}`,
+            secretData,
+            now,
+          );
+          const provision = await shopifyProvisioning.provisionAccountFromShopify({
+            prisma,
+            shop,
+            accessToken: exchanged.accessToken,
+            credentialId: credId,
+          });
+          if (provision.accountId) {
+            const reRows = await prisma.$queryRawUnsafe(
+              `SELECT id AS accountid, plan, trialendsat, billingstatus, paymentgraceuntil FROM "Account" WHERE id = $1::text LIMIT 1`,
+              provision.accountId
+            );
+            if (reRows?.length) {
+              rows.push(reRows[0]);
+              console.log(`🔑 Shopify Token Exchange OK pour ${shop} (account: ${provision.accountId}, reason: ${provision.reason || 'new'})`);
+            }
+          } else {
+            console.warn(`⚠️ Shopify Token Exchange OK mais provisioning incomplet pour ${shop}: ${provision.reason}`);
+          }
+        } catch (exchangeErr) {
+          console.warn(`⚠️ Shopify Token Exchange échoué pour ${shop}:`, exchangeErr?.message || exchangeErr);
+        }
+      }
+      if (rows.length === 0) {
+        return res.status(409).json({
+          code: 'NO_ACCOUNT_FOR_SHOP',
+          message: 'Aucun compte FeedPlug lié à cette boutique Shopify',
+          shop,
+        });
+      }
+    }
+    const row = rows[0];
+    req.user = {
+      accountId: row.accountid,
+      shopifyShop: shop,
+      authSource: 'shopify_session',
+    };
+    req.accountId = row.accountid;
+    req.account = {
+      plan: row.plan,
+      trialEndsAt: row.trialendsat,
+      billingStatus: row.billingstatus,
+      paymentGraceUntil: row.paymentgraceuntil,
+    };
+    const accessAllowed = await enforceAccountAccess(req, res);
+    if (accessAllowed !== true) return accessAllowed;
+    return next();
+  } catch (err) {
+    console.error('Shopify session auth error:', err);
+    return res.status(500).json({ message: 'Erreur authentification Shopify' });
   }
 };
 
@@ -1107,7 +1687,7 @@ const requireAuth = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
     req.user = decoded;
     req.accountId = decoded.accountId;
 
@@ -1129,16 +1709,26 @@ app.use('/api/v1/ingestion', requireAuth);
 app.use('/api/v1/enrichment', requireAuth);
 app.use('/api/v1/optimization', requireAuth);
 app.use('/api/v1/rules', requireAuth);
-app.use('/api/v1/performance', requireAuth);
+// Auth mixte sur /performance : le dashboard standalone envoie un JWT, l'app
+// Shopify embedded un session token App Bridge. requireAuth (JWT only) rendait
+// toutes les routes performance inaccessibles depuis l'app embedded (401).
+app.use('/api/v1/performance', authenticateJwtOrShopifySession);
 
-// Middleware auto-vérification d'ownership pour les routes feeds/:id/*
+// Middleware auto-vérification d'ownership pour les routes feeds/:id/*.
+// Fail-closed : si on ne PEUT pas vérifier (pas d'accountId, DB indispo), on bloque.
 app.use('/api/v1/ingestion/feeds/:id', async (req, res, next) => {
-  // Seulement pour les sous-routes (items, export, runs, etc.)
-  if (req.params.id && req.accountId && prismaReady && prisma) {
-    const hasAccess = await verifyFeedAccess(req.params.id, req.accountId);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Accès refusé à ce flux' });
-    }
+  if (!req.params.id) {
+    return next();
+  }
+  if (!req.accountId) {
+    return res.status(401).json({ message: 'Authentification requise' });
+  }
+  if (!prismaReady || !prisma) {
+    return res.status(503).json({ message: 'Service temporairement indisponible' });
+  }
+  const hasAccess = await verifyFeedAccess(req.params.id, req.accountId);
+  if (!hasAccess) {
+    return res.status(403).json({ message: 'Accès refusé à ce flux' });
   }
   next();
 });
@@ -2033,7 +2623,7 @@ app.post('/api/v1/ingestion/sources', async (req, res) => {
     }
     const initialFeedMapping = feedMappingJson || mappingJson || null;
 
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     if (prismaReady && prisma) {
       const [sourcesRows, feedsRows] = await Promise.all([
         prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS c FROM "FeedSource" WHERE accountid = $1::text`, acctId),
@@ -2445,7 +3035,7 @@ app.post('/api/v1/ingestion/feeds', async (req, res) => {
     if (!name || !sourceId || !mappingJson) {
       return res.status(400).json({ message: 'name, sourceId et mappingJson sont requis' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     if (prismaReady && prisma) {
       if (!await verifySourceAccess(sourceId, acctId)) {
         return res.status(403).json({ message: 'Accès refusé à cette source' });
@@ -2510,8 +3100,8 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
   try {
     if (await ensurePrismaReady()) {
       // Utiliser une requête raw pour éviter les problèmes d'enums
-      const feeds = await prisma.$queryRawUnsafe(`
-        SELECT 
+      const baseFeedsQuery = `
+        SELECT
           f.id,
           f.name,
           f.sourceid,
@@ -2519,6 +3109,7 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
           f.status,
           f.mappingjson,
           f.dedupstrategy,
+          f.autopush_enabled,
           f.createdat,
           f.updatedat,
           json_build_object(
@@ -2557,7 +3148,21 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
         ) ir ON TRUE
         WHERE f.accountid = $1::text
         ORDER BY f.createdat DESC
-      `, req.accountId);
+      `;
+      let feeds;
+      try {
+        feeds = await prisma.$queryRawUnsafe(baseFeedsQuery, req.accountId);
+      } catch (err) {
+        // Tolère l'absence de la colonne autopush_enabled (migration 034 non appliquée).
+        if (err?.code === 'P2010' || /autopush_enabled/i.test(err?.message || '')) {
+          feeds = await prisma.$queryRawUnsafe(
+            baseFeedsQuery.replace('f.autopush_enabled', 'false AS autopush_enabled'),
+            req.accountId
+          );
+        } else {
+          throw err;
+        }
+      }
       // Normaliser les noms de colonnes pour le frontend
       const normalizedFeeds = feeds.map(feed => ({
         id: feed.id,
@@ -2569,6 +3174,7 @@ app.get('/api/v1/ingestion/feeds', async (req, res) => {
         mappingJson: feed.mappingjson,
         mappingjson: feed.mappingjson,
         dedupStrategy: feed.dedupstrategy,
+        autoPushEnabled: feed.autopush_enabled === true,
         createdAt: feed.createdat,
         updatedAt: feed.updatedat,
         latestRun: feed.latestRun?.finishedAt || feed.latestRun?.status ? feed.latestRun : null,
@@ -2812,7 +3418,7 @@ app.get('/api/v1/ingestion/fields', async (req, res) => {
 app.put('/api/v1/ingestion/feeds/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, frequency, status, mappingJson, dedupStrategy } = req.body || {};
+    const { name, frequency, status, mappingJson, dedupStrategy, autoPushEnabled } = req.body || {};
     
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
@@ -2865,7 +3471,12 @@ app.put('/api/v1/ingestion/feeds/:id', async (req, res) => {
       values.push(dedupStrategy);
       paramIndex++;
     }
-    
+    if (autoPushEnabled !== undefined) {
+      updates.push(`autopush_enabled = $${paramIndex}::boolean`);
+      values.push(!!autoPushEnabled);
+      paramIndex++;
+    }
+
     // Toujours mettre à jour updatedAt
     updates.push(`updatedat = $${paramIndex}::timestamptz`);
     values.push(now);
@@ -2936,7 +3547,7 @@ app.post('/api/v1/ingestion/create-missing-feeds', async (req, res) => {
   };
 
   try {
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feedsRows = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS c FROM "Feed" WHERE accountid = $1::text`, acctId);
     const feedsCount = feedsRows?.[0]?.c ?? 0;
 
@@ -2997,7 +3608,7 @@ app.post('/api/v1/ingestion/create-missing-feeds', async (req, res) => {
           'guid_or_url',
           now,
           now,
-          req.accountId || source.accountid || 'default-account'
+          req.accountId || source.accountid
         );
 
         results.created.push({
@@ -3031,7 +3642,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible (runs)' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const productCount = await countProductsForAccount(prisma, acctId);
     const limitProducts = await checkPlanLimit(prisma, acctId, 'maxProducts', productCount);
     if (!limitProducts.allowed) {
@@ -3163,6 +3774,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion CSV');
       return res.status(201).json({ message: 'Ingestion CSV effectuée', ...result });
     }
 
@@ -3258,6 +3870,8 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoOptimization(req.accountId, feed.id, 'ingestion Shopify');
+      scheduleAutoLiaSync(req.accountId, 'ingestion Shopify');
       return res.status(201).json({ message: 'Ingestion Shopify effectuée', ...result });
     }
 
@@ -3321,6 +3935,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
+      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion PrestaShop');
       return res.status(201).json({ message: 'Ingestion Prestashop effectuée', ...result });
     }
 
@@ -3516,7 +4131,7 @@ app.post('/api/v1/ingestion/feeds/:id/enrichment-sources', async (req, res) => {
     const { name, configJson, mappingJson } = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
     if (!await verifyFeedAccess(feedId, req.accountId)) return res.status(403).json({ message: 'Accès refusé' });
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'aiEnrichment');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -3548,7 +4163,7 @@ app.post('/api/v1/ingestion/feeds/:id/apply-enrichment-sources', async (req, res
     const { id: feedId } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
     if (!await verifyFeedAccess(feedId, req.accountId)) return res.status(403).json({ message: 'Accès refusé' });
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'aiEnrichment');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -3623,6 +4238,193 @@ app.delete('/api/v1/ingestion/enrichment-sources/:id', async (req, res) => {
 
 // Endpoint pour exécuter automatiquement les feeds selon leur horaire programmé
 // Cet endpoint est appelé par Cloud Scheduler toutes les heures
+// ===== Centre de notifications in-app =====
+app.use('/api/v1/notifications', requireAuth);
+
+app.get('/api/v1/notifications', async (req, res) => {
+  // Dégradation douce : si la table n'existe pas encore (migration 036 non
+  // appliquée) ou erreur DB, on renvoie une liste vide plutôt qu'un 500.
+  try {
+    if (!prismaReady || !prisma) return res.json({ notifications: [], unreadCount: 0 });
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT id, type, priority, title, message, actionurl, read, createdat
+       FROM notification WHERE accountid = $1::text
+       ORDER BY createdat DESC LIMIT 50`,
+      req.accountId
+    );
+    const unread = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS c FROM notification WHERE accountid = $1::text AND read = false`,
+      req.accountId
+    );
+    res.json({
+      notifications: (rows || []).map((n) => ({
+        id: n.id,
+        type: n.type,
+        priority: n.priority,
+        title: n.title,
+        message: n.message,
+        actionUrl: n.actionurl || null,
+        read: n.read === true,
+        timestamp: n.createdat,
+      })),
+      unreadCount: unread?.[0]?.c ?? 0,
+    });
+  } catch (e) {
+    console.warn('GET notifications error (table absente?):', e?.message);
+    res.json({ notifications: [], unreadCount: 0 });
+  }
+});
+
+app.post('/api/v1/notifications/:id/read', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `UPDATE notification SET read = true WHERE id = $1::text AND accountid = $2::text`,
+      req.params.id, req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Mark notification read error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+app.post('/api/v1/notifications/read-all', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `UPDATE notification SET read = true WHERE accountid = $1::text AND read = false`,
+      req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Mark all notifications read error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+app.delete('/api/v1/notifications/:id', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM notification WHERE id = $1::text AND accountid = $2::text`,
+      req.params.id, req.accountId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Delete notification error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+// Exports planifiés : pousse automatiquement vers GMC/Amazon les flux dont
+// l'auto-push est activé (opt-in `autopush_enabled`). Déclenché par le job
+// Cloud Scheduler feedplug-scheduled-exports, protégé par SCHEDULER_SECRET.
+app.post('/api/v1/exports/scheduled-runs', async (req, res) => {
+  try {
+    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
+      ? process.env.SCHEDULER_SECRET.trim()
+      : '';
+    if (!schedulerSecret) {
+      return res.status(503).json({ message: 'Scheduler non configuré' });
+    }
+    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+    const providedSecret = typeof rawProvidedSecret === 'string'
+      ? rawProvidedSecret.replace('Bearer ', '').trim()
+      : '';
+    if (providedSecret !== schedulerSecret) {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Prisma non disponible' });
+    }
+
+    // On évite de re-pousser un flux poussé il y a moins de 23 h (le job tourne
+    // toutes les heures ; cela garantit ~1 push/jour et absorbe les retards).
+    const MIN_HOURS_BETWEEN_PUSHES = 23;
+
+    let feeds;
+    try {
+      feeds = await prisma.$queryRawUnsafe(`
+        SELECT id, name, accountid
+        FROM "Feed"
+        WHERE status = 'ACTIVE' AND autopush_enabled = true
+      `);
+    } catch (err) {
+      if (err?.code === 'P2010' || /autopush_enabled/i.test(err?.message || '')) {
+        return res.status(503).json({ message: 'Migration 034 (autopush_enabled) non appliquée.' });
+      }
+      throw err;
+    }
+
+    const results = { checked: feeds.length, executed: 0, skipped: 0, errors: [] };
+
+    for (const feed of feeds) {
+      try {
+        // Plateformes connectées (actives) du compte propriétaire du flux.
+        const conns = await prisma.$queryRawUnsafe(
+          `SELECT DISTINCT platform FROM "PlatformConnection"
+           WHERE accountid = $1::text AND status = 'active'`,
+          feed.accountid
+        );
+        const targets = (conns || [])
+          .map((c) => String(c.platform || '').toLowerCase())
+          .filter((p) => p === 'gmc' || p === 'amazon');
+        if (targets.length === 0) {
+          results.skipped++;
+          continue;
+        }
+
+        for (const platform of targets) {
+          // Déduplication : dernier export de ce flux sur cette plateforme.
+          const lastRows = await prisma.$queryRawUnsafe(
+            `SELECT MAX(createdat) AS last FROM "ExportLog"
+             WHERE feedid = $1::text AND platform = $2::text`,
+            feed.id, platform
+          );
+          const lastAt = lastRows?.[0]?.last ? new Date(lastRows[0].last) : null;
+          if (lastAt && (Date.now() - lastAt.getTime()) / 3600000 < MIN_HOURS_BETWEEN_PUSHES) {
+            results.skipped++;
+            continue;
+          }
+
+          console.log(`🚀 Auto-push ${platform} du flux ${feed.name} (${feed.id})`);
+          if (platform === 'gmc') {
+            await executeGmcPush({ accountId: feed.accountid, userId: null, feedId: feed.id });
+          } else {
+            await executeAmazonPush({ accountId: feed.accountid, feedId: feed.id });
+          }
+          results.executed++;
+        }
+      } catch (err) {
+        console.error(`Auto-push échoué pour le flux ${feed.id}:`, err?.message || err);
+        results.errors.push({ feedId: feed.id, message: err?.message || String(err) });
+        createNotification(prisma, feed.accountid, {
+          type: 'error',
+          priority: 'high',
+          title: `Échec de l'export automatique — ${feed.name || 'flux'}`,
+          message: `Le push automatique du flux a échoué : ${err?.message || 'erreur inconnue'}.`,
+          actionUrl: '/flux',
+        }).catch(() => {});
+        // Email d'alerte échec d'export
+        try {
+          const accountEmails = await getAccountEmails(feed.accountid);
+          const context = `Export automatique — ${feed.name || feed.id}`;
+          for (const email of accountEmails.slice(0, 3)) {
+            sendErrorEmail(email, context, err?.message || String(err)).catch((e) => console.warn('Email erreur export (scheduler) non envoyé:', e.message));
+          }
+        } catch (_) {}
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Scheduled exports error:', error);
+    res.status(500).json({ message: 'Erreur lors des exports planifiés' });
+  }
+});
+
 app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
   try {
     const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
@@ -3804,6 +4606,8 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
             sendSyncCompleteEmail(email, feed.feed_name || feedObj.name, stats).catch(err => console.warn('Email sync terminée (scheduler) non envoyé:', err.message));
           }
           results.executed++;
+          scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié Shopify');
+          scheduleAutoLiaSync(feed.accountid, 'run planifié Shopify');
           console.log(`✅ Feed Shopify ${feed.feed_name} exécuté avec succès`);
           continue;
         }
@@ -3841,6 +4645,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
             sendSyncCompleteEmail(email, feed.feed_name || feedObj.name, stats).catch(err => console.warn('Email sync terminée (scheduler) non envoyé:', err.message));
           }
           results.executed++;
+          scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié PrestaShop');
           console.log(`✅ Feed Prestashop ${feed.feed_name} exécuté avec succès`);
           continue;
         }
@@ -3925,6 +4730,7 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
         }
         
         results.executed++;
+        scheduleAutoGmcPush(feed.accountid, feed.feed_id, 'run planifié CSV');
         console.log(`✅ Feed ${feed.feed_name} exécuté avec succès`);
       } catch (error) {
         console.error(`❌ Erreur lors de l'exécution du feed ${feed.feed_name}:`, error.message);
@@ -3933,6 +4739,14 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
           feedName: feed.feed_name,
           error: error.message
         });
+        // Notification in-app "Échec d'import planifié"
+        createNotification(prisma, feed.accountid, {
+          type: 'error',
+          priority: 'high',
+          title: `Échec de la synchronisation — ${feed.feed_name || 'flux'}`,
+          message: `L'import automatique du flux a échoué : ${error?.message || 'erreur inconnue'}.`,
+          actionUrl: '/sources',
+        }).catch(() => {});
         // Email "Erreur de sync" pour le run planifié
         const accountEmails = await getAccountEmails(feed.accountid);
         const context = `Synchronisation planifiée — ${feed.feed_name || feed.feed_id}`;
@@ -3978,7 +4792,7 @@ app.get('/api/v1/ingestion/feeds/:id/items', async (req, res) => {
       return res.status(403).json({ message: 'Accès refusé à ce flux' });
     }
     const destinationContext = requestedDestinationId
-      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId)
+      ? await getDestinationPushContext(req.accountId, requestedDestinationId)
       : null;
 
     const hasSearch = q.length > 0;
@@ -4885,6 +5699,70 @@ function buildFluxRedirectUrl(appUrl, locale, params = {}) {
   return target.toString();
 }
 
+function normalizeEmbeddedReturnTo(value, fallback = '/embedded/channels') {
+  const raw = String(value || '').trim();
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || !raw.startsWith('/embedded')) {
+    return fallback;
+  }
+  try {
+    const target = new URL(raw, 'https://embedded.feedplug.local');
+    return `${target.pathname}${target.search}`;
+  } catch {
+    return fallback;
+  }
+}
+
+// Helpers dashboard (hors Shopify) extraits dans lib/platform-redirects.js pour
+// être testables en isolation. Le wrapper local injecte APP_URL.
+const {
+  normalizeDashboardReturnTo,
+  buildDashboardRedirectUrl: buildDashboardRedirectUrlBase,
+} = require('./lib/platform-redirects');
+
+function buildDashboardRedirectUrl(returnTo, params = {}, fallback = '/flux') {
+  return buildDashboardRedirectUrlBase(APP_URL, returnTo, params, fallback);
+}
+
+async function buildEmbeddedShopifyAdminRedirectUrl({
+  accountId,
+  shop,
+  returnTo = '/embedded/channels',
+  fallbackUrl,
+  params = {},
+}) {
+  const targetPath = new URL(
+    normalizeEmbeddedReturnTo(returnTo, '/embedded/channels'),
+    'https://embedded.feedplug.local'
+  );
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    targetPath.searchParams.set(key, String(value));
+  }
+
+  let resolvedShop = normalizeShopifyShop(shop || '');
+  if (!resolvedShop && accountId) {
+    try {
+      const credential = await findShopifyCredentialForAccount(accountId);
+      resolvedShop = credential?.shop || '';
+    } catch (error) {
+      console.warn('⚠️ Impossible de résoudre le shop Shopify pour redirect embedded:', error?.message || error);
+    }
+  }
+
+  if (resolvedShop && SHOPIFY_API_KEY) {
+    const adminUrl = new URL(`https://${resolvedShop}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}`);
+    adminUrl.searchParams.set('returnTo', `${targetPath.pathname}${targetPath.search}`);
+    return adminUrl.toString();
+  }
+
+  const fallback = new URL(String(fallbackUrl || APP_URL || 'https://app.feedplug.com'));
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    fallback.searchParams.set(key, String(value));
+  }
+  return fallback.toString();
+}
+
 function parseGmcMerchantOptions(accountsData) {
   const rawEntries = Array.isArray(accountsData?.accountIdentifiers) ? accountsData.accountIdentifiers : [];
   const seen = new Set();
@@ -5031,7 +5909,10 @@ async function fetchMarketingAuditFileItems(audit, input = {}) {
   if (!feedUrl) {
     throw new Error('URL de flux introuvable');
   }
-  const response = await fetch(feedUrl);
+  // SSRF guard : on refuse les IP internes / metadata cloud — l'URL vient d'un
+  // formulaire prospect non authentifié.
+  const { safeFetch } = require('./lib/safe-url');
+  const response = await safeFetch(feedUrl);
   if (!response.ok) {
     throw new Error(`Erreur recuperation flux ${response.status}`);
   }
@@ -5138,6 +6019,238 @@ async function fetchMarketingAuditGmcData(audit, input = {}) {
   };
 }
 
+// ── Échantillon before/after pour le PDF d'audit ─────────────────────────────
+
+// Récupère les items du catalogue selon le connecteur de l'audit.
+async function fetchAuditItems(auditRow, input = {}) {
+  const connector = String(auditRow.connectortype || '').toUpperCase();
+  if (connector === 'SHOPIFY') {
+    return { items: await fetchMarketingAuditShopifyItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'PRESTASHOP') {
+    return { items: await fetchMarketingAuditPrestashopItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'CSV') {
+    return { items: await fetchMarketingAuditFileItems(auditRow, input), diagnostics: input.gmcDiagnostics || {} };
+  }
+  if (connector === 'GMC') {
+    return await fetchMarketingAuditGmcData(auditRow, input);
+  }
+  return null;
+}
+
+function auditFieldHasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
+// Liste des champs faibles d'une fiche (clés normalisées).
+function auditItemMissingFields(item) {
+  const missing = [];
+  if (!auditFieldHasValue(item.descriptionText) && !auditFieldHasValue(item.descriptionHtml)) missing.push('description');
+  if (!auditFieldHasValue(item.gtin) && !auditFieldHasValue(item.mpn)) missing.push('identifier');
+  if (!auditFieldHasValue(item.brand)) missing.push('brand');
+  if (!auditFieldHasValue(item.category) && !auditFieldHasValue(item.googleProductCategory) && !auditFieldHasValue(item.productType)) missing.push('category');
+  if (String(item.title || '').trim().length < 35) missing.push('title');
+  return missing;
+}
+
+// 3 fiches représentatives : titre présent, mais le plus de blocages possible.
+function selectAuditSampleItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter((it) => auditFieldHasValue(it.title))
+    .map((it) => ({ it, weak: auditItemMissingFields(it).length }))
+    .filter((s) => s.weak > 0)
+    .sort((a, b) => b.weak - a.weak)
+    .slice(0, 3)
+    .map((s) => s.it);
+}
+
+function auditExcerpt(value, max) {
+  const text = String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function parseAiJsonResponse(text) {
+  if (!text) return null;
+  let cleaned = String(text).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end < 0 || end < start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+// Version corrigée d'une fiche via l'IA (titre, description, attributs).
+async function generateAuditAfterVersion(item) {
+  const systemPrompt = `Tu es un expert en optimisation de flux produit e-commerce (Google Shopping, marketplaces). On te donne une fiche produit faible, tu produis une version corrigée.
+Règles strictes :
+- Garde la langue d'origine du produit.
+- Titre : 60 à 140 caractères, exprime le type de produit, la marque et l'attribut différenciant principal, sans superlatifs marketing.
+- Description : 2 à 3 phrases factuelles et structurées, sans inventer de spécifications techniques inconnues.
+- Attributs : déduis uniquement ce qui est raisonnablement inférable (catégorie, type de produit, couleur ou matière si évident). N'invente JAMAIS un GTIN ou un MPN.
+Réponds UNIQUEMENT avec un JSON valide, sans texte autour : {"title":"...","description":"...","attributes":[{"label":"...","value":"..."}]}`;
+  const userPrompt = `Fiche produit actuelle :
+Titre : ${item.title || '(vide)'}
+Description : ${auditExcerpt(item.descriptionText || item.descriptionHtml || '', 400) || '(vide)'}
+Marque : ${item.brand || '(vide)'}
+Catégorie : ${item.category || item.googleProductCategory || item.productType || '(vide)'}
+Prix : ${item.price != null ? item.price : '(vide)'} ${item.currency || ''}`.trim();
+
+  const response = await callAIWithCache(
+    prisma,
+    'audit_before_after',
+    { title: item.title || '', brand: item.brand || '', sku: item.sku || '' },
+    systemPrompt,
+    userPrompt,
+    String(item.sku || item.gtin || 'audit-sample'),
+    false
+  );
+  const parsed = parseAiJsonResponse(response?.text);
+  if (!parsed || !parsed.title) {
+    console.warn('[audit_before_after] parse fail. textLen=%d preview=%s parsed=%s',
+      (response?.text || '').length,
+      String(response?.text || '').slice(0, 220).replace(/\s+/g, ' '),
+      parsed ? `keys=${Object.keys(parsed).join(',')}` : 'null'
+    );
+    return null;
+  }
+  return {
+    title: String(parsed.title).slice(0, 200),
+    description: String(parsed.description || '').slice(0, 600),
+    attributes: Array.isArray(parsed.attributes)
+      ? parsed.attributes
+        .slice(0, 5)
+        .map((a) => ({ label: String(a?.label || '').slice(0, 40), value: String(a?.value || '').slice(0, 90) }))
+        .filter((a) => a.label && a.value)
+      : [],
+  };
+}
+
+// Génère une image "after" lifestyle (fond studio premium, qualité Shopping)
+// à partir de l'image originale du produit. Retourne l'URL GCS publique ou
+// null si l'image source manque ou si la gen Vertex échoue. Coût ~$0.02
+// par image (Gemini 2.5 Flash Image), latence 3-7s — appliqué uniquement
+// sur le 1er sample (hero) pour contenir budget et délai.
+async function generateAuditAfterImage(item) {
+  const sourceUrl = auditFieldHasValue(item.imageUrl) ? String(item.imageUrl).trim() : '';
+  if (!sourceUrl) return null;
+  try {
+    const productContext = [item.brand, item.category || item.googleProductCategory || item.productType]
+      .filter(Boolean).join(' · ').slice(0, 120);
+    const productDescription = auditExcerpt(item.descriptionText || item.descriptionHtml || '', 200) || (item.title || '');
+    const result = await generateLifestyleImage(sourceUrl, PRESET_SCENES.neutral, {
+      productContext,
+      productDescription,
+    });
+    return result?.url || null;
+  } catch (imgError) {
+    console.warn('Audit after-image gen échouée:', imgError.message);
+    return null;
+  }
+}
+
+// Construit jusqu'à 3 paires before/after pour le PDF d'audit.
+// Sur le 1er sample (hero), on génère aussi une image "after" Vertex pour
+// montrer le rendu Shopping/Amazon optimisé. Les autres samples restent
+// en texte-only (économie + latence).
+async function generateAuditSampleProducts(items) {
+  const samples = selectAuditSampleItems(items);
+  const results = [];
+  let heroImageDone = false;
+  for (let i = 0; i < samples.length; i += 1) {
+    const item = samples[i];
+    const before = {
+      title: String(item.title || '').trim(),
+      description: auditExcerpt(item.descriptionText || item.descriptionHtml || '', 240),
+      imageUrl: auditFieldHasValue(item.imageUrl) ? item.imageUrl : null,
+      issues: auditItemMissingFields(item),
+    };
+    let after = null;
+    try {
+      after = await generateAuditAfterVersion(item);
+    } catch (aiError) {
+      console.warn('Audit before/after IA échouée:', aiError.message);
+    }
+    // Image lifestyle générée sur le PREMIER sample qui dispose d'une image
+    // source (pas forcément index 0 : si sample[0] n'a pas d'image et que
+    // sample[1] en a une, c'est lui le hero visuel). Un seul appel Vertex
+    // par audit pour contenir coût et latence.
+    if (!heroImageDone && after && before.imageUrl) {
+      const imageUrl = await generateAuditAfterImage(item);
+      if (imageUrl) {
+        after.imageUrl = imageUrl;
+        heroImageDone = true;
+      }
+    }
+    results.push({ before, after });
+  }
+  return results;
+}
+
+// Backfill : génère l'échantillon before/after si un audit "ready" ne l'a pas.
+// Inclut aussi le backfill ciblé de l'image "after" du sample hero pour les
+// audits générés avant l'ajout du visuel avant/après (rétrocompatibilité).
+async function ensureAuditBeforeAfter(audit) {
+  if (!audit || !prismaReady || !prisma) return audit;
+  const report = typeof audit.reportjson === 'string' ? JSON.parse(audit.reportjson || '{}') : (audit.reportjson || {});
+  if (audit.status !== 'ready' || !report || !Number.isFinite(Number(report.score))) return audit;
+
+  const hasSamples = Array.isArray(report.sampleProducts) && report.sampleProducts.length > 0;
+  // Le "hero visuel" n'est pas forcément le sample[0] : c'est le premier
+  // sample qui dispose d'une before.imageUrl utilisable. Si sample[0] n'a
+  // pas d'image source, l'image after se génère sur le sample suivant.
+  const heroIndex = hasSamples
+    ? report.sampleProducts.findIndex((s) => s && s.before?.imageUrl)
+    : -1;
+  const heroVisual = heroIndex >= 0 ? report.sampleProducts[heroIndex] : null;
+  // 3 cas distincts :
+  //  1. Pas de samples → génération complète.
+  //  2. Samples avec tous les `after` null = coquilles vides (souvent dû à
+  //     un modèle Gemini déprécié lors de la 1re gen) → on regénère tout.
+  //  3. Hero visuel a un after textuel mais pas d'image → backfill image ciblé.
+  const allAfterNull = hasSamples && report.sampleProducts.every((s) => !s || !s.after);
+  const needsFullRegen = !hasSamples || allAfterNull;
+  const heroNeedsImage = !needsFullRegen && !!(heroVisual && heroVisual.after && !heroVisual.after.imageUrl);
+
+  if (!needsFullRegen && !heroNeedsImage) return audit;
+
+  try {
+    const input = typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {});
+
+    if (heroNeedsImage) {
+      // Backfill ciblé : on regénère uniquement l'image after du hero visuel
+      // (= 1er sample avec before.imageUrl, pas forcément index 0), tout
+      // le reste reste figé (texte before/after, autres samples).
+      const fetched = await fetchAuditItems(audit, input);
+      const heroItem = (fetched?.items || []).find((it) =>
+        (it.title || '').trim() === (heroVisual.before.title || '').trim()
+      );
+      if (heroItem) {
+        const imageUrl = await generateAuditAfterImage(heroItem);
+        if (imageUrl) {
+          report.sampleProducts[heroIndex].after.imageUrl = imageUrl;
+        }
+      }
+    } else {
+      const fetched = await fetchAuditItems(audit, input);
+      if (!fetched || !Array.isArray(fetched.items)) return audit;
+      report.sampleProducts = await generateAuditSampleProducts(fetched.items);
+    }
+
+    await prisma.$executeRawUnsafe(`
+      UPDATE marketing_audits SET reportjson = $1::jsonb, "updatedAt" = NOW() WHERE id = $2::text
+    `, JSON.stringify(report), audit.id);
+    const refreshed = await prisma.$queryRawUnsafe(`SELECT * FROM marketing_audits WHERE id = $1::text LIMIT 1`, audit.id);
+    return refreshed?.[0] || audit;
+  } catch (backfillError) {
+    console.warn('Backfill before/after échoué:', backfillError.message);
+    return audit;
+  }
+}
+
 async function maybeGenerateMarketingAuditReport(auditRow) {
   if (!auditRow || !prismaReady || !prisma) return auditRow;
   const currentReport = typeof auditRow.reportjson === 'string' ? JSON.parse(auditRow.reportjson || '{}') : (auditRow.reportjson || {});
@@ -5149,21 +6262,15 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
   }
 
   const input = typeof auditRow.inputjson === 'string' ? JSON.parse(auditRow.inputjson || '{}') : (auditRow.inputjson || {});
-  let items = [];
   let diagnostics = input.gmcDiagnostics || {};
 
-  if (String(auditRow.connectortype || '').toUpperCase() === 'SHOPIFY') {
-    items = await fetchMarketingAuditShopifyItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'PRESTASHOP') {
-    items = await fetchMarketingAuditPrestashopItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'CSV') {
-    items = await fetchMarketingAuditFileItems(auditRow, input);
-  } else if (String(auditRow.connectortype || '').toUpperCase() === 'GMC') {
-    const gmcData = await fetchMarketingAuditGmcData(auditRow, input);
-    items = gmcData.items;
-    diagnostics = gmcData.diagnostics;
-  } else {
+  const fetched = await fetchAuditItems(auditRow, input);
+  if (!fetched || !Array.isArray(fetched.items)) {
     return auditRow;
+  }
+  const items = fetched.items;
+  if (fetched.diagnostics) {
+    diagnostics = fetched.diagnostics;
   }
 
   const summary = buildAuditSummaryFromItems(items);
@@ -5176,6 +6283,8 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
     estimatedVisibilityLiftPct: aggregate.estimatedVisibilityLiftPct,
     summary: aggregate.metrics,
     scoreBreakdown: aggregate.scoreBreakdown,
+    auditPillars: aggregate.auditPillars,
+    scoreBand: aggregate.scoreBand,
     connectorType: String(auditRow.connectortype || 'OTHER').toUpperCase(),
     targetChannels: normalizeTargetChannels(typeof auditRow.targetchannels === 'string' ? JSON.parse(auditRow.targetchannels || '[]') : auditRow.targetchannels || []),
     coverage: {
@@ -5219,6 +6328,13 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
     ],
     methodology: aggregate.methodology,
   };
+
+  try {
+    report.sampleProducts = await generateAuditSampleProducts(items);
+  } catch (sampleError) {
+    console.warn('Génération échantillon audit échouée:', sampleError.message);
+    report.sampleProducts = [];
+  }
 
   await prisma.$executeRawUnsafe(`
     UPDATE marketing_audits
@@ -5682,7 +6798,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     const requestedPlatform = String(req.query.platform || '').toLowerCase();
     const requestedDestinationId = String(req.query.destinationId || '').trim();
     const destinationContext = requestedDestinationId
-      ? await getDestinationPushContext(req.accountId || 'default-account', requestedDestinationId, requestedPlatform || null)
+      ? await getDestinationPushContext(req.accountId, requestedDestinationId, requestedPlatform || null)
       : null;
     const platform = destinationContext?.platformKey || requestedPlatform || 'gmc';
     const format = (req.query.format || (platform === 'chatgpt' ? 'json' : 'csv')).toLowerCase();
@@ -5699,9 +6815,9 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
 
     const limit = Math.min(parseInt(req.query.limit) || 10000, 50000);
 
-    const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
+    const SUPPORTED_PLATFORMS = ['gmc', 'lia', 'meta', 'amazon', 'cdiscount', 'rakuten', 'chatgpt', 'bing', 'pinterest', 'tiktok', 'snapchat', 'yandex', 'baidu', 'perplexity', 'gemini'];
     if (!SUPPORTED_PLATFORMS.includes(platform)) {
-      return res.status(400).json({ message: 'Plateforme non supportée. Utilisez platform=gmc|meta|amazon|cdiscount|rakuten|chatgpt|bing|pinterest|tiktok|snapchat|yandex|baidu|perplexity|gemini.' });
+      return res.status(400).json({ message: 'Plateforme non supportée. Utilisez platform=gmc|lia|meta|amazon|cdiscount|rakuten|chatgpt|bing|pinterest|tiktok|snapchat|yandex|baidu|perplexity|gemini.' });
     }
     const jsonPlatforms = ['chatgpt'];
     if (!jsonPlatforms.includes(platform) && format !== 'csv') {
@@ -5717,7 +6833,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     }
 
     // Exclure les produits dont le canal est désactivé (_channelOverrides)
-    const overrideKeyMap = { gmc: 'google', meta: 'meta', amazon: 'amazon', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
+    const overrideKeyMap = { gmc: 'google', lia: 'google', meta: 'meta', amazon: 'amazon', chatgpt: 'chatgpt', bing: 'bing', pinterest: 'pinterest', tiktok: 'tiktok', snapchat: 'snapchat', yandex: 'yandex', baidu: 'baidu', perplexity: 'perplexity', gemini: 'gemini' };
     const overrideKey = overrideKeyMap[platform] || null;
     const excludeOverrides = overrideKey && !destinationContext
       ? `AND (customfields->'_channelOverrides'->>'${overrideKey}' IS NULL OR customfields->'_channelOverrides'->>'${overrideKey}' != 'false')`
@@ -5739,7 +6855,7 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
     const channelKey = platform === 'gmc' ? 'gmc' : (platform === 'amazon' ? (channel || 'amazon') : (platform === 'chatgpt' ? 'chatgpt' : platform));
     try {
       const { applyRules, getActiveRules } = require('./rules/engine');
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const rules = await prisma.$queryRawUnsafe(`
         SELECT id, conditionjson, actionjson, feedids, channelids, priority, isactive, startdate, enddate
         FROM "Rule" WHERE accountid = $1::text AND isactive = true ORDER BY priority ASC
@@ -5912,6 +7028,34 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         ];
       });
       filename = `feed-gmc-${id}${destinationContext?.slug ? `-${destinationContext.slug}` : ''}.csv`;
+    } else if (platform === 'lia') {
+      // Google Local Inventory Ads : flux d'inventaire local, une ligne par
+      // produit × magasin. Le flux produit principal reste l'export GMC ;
+      // celui-ci ne porte que la dimension magasin (store_code, quantity, ...).
+      const { buildLiaRows } = require('./lib/local-inventory');
+      const requestedStoreCode = String(req.query.storeCode || '').trim();
+      const stores = await prisma.$queryRawUnsafe(`
+        SELECT storecode FROM "StoreLocation"
+        WHERE accountid = $1::text AND isactive = true
+        ORDER BY storecode
+      `, req.accountId);
+      if (!stores || stores.length === 0) {
+        return res.status(400).json({
+          message: 'Aucun magasin configuré. Créez vos magasins (Paramètres → Magasins LIA) avant d\'exporter le flux d\'inventaire local.'
+        });
+      }
+      if (requestedStoreCode && !stores.some(s => s.storecode === requestedStoreCode)) {
+        return res.status(400).json({ message: `Magasin inconnu : ${requestedStoreCode}` });
+      }
+      const inventories = await prisma.$queryRawUnsafe(`
+        SELECT storecode, offerid, quantity, availability, price, saleprice, pickupmethod, pickupsla
+        FROM "LocalInventory"
+        WHERE accountid = $1::text
+      `, req.accountId);
+      const lia = buildLiaRows({ items, stores, inventories, storeCode: requestedStoreCode || null });
+      headers = lia.headers;
+      rows = lia.rows;
+      filename = `feed-lia-${id}${requestedStoreCode ? `-${requestedStoreCode.toLowerCase()}` : ''}.csv`;
     } else if (platform === 'meta') {
       // Meta (Facebook Commerce / Catalogue) : colonnes attendues par le format CSV Meta
       headers = ['id', 'title', 'description', 'link', 'image_link', 'availability', 'condition', 'price', 'brand', 'gtin', 'mpn'];
@@ -6124,7 +7268,7 @@ app.get('/api/v1/ingestion/items/:id', async (req, res) => {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
 
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     
     // Si l'ID ne ressemble pas à un UUID, chercher par MPN ou SKU (dans le compte uniquement)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -6271,7 +7415,7 @@ app.get('/api/v1/ingestion/items/:id/debug', async (req, res) => {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
 
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Si l'ID ne ressemble pas à un UUID, chercher par MPN ou SKU (dans le compte uniquement)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -6361,7 +7505,7 @@ app.get('/api/v1/ingestion/items/:id/score', async (req, res) => {
     }
 
     // Récupérer l'item (support UUID, MPN ou SKU)
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Vérifier si c'est un UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -6492,7 +7636,7 @@ app.get('/api/v1/ingestion/items/:id/score-history', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     let items;
     if (isUUID) {
@@ -6965,7 +8109,7 @@ app.post('/api/v1/ingestion/recalculate-all-scores', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const acctId = req.accountId || 'default-account';
+    const acctId = req.accountId;
     const feature = await canUseFeature(prisma, acctId, 'qualityScore');
     if (!feature.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: feature.message });
@@ -7585,6 +8729,184 @@ function resolveMarketingOutboundStage(nurtureStage) {
   return 'j0';
 }
 
+// ── Nurture post-audit de flux (segments A / B) ──────────────────────────────
+// Le lead d'un audit suit une séquence dédiée. Le segment réel (A = audit non
+// terminé, B = audit vu) est déterminé au moment de l'envoi à partir du statut
+// de l'audit ; seul le numéro d'étape est stocké dans `nurturestage`.
+const MARKETING_STAGE_AUDIT_1 = 'audit_step_1';
+
+function auditStepFromStage(stage) {
+  const match = /^audit_step_([1-4])$/.exec(String(stage || ''));
+  return match ? Number(match[1]) : null;
+}
+
+const AUDIT_NURTURE_ISSUE_LABELS = {
+  fr: {
+    title: 'Titres produit', description: 'Descriptions', image: 'Images principales',
+    brand: 'Marque', category: 'Catégorisation',
+    identifier: 'Identifiants produits (GTIN/MPN)', link: 'URLs produit',
+  },
+  en: {
+    title: 'Product titles', description: 'Descriptions', image: 'Main images',
+    brand: 'Brand', category: 'Categorization',
+    identifier: 'Product identifiers (GTIN/MPN)', link: 'Product URLs',
+  },
+  es: {
+    title: 'Títulos de producto', description: 'Descripciones', image: 'Imágenes principales',
+    brand: 'Marca', category: 'Categorización',
+    identifier: 'Identificadores de producto (GTIN/MPN)', link: 'URLs de producto',
+  },
+};
+
+const AUDIT_NURTURE_BLOCAGE_FALLBACK = {
+  fr: 'Attributs catalogue à compléter sur une partie des fiches',
+  en: 'Catalog attributes to complete on part of the catalog',
+  es: 'Atributos de catálogo por completar en parte del catálogo',
+};
+
+function auditIssueLabel(issue, loc) {
+  const labels = AUDIT_NURTURE_ISSUE_LABELS[loc] || AUDIT_NURTURE_ISSUE_LABELS.fr;
+  return labels[issue?.key] || issue?.label || AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr;
+}
+
+function formatAuditIssueDetail(issue, loc) {
+  const count = Number(issue?.affectedProducts || 0);
+  const rate = Number(issue?.affectedRate || 0);
+  if (!count) return '';
+  if (loc === 'en') return `${count} products affected · ${rate}% of the catalog`;
+  if (loc === 'es') return `${count} fichas afectadas · ${rate}% del catálogo`;
+  return `${count} fiches concernées · ${rate}% du catalogue`;
+}
+
+function formatAuditBlocage(issue, loc) {
+  const label = auditIssueLabel(issue, loc);
+  const detail = formatAuditIssueDetail(issue, loc);
+  return detail ? `${label} — ${detail}` : label;
+}
+
+function buildAuditIssuesList(issues, loc) {
+  return (Array.isArray(issues) ? issues : []).slice(0, 3).map((issue) => ({
+    label: auditIssueLabel(issue, loc),
+    detail: formatAuditIssueDetail(issue, loc),
+    severity: issue?.severity || 'low',
+  }));
+}
+
+function buildAuditNurtureContext(lead, audit) {
+  const loc = getEmailLocale(audit?.locale || lead?.locale || 'fr');
+  const report = typeof audit?.reportjson === 'string'
+    ? JSON.parse(audit.reportjson || '{}')
+    : (audit?.reportjson || {});
+  let input = {};
+  try {
+    input = typeof audit?.inputjson === 'string'
+      ? JSON.parse(audit.inputjson || '{}')
+      : (audit?.inputjson || {});
+  } catch { input = {}; }
+
+  const issues = Array.isArray(report.topIssues) ? report.topIssues : [];
+  const blocages = issues.slice(0, 3).map((issue) => formatAuditBlocage(issue, loc));
+  while (blocages.length < 3) blocages.push(AUDIT_NURTURE_BLOCAGE_FALLBACK[loc] || AUDIT_NURTURE_BLOCAGE_FALLBACK.fr);
+
+  const publicBaseUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
+
+  return {
+    prenom: lead?.firstName || '',
+    societe: audit?.company || lead?.company || '',
+    score: report.score ?? '',
+    scorePotentiel: report.potentialScore ?? '',
+    blocage1: blocages[0],
+    blocage2: blocages[1],
+    blocage3: blocages[2],
+    issuesList: buildAuditIssuesList(issues, loc),
+    produitsRecuperables: report.estimatedAdditionalApprovedProducts ?? '',
+    gainVisibilite: report.estimatedVisibilityLiftPct ?? '',
+    cms: input.cmsUsed || audit?.connectortype || '',
+    lienAudit: `${publicBaseUrl}/${audit?.locale || 'fr'}/audit-flux/${audit?.sharetoken || ''}`,
+    lienAuditPdf: `${(process.env.API_URL || 'https://api.feedplug.com').replace(/\/$/, '')}/api/v1/marketing/audits/${audit?.sharetoken || ''}/pdf`,
+    lienRdv: process.env.MARKETING_RDV_URL || 'https://calendly.com/victorsoldet/30min',
+  };
+}
+
+// Envoie l'étape de nurture post-audit pour un lead donné, puis programme la suivante.
+async function sendAuditNurtureForLead(lead, step) {
+  const auditRows = await prisma.$queryRawUnsafe(`
+    SELECT *
+    FROM marketing_audits
+    WHERE leadid = $1::text OR LOWER(email) = LOWER($2::text)
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  `, lead.id, lead.email);
+  let audit = auditRows?.[0] || null;
+
+  if (!audit) {
+    // Lead marqué "audit" sans audit retrouvé : on clôture pour éviter une boucle.
+    await markLeadMarketingProgress(lead.id, {
+      nurtureStage: MARKETING_STAGE_DONE,
+      nextMarketingEmailAt: null,
+    });
+    return;
+  }
+
+  // Si la source est connectée mais le rapport pas encore généré, on tente.
+  try {
+    audit = await maybeGenerateMarketingAuditReport(audit);
+  } catch (genError) {
+    console.warn('Audit nurture: génération rapport échouée:', genError.message);
+  }
+
+  const report = typeof audit.reportjson === 'string'
+    ? JSON.parse(audit.reportjson || '{}')
+    : (audit.reportjson || {});
+  const hasReport = report && Number.isFinite(Number(report.score));
+  const segment = (audit.status === 'pending_connection' || !hasReport) ? 'A' : 'B';
+
+  // Le segment A ne compte que 2 mails.
+  if (segment === 'A' && step > 2) {
+    await markLeadMarketingProgress(lead.id, {
+      nurtureStage: MARKETING_STAGE_DONE,
+      nextMarketingEmailAt: null,
+    });
+    return;
+  }
+
+  const context = buildAuditNurtureContext(lead, audit);
+
+  const resendContactId = await registerLeadInResend(lead);
+  if (resendContactId) {
+    await markLeadMarketingProgress(lead.id, { resendContactId });
+  }
+
+  await sendMarketingAuditNurtureEmail({
+    email: lead.email,
+    locale: audit.locale || lead.locale || 'fr',
+    segment,
+    step,
+    context,
+  });
+
+  const now = new Date();
+  let nextStage = MARKETING_STAGE_DONE;
+  let nextAt = null;
+  if (segment === 'A') {
+    if (step === 1) { nextStage = 'audit_step_2'; nextAt = addDays(now, 3).toISOString(); }
+  } else if (step === 1) {
+    nextStage = 'audit_step_2'; nextAt = addDays(now, 2).toISOString();
+  } else if (step === 2) {
+    nextStage = 'audit_step_3'; nextAt = addDays(now, 4).toISOString();
+  } else if (step === 3) {
+    nextStage = 'audit_step_4'; nextAt = addDays(now, 5).toISOString();
+  }
+
+  await markLeadMarketingProgress(lead.id, {
+    nurtureStage: nextStage,
+    nextMarketingEmailAt: nextAt,
+    lastMarketingEmailAt: now.toISOString(),
+    marketingOptIn: true,
+    unsubscribedAt: null,
+  });
+}
+
 function buildLeadTrimmedInput(body = {}) {
   return {
     firstName: typeof body.firstName === 'string' ? body.firstName.trim() : '',
@@ -7682,10 +9004,12 @@ async function validateMarketingSubmission({
   requireCaptcha = false,
   extraFields = [],
 }) {
-  const companyWebsite = String(req.body?.companyWebsite || '').trim();
-  if (companyWebsite.length > 0) {
-    return { ok: false, status: 400, message: 'Demande refusée', reason: 'honeypot_filled' };
-  }
+  // Honeypot historique (companyWebsite) supprimé : les gestionnaires de mots
+  // de passe (Dashlane, 1Password, Chrome autofill agressif) remplissent
+  // l'input même caché et bloquaient de vraies submissions de prospects
+  // (regression vue en prod 2026-06-12 sur honeypot_filled). On garde les
+  // autres protections : Cloudflare Turnstile + rate limiter + spam risk
+  // assessment + form age check ci-dessous.
 
   const startedAtMs = Number(req.body?.formStartedAt);
   if (Number.isFinite(startedAtMs)) {
@@ -8157,7 +9481,12 @@ function computeMarketingAuditReport(input = {}) {
 
 async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, userAgent }) {
   const emailNormalized = String(email || '').trim().toLowerCase();
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  // Le lead d'un audit entre dans la séquence post-audit (segment A/B),
+  // 1er mail à J+1. On force l'étape même pour un lead déjà connu (ex.
+  // early-access) : l'intention "audit" prime sur la séquence générique.
+  const firstAuditEmailIso = addDays(now, 1).toISOString();
   if (!emailNormalized) return null;
 
   const prismaClient = await getPrismaClientOrThrow('Base marketing indisponible pour l’audit');
@@ -8175,11 +9504,12 @@ async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, 
           locale = COALESCE($7::text, locale),
           source = 'audit_flux_marketing',
           marketingoptin = true,
-          nurturestage = COALESCE(nurturestage, $8::text),
-          nextmarketingemailat = COALESCE(nextmarketingemailat, $9::timestamptz),
-          "updatedAt" = $9::timestamptz
+          nurturestage = $8::text,
+          nextmarketingemailat = $9::timestamptz,
+          "updatedAt" = $10::timestamptz
       WHERE email = $1::text
-    `, emailNormalized, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, trimmed.company, locale, MARKETING_STAGE_J0, nowIso);
+        AND COALESCE("status", '') <> 'converted'
+    `, emailNormalized, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, trimmed.company, locale, MARKETING_STAGE_AUDIT_1, firstAuditEmailIso, nowIso);
     const refreshed = await prismaClient.$queryRawUnsafe(`SELECT * FROM marketing_leads WHERE email = $1::text LIMIT 1`, emailNormalized);
     return refreshed?.[0] || existing[0];
   }
@@ -8196,9 +9526,9 @@ async function upsertMarketingLeadForAudit({ email, trimmed, locale, ipAddress, 
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text,
       $8::text, $9::text, $10::text, 'audit_flux_marketing', 'new',
       true, $11::text, $12::timestamptz,
-      $12::timestamptz, $12::timestamptz
+      $13::timestamptz, $13::timestamptz
     )
-  `, leadId, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, emailNormalized, trimmed.company, ipAddress, userAgent, locale, MARKETING_STAGE_J0, nowIso);
+  `, leadId, trimmed.firstName, trimmed.lastName, trimmed.jobTitle, trimmed.phone, emailNormalized, trimmed.company, ipAddress, userAgent, locale, MARKETING_STAGE_AUDIT_1, firstAuditEmailIso, nowIso);
   const created = await prismaClient.$queryRawUnsafe(`SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1`, leadId);
   return created?.[0] || null;
 }
@@ -8229,6 +9559,362 @@ function serializeMarketingAudit(audit) {
     createdAt: audit.createdAt ? (audit.createdAt.toISOString ? audit.createdAt.toISOString() : audit.createdAt) : null,
     updatedAt: audit.updatedAt ? (audit.updatedAt.toISOString ? audit.updatedAt.toISOString() : audit.updatedAt) : null,
   };
+}
+
+// ── PDF d'audit premium (HTML → PDF via Chromium) ────────────────────────────
+
+const AUDIT_PDF_FIELD_LABELS_FR = {
+  description: 'Description', identifier: 'Identifiant (GTIN/MPN)',
+  brand: 'Marque', category: 'Catégorie', title: 'Titre',
+};
+
+function auditPdfEscape(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Style d'un blocage selon la sévérité — calqué sur getIssueStyle() du front.
+const AUDIT_PDF_SEVERITY = {
+  high: { border: '#FECACA', bg: '#FEF1F1', text: '#B42318', label: 'Priorité haute' },
+  medium: { border: '#FDE68A', bg: '#FEF6E7', text: '#B45309', label: 'Priorité moyenne' },
+  low: { border: '#CFCFCF', bg: '#F2F2F2', text: '#2A2A2A', label: 'Priorité basse' },
+};
+
+// Radar / "araignée" SVG des piliers du flux — lecture instantanée des points faibles.
+function buildAuditRadarSvg(pillars) {
+  const list = (Array.isArray(pillars) ? pillars : []).slice(0, 6);
+  const n = list.length;
+  if (n < 3) return '';
+  const cx = 230;
+  const cy = 152;
+  const R = 84;
+  const angle = (i) => (-90 + i * (360 / n)) * Math.PI / 180;
+  const point = (i, radius) => {
+    const a = angle(i);
+    return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+  };
+  const clampScore = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  const polyPoints = (radiusFor) => list
+    .map((_, i) => point(i, radiusFor(i)).map((v) => v.toFixed(1)).join(','))
+    .join(' ');
+
+  const rings = [0.25, 0.5, 0.75, 1]
+    .map((lvl) => `<polygon points="${polyPoints(() => R * lvl)}" fill="none" stroke="#E5E5E5" stroke-width="1"/>`)
+    .join('');
+  const axes = list
+    .map((_, i) => {
+      const [x, y] = point(i, R);
+      return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#E5E5E5" stroke-width="1"/>`;
+    })
+    .join('');
+  const dataPoints = polyPoints((i) => (R * clampScore(list[i].score)) / 100);
+  const dots = list
+    .map((_, i) => {
+      const [x, y] = point(i, (R * clampScore(list[i].score)) / 100);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#2A6FE8"/>`;
+    })
+    .join('');
+  const labels = list
+    .map((p, i) => {
+      const [lx, ly] = point(i, R + 15);
+      const anchor = lx > cx + 6 ? 'start' : lx < cx - 6 ? 'end' : 'middle';
+      const dy = ly < cy - 6 ? -3 : ly > cy + 6 ? 11 : 4;
+      const v = Math.round(clampScore(p.score));
+      return `<text x="${lx.toFixed(1)}" y="${(ly + dy).toFixed(1)}" text-anchor="${anchor}" font-size="9.5" font-weight="600" fill="#2A2A2A">${auditPdfEscape(p.label)}</text>`
+        + `<text x="${lx.toFixed(1)}" y="${(ly + dy + 12).toFixed(1)}" text-anchor="${anchor}" font-size="11" font-weight="700" fill="#2A6FE8">${v}/100</text>`;
+    })
+    .join('');
+
+  return `<svg viewBox="0 0 460 312" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Hanken Grotesk',sans-serif">
+    ${rings}${axes}
+    <polygon points="${dataPoints}" fill="rgba(42,111,232,0.14)" stroke="#2A6FE8" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
+// Construit le document HTML (print A4) du rapport d'audit.
+// Aligné sur le design system FeedPlug ("Tesla mineral") : surface off-white,
+// encre near-black, accent bleu acier #2A6FE8, typo Bricolage / Hanken Grotesk.
+function buildAuditReportHtml(audit) {
+  const esc = auditPdfEscape;
+  const report = audit.report || {};
+  const score = Math.max(0, Math.min(100, Math.round(Number(report.score) || 0)));
+  const potential = Math.max(0, Math.min(100, Math.round(Number(report.potentialScore) || 0)));
+  const band = report.scoreBand || {};
+  const pillars = Array.isArray(report.auditPillars) ? report.auditPillars : [];
+  const issues = Array.isArray(report.topIssues) ? report.topIssues : [];
+  const samples = Array.isArray(report.sampleProducts) ? report.sampleProducts : [];
+  const createdAt = audit.createdAt ? new Date(audit.createdAt) : new Date();
+  const dateStr = createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const radarSvg = buildAuditRadarSvg(pillars);
+  const pillarsHtml = pillars.map((p) => {
+    const v = Math.max(0, Math.min(100, Math.round(Number(p.score) || 0)));
+    return `
+    <div style="margin-bottom:14px;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="font-size:12.5px;font-weight:600;color:#0A0A0A;">${esc(p.label)}</td>
+        <td style="text-align:right;font-size:12.5px;font-weight:700;color:#2A6FE8;">${v}/100</td>
+      </tr></table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;"><tr>
+        <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
+          <table width="${Math.max(4, v)}%" cellpadding="0" cellspacing="0"><tr>
+            <td style="background:#2A6FE8;height:7px;border-radius:999px;font-size:0;">&nbsp;</td>
+          </tr></table>
+        </td>
+      </tr></table>
+    </div>`;
+  }).join('');
+
+  const issuesHtml = issues.slice(0, 5).map((it, idx) => {
+    const sev = AUDIT_PDF_SEVERITY[it.severity] || AUDIT_PDF_SEVERITY.low;
+    return `
+    <div class="issue" style="background:${sev.bg};border:1px solid ${sev.border};">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:top;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:${sev.text};">${esc(sev.label)}</div>
+          <div style="font-size:15px;font-weight:700;color:#0A0A0A;margin-top:6px;">${idx + 1}. ${esc(it.label)}</div>
+        </td>
+        <td style="vertical-align:top;text-align:right;width:60px;">
+          <span style="display:inline-block;background:#fff;border:1px solid ${sev.border};color:${sev.text};font-size:12px;font-weight:700;border-radius:999px;padding:4px 9px;">${esc(it.affectedRate || 0)}%</span>
+        </td>
+      </tr></table>
+      <div style="font-size:12.5px;line-height:1.65;color:#2A2A2A;margin-top:10px;">${esc(it.affectedProducts || 0)} produits concernés. ${esc(it.impact || '')}</div>
+      ${it.recommendation ? `<div style="font-size:12.5px;line-height:1.65;color:#2A2A2A;margin-top:5px;"><strong style="color:#0A0A0A;">Action recommandée :</strong> ${esc(it.recommendation)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const samplesHtml = samples.map((s, idx) => {
+    const before = s.before || {};
+    const after = s.after || null;
+    const beforeIssues = Array.isArray(before.issues)
+      ? before.issues.map((k) => AUDIT_PDF_FIELD_LABELS_FR[k] || k)
+      : [];
+    const afterAttrs = after && Array.isArray(after.attributes) ? after.attributes : [];
+    // Images affichées uniquement si on a l'après (sample hero only),
+    // sinon on garde une mise en page symétrique full-texte.
+    const showImages = !!(before.imageUrl && after && after.imageUrl);
+    const imgStyle = 'display:block;width:100%;height:130px;object-fit:contain;background:#FFFFFF;border-radius:14px;margin-bottom:10px;';
+    return `
+    <div class="ba-block">
+      <div class="eyebrow" style="margin-bottom:9px;">Fiche produit ${idx + 1}</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
+        <td style="width:50%;vertical-align:top;padding-right:8px;">
+          <div class="ba-card" style="background:#FEF1F1;border:1px solid #FECACA;">
+            ${showImages ? `<img src="${esc(before.imageUrl)}" style="${imgStyle}" alt="Avant">` : ''}
+            <div class="ba-tag" style="color:#B42318;">Avant</div>
+            <div class="ba-title">${esc(before.title) || '<span style="color:#B0B0B0;">(titre vide)</span>'}</div>
+            <div class="ba-desc">${esc(before.description) || '<span style="color:#B0B0B0;">(description vide)</span>'}</div>
+            ${beforeIssues.length ? `<div style="margin-top:10px;">${beforeIssues.map((i) => `<span class="chip" style="background:#fff;border:1px solid #FECACA;color:#B42318;">✕ ${esc(i)}</span>`).join('')}</div>` : ''}
+          </div>
+        </td>
+        <td style="width:50%;vertical-align:top;padding-left:8px;">
+          <div class="ba-card" style="background:#ECFDF3;border:1px solid #BBF7D0;">
+            ${showImages ? `<img src="${esc(after.imageUrl)}" style="${imgStyle}" alt="Après">` : ''}
+            <div class="ba-tag" style="color:#15803D;">Après — corrigé par FeedPlug</div>
+            ${after ? `
+            <div class="ba-title">${esc(after.title)}</div>
+            <div class="ba-desc">${esc(after.description)}</div>
+            ${afterAttrs.length ? `<div style="margin-top:10px;">${afterAttrs.map((a) => `<div style="font-size:11.5px;color:#0A0A0A;margin-bottom:3px;"><strong style="color:#15803D;">${esc(a.label)} :</strong> ${esc(a.value)}</div>`).join('')}</div>` : ''}
+            ` : '<div class="ba-desc" style="color:#6F6F6F;">Version optimisée générée dans votre espace FeedPlug.</div>'}
+          </div>
+        </td>
+      </tr></table>
+    </div>`;
+  }).join('');
+
+  const planSteps = issues.slice(0, 4).map((it) => it.recommendation || `Corriger : ${it.label}`);
+  planSteps.push('Brancher FeedPlug pour appliquer et maintenir ces corrections automatiquement sur tous les canaux.');
+  const planHtml = planSteps.map((step, idx) => `
+    <tr>
+      <td style="width:32px;vertical-align:top;padding:7px 0;">
+        <div style="width:26px;height:26px;line-height:26px;text-align:center;background:#E8EFFB;border-radius:999px;color:#2A6FE8;font-size:12px;font-weight:700;">${idx + 1}</div>
+      </td>
+      <td style="padding:7px 0 7px 12px;font-size:13.5px;line-height:1.6;color:#2A2A2A;">${esc(step)}</td>
+    </tr>`).join('');
+
+  const statCell = (value, label, color) => `
+    <div class="stat">
+      <div class="stat-v" style="color:${color};">${esc(value)}</div>
+      <div class="stat-l">${esc(label)}</div>
+    </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#FAFAFA; color:#0A0A0A;
+    font-family:'Hanken Grotesk',ui-sans-serif,system-ui,-apple-system,sans-serif;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .display { font-family:'Bricolage Grotesque','Hanken Grotesk',sans-serif; }
+  .cover { padding:46px 56px 30px; border-bottom:1px solid #E5E5E5; }
+  .wrap { padding:36px 56px 48px; }
+  .eyebrow { font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#2A6FE8; }
+  /* Empêcher un titre h2 d'être laissé seul en bas de page sans son contenu.
+     break-after:avoid est la prop moderne, page-break-after:avoid le fallback
+     historique encore lu par Chromium / Skia PDF. */
+  h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:19px; font-weight:700; color:#0A0A0A; margin:0 0 14px; letter-spacing:-0.01em; page-break-after:avoid; break-after:avoid; }
+  .section { margin-bottom:28px; }
+  .card { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:22px; page-break-inside:avoid; }
+  .issue { border-radius:20px; padding:18px 20px; margin-bottom:12px; page-break-inside:avoid; }
+  .ba-block { margin-bottom:16px; page-break-inside:avoid; }
+  .ba-card { border-radius:20px; padding:16px 17px; min-height:148px; }
+  .ba-tag { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:9px; }
+  .ba-title { font-size:13px; font-weight:700; color:#0A0A0A; line-height:1.42; margin-bottom:7px; }
+  .ba-desc { font-size:11.5px; color:#2A2A2A; line-height:1.6; }
+  .chip { display:inline-block; font-size:10px; font-weight:600; border-radius:6px; padding:3px 8px; margin:0 5px 5px 0; }
+  .stat { background:#FFFFFF; border:1px solid #E5E5E5; border-radius:20px; padding:20px 18px; }
+  .stat-v { font-family:'Bricolage Grotesque',sans-serif; font-size:32px; font-weight:700; line-height:1; letter-spacing:-0.04em; }
+  .stat-l { font-size:12.5px; color:#6F6F6F; margin-top:9px; line-height:1.45; }
+</style></head>
+<body>
+  <div class="cover">
+    <div class="display" style="font-size:18px;font-weight:700;color:#0A0A0A;letter-spacing:-0.02em;">FeedPlug</div>
+    <div class="eyebrow" style="margin-top:34px;">Rapport d'audit · ${esc(dateStr)}</div>
+    <div class="display" style="font-size:34px;font-weight:700;color:#0A0A0A;letter-spacing:-0.02em;margin-top:10px;">Audit de flux produit</div>
+    <div style="font-size:14px;color:#6F6F6F;margin-top:10px;">
+      ${esc(audit.company || 'Votre catalogue')} &nbsp;·&nbsp; ${esc(audit.cmsUsed || audit.connectorType || 'Source')} &nbsp;·&nbsp; ${esc((report.summary && report.summary.totalProducts) || audit.catalogSize || 0)} produits
+    </div>
+  </div>
+  <div class="wrap">
+
+    <div class="section">
+      <h2>Synthèse</h2>
+      <div class="card">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;">
+            <div style="font-size:12.5px;font-weight:600;color:#6F6F6F;">Score actuel du flux</div>
+            <div class="display" style="font-size:52px;font-weight:700;line-height:1;letter-spacing:-0.04em;color:#2A6FE8;margin-top:6px;">${score}<span style="font-size:20px;color:#B0B0B0;">/100</span></div>
+          </td>
+          <td style="text-align:right;vertical-align:middle;">
+            <span style="display:inline-block;background:#E8EFFB;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700;color:#1F58C0;">Potentiel atteignable&nbsp;: ${potential}/100</span>
+          </td>
+        </tr></table>
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;"><tr>
+          <td style="background:#E5E5E5;border-radius:999px;font-size:0;">
+            <table width="${Math.max(4, score)}%" cellpadding="0" cellspacing="0"><tr><td style="background:#2A6FE8;height:10px;border-radius:999px;font-size:0;">&nbsp;</td></tr></table>
+          </td>
+        </tr></table>
+        ${band.label ? `<div style="margin-top:16px;padding-top:15px;border-top:1px solid #E5E5E5;font-size:13px;line-height:1.65;color:#2A2A2A;"><strong class="display" style="color:#0A0A0A;">Niveau ${esc(band.label)}.</strong> ${esc(band.description || '')}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="section">
+      <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
+        <td style="width:33.33%;padding-right:7px;vertical-align:top;">${statCell(report.estimatedAdditionalApprovedProducts || 0, 'produits récupérables', '#15803D')}</td>
+        <td style="width:33.33%;padding:0 7px;vertical-align:top;">${statCell(`+${report.estimatedVisibilityLiftPct || 0}%`, 'de visibilité estimée', '#2A6FE8')}</td>
+        <td style="width:33.33%;padding-left:7px;vertical-align:top;">${statCell(`${(report.summary && report.summary.approvalReadyRate) || 0}%`, 'produits déjà prêts', '#2A6FE8')}</td>
+      </tr></table>
+    </div>
+
+    ${pillars.length ? `<div class="section">
+      <h2>Le profil de votre flux</h2>
+      <div class="card">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:54%;vertical-align:middle;padding-right:18px;">${radarSvg}</td>
+          <td style="width:46%;vertical-align:middle;padding-left:20px;border-left:1px solid #E5E5E5;">${pillarsHtml}</td>
+        </tr></table>
+      </div>
+    </div>` : ''}
+
+    <div class="section">
+      <h2>Les blocages prioritaires</h2>
+      ${issuesHtml || '<div class="card">Aucun blocage majeur détecté.</div>'}
+    </div>
+
+    ${samples.length ? `<div class="section">
+      <h2>Avant / Après sur votre catalogue</h2>
+      <p style="font-size:13px;color:#6F6F6F;margin:0 0 16px;line-height:1.6;">Un échantillon de vos fiches, corrigées par FeedPlug — titres, descriptions et attributs.</p>
+      ${samplesHtml}
+    </div>` : ''}
+
+    <div class="section">
+      <h2>Plan d'action</h2>
+      <div class="card"><table width="100%" cellpadding="0" cellspacing="0">${planHtml}</table></div>
+    </div>
+
+    <div style="border-top:1px solid #E5E5E5;padding-top:18px;">
+      ${report.methodology ? `<div style="font-size:10.5px;color:#B0B0B0;line-height:1.65;">${esc(report.methodology.scoring || '')} ${esc(report.methodology.estimation || '')}</div>` : ''}
+      <div style="margin-top:13px;font-size:12px;color:#6F6F6F;">Audit complet et version optimisée du catalogue&nbsp;: <strong style="color:#2A6FE8;">${esc(audit.shareUrl || 'feedplug.com')}</strong></div>
+    </div>
+
+  </div>
+</body></html>`;
+}
+
+let auditPdfBrowserPromise = null;
+
+// Résout le chemin du binaire Chromium parmi les emplacements connus.
+function resolveChromiumPath() {
+  const fs = require('fs');
+  const candidates = [
+    process.env.CHROMIUM_PATH,
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch { /* ignore */ }
+  }
+  return candidates[0] || '/usr/bin/chromium';
+}
+
+// Lance (ou réutilise) un Chromium headless adapté à Cloud Run.
+async function getAuditPdfBrowser() {
+  const puppeteer = require('puppeteer-core');
+  if (auditPdfBrowserPromise) {
+    try {
+      const existing = await auditPdfBrowserPromise;
+      if (existing && existing.connected !== false && existing.isConnected && existing.isConnected()) {
+        return existing;
+      }
+    } catch {
+      auditPdfBrowserPromise = null;
+    }
+  }
+  const executablePath = resolveChromiumPath();
+  console.log(`🖨️  Lancement Chromium pour PDF audit: ${executablePath}`);
+  auditPdfBrowserPromise = puppeteer.launch({
+    executablePath,
+    headless: true,
+    dumpio: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-crash-reporter',
+      '--disable-breakpad',
+      '--disable-software-rasterizer',
+    ],
+  });
+  return auditPdfBrowserPromise;
+}
+
+// Rend un document HTML en PDF (buffer) via Chromium headless.
+async function renderAuditReportPdf(html) {
+  const browser = await getAuditPdfBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 20000 });
+    const pdfData = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+    // Puppeteer v23 renvoie un Uint8Array : on le convertit en Buffer Node
+    // pour qu'Express l'envoie en binaire (sinon sérialisé en JSON).
+    return Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData);
+  } finally {
+    await page.close().catch(() => {});
+  }
 }
 
 function buildMarketingAuditPdfBuffer(auditPayload) {
@@ -8308,1014 +9994,73 @@ function buildMarketingAuditPdfBuffer(auditPayload) {
   });
 }
 
-// Endpoint pour Early Access (marketing leads)
-app.post('/api/v1/marketing/early-access', marketingEarlyAccessLimiter, async (req, res) => {
-  try {
-    const { email } = req.body;
-    const trimmed = buildLeadTrimmedInput(req.body);
-    const leadSource = normalizeMarketingLeadSource(req.body?.source);
-
-    if (!email) {
-      return res.status(400).json({ message: 'Email requis' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Email invalide' });
-    }
-
-    const antiSpamCheck = await validateMarketingSubmission({
-      req,
-      email,
-      trimmed,
-      requireCaptcha: Boolean(trimmed.firstName || trimmed.lastName || trimmed.jobTitle || trimmed.company),
-    });
-    if (!antiSpamCheck.ok) {
-      console.warn('Marketing early-access blocked:', {
-        reason: antiSpamCheck.reason,
-        source: leadSource,
-        emailDomain: String(email).trim().toLowerCase().split('@')[1] || 'unknown',
-      });
-      return res.status(antiSpamCheck.status).json({ message: antiSpamCheck.message });
-    }
-
-    const prismaClient = await requirePrismaForRequest(res, 'Service marketing temporairement indisponible');
-    if (!prismaClient) return;
-
-    const emailNormalized = email.toLowerCase().trim();
-    const ipAddress = getClientIp(req);
-    const userAgent = req.headers['user-agent'] || null;
-    const nowIso = new Date().toISOString();
-
-    const existingRows = await prismaClient.$queryRawUnsafe(`
-      SELECT * FROM marketing_leads WHERE email = $1::text LIMIT 1
-    `, emailNormalized);
-    const existingLead = existingRows?.[0] || null;
-
-    if (existingLead) {
-      if (existingLead.unsubscribedat) {
-        await markLeadMarketingProgress(existingLead.id, {
-          marketingOptIn: true,
-          unsubscribedAt: null,
-          nurtureStage: MARKETING_STAGE_J0,
-          nextMarketingEmailAt: nowIso,
-        });
-
-        setImmediate(async () => {
-          try {
-            const resendContactId = await registerLeadInResend({
-              ...existingLead,
-              ...trimmed,
-              email: emailNormalized,
-              unsubscribedAt: null,
-              marketingOptIn: true,
-            });
-            if (resendContactId) {
-              await markLeadMarketingProgress(existingLead.id, { resendContactId });
-            }
-            await sendLeadNurtureStage({
-              ...existingLead,
-              ...trimmed,
-              id: existingLead.id,
-              email: emailNormalized,
-              marketingOptIn: true,
-              unsubscribedAt: null,
-            }, 'j0');
-          } catch (marketingError) {
-            console.warn('Email marketing J0 non envoyé (lead réactivé):', marketingError.message);
-          }
-        });
-      }
-
-      setImmediate(async () => {
-        try {
-          await notifyInternalMarketingFormSubmission({
-            kind: 'lead',
-            source: leadSource,
-            email: emailNormalized,
-            firstName: trimmed.firstName || existingLead.firstName || existingLead.firstname || null,
-            lastName: trimmed.lastName || existingLead.lastName || existingLead.lastname || null,
-            jobTitle: trimmed.jobTitle || existingLead.jobTitle || existingLead.jobtitle || null,
-            phone: trimmed.phone || existingLead.phone || null,
-            company: trimmed.company || existingLead.company || null,
-            locale: trimmed.locale || existingLead.locale || 'fr',
-            createdAt: nowIso,
-            alreadyRegistered: true,
-          });
-        } catch (alertError) {
-          console.warn('Alerte interne lead non envoyee (soumission repetee):', alertError.message);
-        }
-      });
-
-      return res.status(200).json({
-        message: 'Vous êtes déjà inscrit !',
-        alreadyRegistered: true,
-      });
-    }
-
-    const leadId = crypto.randomUUID();
-    await prismaClient.$executeRawUnsafe(`
-      INSERT INTO marketing_leads (
-        id, "firstName", "lastName", "jobTitle", phone, email, company,
-        "ipAddress", "userAgent", locale, source, status,
-        marketingoptin, nurturestage, nextmarketingemailat,
-        "createdAt", "updatedAt"
-      )
-      VALUES (
-        $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text,
-        $8::text, $9::text, $10::text, $11::text, 'new',
-        true, $12::text, $13::timestamptz,
-        $13::timestamptz, $13::timestamptz
-      )
-    `,
-      leadId,
-      trimmed.firstName,
-      trimmed.lastName,
-      trimmed.jobTitle,
-      trimmed.phone,
-      emailNormalized,
-      trimmed.company,
-      ipAddress,
-      userAgent,
-      trimmed.locale,
-      leadSource,
-      MARKETING_STAGE_J0,
-      nowIso
-    );
-
-    const saved = await prismaClient.$queryRawUnsafe(`
-      SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1
-    `, leadId);
-    const newLead = saved?.[0] || null;
-
-    console.log(`✅ Nouveau lead Early Access: ${newLead?.firstName || 'N/A'} (${newLead?.email || emailNormalized})`);
-
-    setImmediate(async () => {
-      if (!newLead) return;
-      try {
-        const resendContactId = await registerLeadInResend(newLead);
-        if (resendContactId) {
-          await markLeadMarketingProgress(newLead.id, { resendContactId });
-        }
-        await sendLeadNurtureStage(newLead, 'j0');
-      } catch (marketingError) {
-        console.warn('Email marketing J0 non envoyé:', marketingError.message);
-      }
-
-      try {
-        await notifyInternalMarketingFormSubmission({
-          kind: 'lead',
-          source: leadSource,
-          email: emailNormalized,
-          firstName: trimmed.firstName,
-          lastName: trimmed.lastName,
-          jobTitle: trimmed.jobTitle,
-          phone: trimmed.phone,
-          company: trimmed.company,
-          locale: trimmed.locale,
-          createdAt: nowIso,
-        });
-      } catch (alertError) {
-        console.warn('Alerte interne lead non envoyee:', alertError.message);
-      }
-    });
-
-    res.status(201).json({
-      message: 'Inscription réussie ! Nous vous avons envoyé la suite.',
-      success: true,
-    });
-  } catch (error) {
-    console.error('Early access error:', error);
-    res.status(500).json({ message: "Erreur lors de l'inscription" });
-  }
-});
-
-app.post('/api/v1/marketing/audits', marketingAuditLimiter, async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    const trimmed = buildLeadTrimmedInput(req.body || {});
-    const locale = typeof req.body?.locale === 'string' ? req.body.locale.trim() || 'fr' : 'fr';
-    const connectorType = String(req.body?.connectorType || 'OTHER').trim().toUpperCase();
-    const cmsUsed = typeof req.body?.cmsUsed === 'string' ? req.body.cmsUsed.trim() : '';
-    const shopUrl = typeof req.body?.shopUrl === 'string' ? req.body.shopUrl.trim() : '';
-    const merchantId = typeof req.body?.merchantId === 'string' ? req.body.merchantId.trim() : '';
-    const targetChannels = normalizeTargetChannels(req.body?.targetChannels);
-    const catalogSize = Math.max(1, Number(req.body?.catalogSize || 0) || 1);
-
-    if (!email) {
-      return res.status(400).json({ message: 'Email requis' });
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(String(email))) {
-      return res.status(400).json({ message: 'Email invalide' });
-    }
-    if (!trimmed.company) {
-      return res.status(400).json({ message: 'Entreprise requise pour generer l audit' });
-    }
-    if (!trimmed.firstName || !trimmed.lastName || !trimmed.jobTitle) {
-      return res.status(400).json({ message: 'Prenom, nom et fonction sont requis' });
-    }
-    if (!cmsUsed) {
-      return res.status(400).json({ message: 'Le CMS ou la source utilisee est requis' });
-    }
-    if (connectorType === 'GMC' && !merchantId) {
-      return res.status(400).json({ message: 'Merchant ID requis pour un audit Google Merchant Center' });
-    }
-    if (connectorType !== 'GMC' && !shopUrl) {
-      return res.status(400).json({ message: 'URL boutique ou flux requise pour lancer l audit' });
-    }
-
-    const antiSpamCheck = await validateMarketingSubmission({
-      req,
-      email,
-      trimmed,
-      requireCaptcha: true,
-    });
-    if (!antiSpamCheck.ok) {
-      console.warn('Marketing audit blocked:', {
-        reason: antiSpamCheck.reason,
-        connectorType,
-        emailDomain: String(email).trim().toLowerCase().split('@')[1] || 'unknown',
-      });
-      return res.status(antiSpamCheck.status).json({ message: antiSpamCheck.message });
-    }
-
-    const emailNormalized = String(email).trim().toLowerCase();
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service audit temporairement indisponible' });
-    }
-    const ipAddress = getClientIp(req);
-    const userAgent = req.headers['user-agent'] || null;
-    const lead = await upsertMarketingLeadForAudit({
-      email: emailNormalized,
-      trimmed,
-      locale,
-      ipAddress,
-      userAgent,
-    });
-
-    const input = {
-      connectorType,
-      cmsUsed,
-      shopUrl,
-      merchantId,
-      catalogSize,
-      targetChannels,
-      gmcDiagnostics: req.body?.gmcDiagnostics || {},
-      goal: typeof req.body?.goal === 'string' ? req.body.goal.trim() : 'growth',
-    };
-    const shareToken = crypto.randomUUID();
-    const auditId = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-    const publicBaseUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
-    const shareUrl = `${publicBaseUrl}/${locale}/audit-flux/${shareToken}`;
-
-    await prisma.$executeRawUnsafe(`
-      INSERT INTO marketing_audits (
-        id, leadid, sharetoken, email, company, locale, connectortype,
-        shopurl, merchantid, catalogsize, targetchannels, inputjson, reportjson, status,
-        "createdAt", "updatedAt"
-      )
-      VALUES (
-        $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text,
-        $8::text, $9::text, $10::int, $11::jsonb, $12::jsonb, $13::jsonb, 'pending_connection',
-        $14::timestamptz, $14::timestamptz
-      )
-    `, auditId, lead?.id || null, shareToken, emailNormalized, trimmed.company, locale, connectorType, shopUrl || null, merchantId || null, catalogSize, JSON.stringify(targetChannels), stringifyEncryptedJson(input), JSON.stringify({}), nowIso);
-
-    setImmediate(async () => {
-      if (!lead) return;
-      try {
-        const resendContactId = await registerLeadInResend(lead);
-        if (resendContactId) {
-          await markLeadMarketingProgress(lead.id, { resendContactId });
-        }
-        await sendMarketingAuditEmail({
-          email: emailNormalized,
-          firstName: trimmed.firstName,
-          company: trimmed.company,
-          locale,
-          shareUrl,
-          connectorLabel: cmsUsed || connectorType,
-          targetChannels,
-        });
-      } catch (marketingError) {
-        console.warn('Email audit non envoye:', marketingError.message);
-      }
-
-      try {
-        await notifyInternalMarketingFormSubmission({
-          kind: 'audit',
-          source: 'audit_flux_marketing',
-          email: emailNormalized,
-          firstName: trimmed.firstName,
-          lastName: trimmed.lastName,
-          jobTitle: trimmed.jobTitle,
-          phone: trimmed.phone,
-          company: trimmed.company,
-          locale,
-          connectorType,
-          cmsUsed,
-          shopUrl,
-          merchantId,
-          catalogSize,
-          targetChannels,
-          createdAt: nowIso,
-        });
-      } catch (alertError) {
-        console.warn('Alerte interne audit non envoyee:', alertError.message);
-      }
-    });
-
-    res.status(201).json({
-      success: true,
-      audit: {
-        id: auditId,
-        shareToken,
-        shareUrl,
-        email: emailNormalized,
-        company: trimmed.company,
-        locale,
-        connectorType,
-        cmsUsed,
-        shopUrl,
-        merchantId,
-        catalogSize,
-        targetChannels,
-        report: null,
-        status: 'pending_connection',
-        createdAt: nowIso,
-      },
-    });
-  } catch (error) {
-    console.error('Marketing audit create error:', error);
-    res.status(500).json({ message: 'Erreur lors de la creation de l audit' });
-  }
-});
-
-app.get('/api/v1/marketing/audits/:shareToken', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const rows = await prisma.$queryRawUnsafe(`
-      SELECT *
-      FROM marketing_audits
-      WHERE sharetoken = $1::text
-      LIMIT 1
-    `, shareToken);
-    let audit = rows?.[0];
-    if (!audit) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-    audit = await maybeGenerateMarketingAuditReport(audit);
-    res.json({ audit: serializeMarketingAudit(audit) });
-  } catch (error) {
-    console.error('Marketing audit get error:', error);
-    res.status(500).json({ message: 'Erreur lors de la lecture de l audit' });
-  }
-});
-
-app.get('/api/v1/marketing/audits/:shareToken/pdf', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const rows = await prisma.$queryRawUnsafe(`
-      SELECT *
-      FROM marketing_audits
-      WHERE sharetoken = $1::text
-      LIMIT 1
-    `, shareToken);
-    let audit = rows?.[0];
-    if (!audit) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-    audit = await maybeGenerateMarketingAuditReport(audit);
-    const serialized = serializeMarketingAudit(audit);
-    const buffer = await buildMarketingAuditPdfBuffer(serialized);
-    const filenameBase = String(serialized.company || 'audit-feedplug')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'audit-feedplug';
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${filenameBase}.pdf"`);
-    res.send(buffer);
-  } catch (error) {
-    console.error('Marketing audit pdf error:', error);
-    res.status(500).json({ message: 'Erreur lors de la generation du PDF' });
-  }
-});
-
-app.get('/api/v1/marketing/click', async (req, res) => {
-  try {
-    const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
-    const target = typeof req.query.target === 'string' ? req.query.target.trim().toLowerCase() : '';
-    const href = typeof req.query.href === 'string' ? req.query.href.trim() : '';
-    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
-
-    const redirectHref = resolveMarketingRedirectHref(href);
-    if (!email || !target || !redirectHref || !token || !verifyMarketingClickToken(email, target, href, token)) {
-      return res.status(400).send('Lien de suivi invalide.');
-    }
-
-    setImmediate(() => {
-      recordMarketingClick(email, target).catch((error) => {
-        console.warn('Marketing click tracking error:', error.message);
-      });
-    });
-
-    return res.redirect(302, redirectHref);
-  } catch (error) {
-    console.error('Marketing click redirect error:', error);
-    return res.status(500).send('Erreur lors de la redirection.');
-  }
-});
-
-app.get('/api/v1/marketing/unsubscribe', async (req, res) => {
-  try {
-    const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
-    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
-
-    if (!email || !token || !verifyMarketingUnsubscribeToken(email, token)) {
-      return res.status(400).send('Lien de désinscription invalide.');
-    }
-
-    const prismaClient = await getPrismaClientOrThrow('Base marketing indisponible pour la désinscription');
-    const nowIso = new Date().toISOString();
-
-    await prismaClient.$executeRawUnsafe(`
-      UPDATE marketing_leads
-      SET marketingoptin = FALSE,
-          nurturestage = $2::text,
-          nextmarketingemailat = NULL,
-          unsubscribedat = $3::timestamptz,
-          "updatedAt" = $3::timestamptz
-      WHERE email = $1::text
-    `, email, MARKETING_STAGE_DONE, nowIso);
-
-    setImmediate(() => {
-      syncMarketingContact({ email, unsubscribed: true }).catch((syncError) => {
-        console.warn('Sync désinscription Resend échouée:', syncError.message);
-      });
-    });
-
-    res
-      .status(200)
-      .type('html')
-      .send(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Désinscription confirmée</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#0f172a;padding:48px 24px;"><main style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;"><h1 style="margin-top:0;font-size:28px;">Désinscription confirmée</h1><p>Vous ne recevrez plus les emails marketing FeedPlug liés à votre demande d’accès.</p><p style="color:#475569;">Si c’était une erreur, vous pouvez vous réinscrire depuis le site.</p></main></body></html>`);
-  } catch (error) {
-    console.error('Marketing unsubscribe error:', error);
-    res.status(500).send('Erreur lors de la désinscription.');
-  }
-});
-
-app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
-  try {
-    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
-      ? process.env.SCHEDULER_SECRET.trim()
-      : '';
-    if (!schedulerSecret) {
-      return res.status(503).json({ message: 'Scheduler non configuré' });
-    }
-
-    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-    const providedSecret = typeof rawProvidedSecret === 'string'
-      ? rawProvidedSecret.replace('Bearer ', '').trim()
-      : '';
-    if (providedSecret !== schedulerSecret) {
-      return res.status(401).json({ message: 'Non autorisé' });
-    }
-
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Prisma non disponible' });
-    }
-
-    const dueLeads = await prisma.$queryRawUnsafe(`
-      SELECT *
-      FROM marketing_leads
-      WHERE marketingoptin = TRUE
-        AND unsubscribedat IS NULL
-        AND nextmarketingemailat IS NOT NULL
-        AND nextmarketingemailat <= NOW()
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "User" u
-          WHERE LOWER(u.email) = LOWER(marketing_leads.email)
-        )
-        AND nurturestage IN ($1::text, $2::text, $3::text, $4::text, $5::text)
-      ORDER BY nextmarketingemailat ASC
-      LIMIT 100
-    `, MARKETING_STAGE_J0, MARKETING_STAGE_J1, MARKETING_STAGE_J3, MARKETING_STAGE_J6, MARKETING_STAGE_J10);
-
-    const results = {
-      checked: dueLeads.length,
-      sent: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    for (const lead of dueLeads) {
-      try {
-        const stage = resolveMarketingOutboundStage(lead.nurturestage);
-
-        const resendContactId = await registerLeadInResend(lead);
-        if (resendContactId) {
-          await markLeadMarketingProgress(lead.id, { resendContactId });
-        }
-
-        await sendLeadNurtureStage(lead, stage);
-        results.sent += 1;
-      } catch (error) {
-        results.failed += 1;
-        results.errors.push({
-          leadId: lead.id,
-          email: lead.email,
-          error: error.message,
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      ...results,
-    });
-  } catch (error) {
-    console.error('Marketing nurture run error:', error);
-    res.status(500).json({ message: 'Erreur lors de l’exécution du nurture marketing' });
-  }
-});
-
-// Idées de fonctionnalités (page Roadmap)
-app.post('/api/v1/marketing/feature-idea', marketingFeatureIdeaLimiter, async (req, res) => {
-  try {
-    const { email, name, idea } = req.body;
-
-    if (!email || !idea || typeof idea !== 'string') {
-      return res.status(400).json({
-        message: 'Merci de renseigner votre email et votre idée.',
-      });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({ message: 'Email invalide.' });
-    }
-
-    const ideaTrimmed = idea.trim();
-    if (ideaTrimmed.length < 10) {
-      return res.status(400).json({
-        message: 'Décrivez votre idée en au moins quelques mots (10 caractères minimum).',
-      });
-    }
-
-    const prismaClient = await requirePrismaForRequest(res, 'Service roadmap temporairement indisponible');
-    if (!prismaClient) return;
-
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const emailNormalized = email.toLowerCase().trim();
-
-    await prismaClient.$executeRawUnsafe(`
-      INSERT INTO feature_ideas (id, email, name, idea, "createdAt")
-      VALUES ($1::text, $2::text, $3::text, $4::text, $5::timestamptz)
-    `, id, emailNormalized, (name && name.trim()) || null, ideaTrimmed, now);
-
-    console.log(`💡 Nouvelle idée feature: ${emailNormalized} — ${ideaTrimmed.slice(0, 50)}…`);
-
-    setImmediate(async () => {
-      try {
-        const [firstName, ...rest] = String(name || '').trim().split(/\s+/).filter(Boolean);
-        await notifyInternalMarketingFormSubmission({
-          kind: 'feature_idea',
-          source: 'roadmap',
-          email: emailNormalized,
-          firstName: firstName || null,
-          lastName: rest.length > 0 ? rest.join(' ') : null,
-          idea: ideaTrimmed,
-          createdAt: now,
-        });
-      } catch (alertError) {
-        console.warn('Alerte interne idee produit non envoyee:', alertError.message);
-      }
-    });
-
-    res.status(201).json({
-      message: 'Merci ! Votre idée a bien été enregistrée.',
-      success: true,
-    });
-  } catch (error) {
-    console.error('Feature idea error:', error);
-    res.status(500).json({ message: "Erreur lors de l'envoi. Réessayez plus tard." });
-  }
-});
-
-// Récupérer les idées feature (protégé - OWNER uniquement, rôle depuis JWT)
-app.get('/api/v1/marketing/feature-ideas', authenticateToken, requireStaffAccess, async (req, res) => {
-  try {
-    const prismaClient = await requirePrismaForRequest(res, 'Service roadmap temporairement indisponible');
-    if (!prismaClient) return;
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const skip = (page - 1) * limit;
-
-    const [ideasResult, totalResult] = await Promise.all([
-      prismaClient.$queryRawUnsafe(`
-        SELECT * FROM feature_ideas
-        ORDER BY "createdAt" DESC
-        LIMIT $1::int OFFSET $2::int
-      `, limit, skip),
-      prismaClient.$queryRawUnsafe(`SELECT COUNT(*) as count FROM feature_ideas`)
-    ]);
-
-    const total = parseInt(totalResult[0].count);
-    const ideas = ideasResult || [];
-
-    res.json({
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-      ideas: ideas.map((idea) => ({
-        id: idea.id,
-        email: idea.email,
-        name: idea.name,
-        idea: idea.idea,
-        createdAt: idea.createdAt ? (idea.createdAt.toISOString ? idea.createdAt.toISOString() : idea.createdAt) : new Date().toISOString(),
-      })),
-    });
-  } catch (error) {
-    console.error('Error fetching feature ideas:', error);
-    res.status(500).json({ message: 'Erreur lors de la récupération des idées' });
-  }
-});
-
-// Endpoint pour récupérer les leads - RÉSERVÉ STAFF FEEDPLUG (données prospect internes)
-app.get('/api/v1/marketing/leads', authenticateToken, requireStaffAccess, async (req, res) => {
-  try {
-    const prismaClient = await requirePrismaForRequest(res, 'Service marketing temporairement indisponible');
-    if (!prismaClient) return;
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const skip = (page - 1) * limit;
-
-    const [leadsResult, totalResult] = await Promise.all([
-      prismaClient.$queryRawUnsafe(`
-        SELECT * FROM marketing_leads
-        ORDER BY "createdAt" DESC
-        LIMIT $1::int OFFSET $2::int
-      `, limit, skip),
-      prismaClient.$queryRawUnsafe(`SELECT COUNT(*) as count FROM marketing_leads`)
-    ]);
-
-    const total = parseInt(totalResult[0].count);
-    const leads = leadsResult || [];
-
-    res.json({
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-      leads: leads.map((lead) => serializeMarketingLead(lead)),
-    });
-  } catch (error) {
-    console.error('Error fetching leads:', error);
-    res.status(500).json({ message: 'Erreur lors de la récupération des leads' });
-  }
-});
-
-// Mise à jour d'un lead (statut, notes) — RÉSERVÉ STAFF FEEDPLUG
-app.put('/api/v1/marketing/leads/:id', authenticateToken, requireStaffAccess, async (req, res) => {
-  try {
-    const prismaClient = await requirePrismaForRequest(res, 'Service marketing temporairement indisponible');
-    if (!prismaClient) return;
-
-    const { id } = req.params;
-    const { status, notes } = req.body || {};
-    const updates = {};
-    if (status !== undefined) updates.status = String(status).trim();
-    if (notes !== undefined) updates.notes = notes === null ? null : String(notes);
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ message: 'Données à mettre à jour requises (status et/ou notes)' });
-    }
-
-    const parts = [];
-    const args = [id];
-    let pos = 2;
-    if (updates.status !== undefined) {
-      parts.push(`"status" = $${pos}::text`);
-      args.push(updates.status);
-      pos++;
-    }
-    if (updates.notes !== undefined) {
-      parts.push(`"notes" = $${pos}::text`);
-      args.push(updates.notes);
-      pos++;
-    }
-    parts.push(`"updatedAt" = $${pos}::timestamptz`);
-    args.push(new Date().toISOString());
-    const sql = `UPDATE marketing_leads SET ${parts.join(', ')} WHERE id = $1::text`;
-    const result = await prismaClient.$executeRawUnsafe(sql, ...args);
-    if (result === 0) {
-      return res.status(404).json({ message: 'Lead introuvable' });
-    }
-
-    const refreshed = await prismaClient.$queryRawUnsafe(`
-      SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1
-    `, id);
-    return res.json({ success: true, lead: refreshed?.[0] ? serializeMarketingLead(refreshed[0]) : null });
-  } catch (error) {
-    console.error('Error updating lead:', error);
-    res.status(500).json({ message: 'Erreur lors de la mise à jour du lead' });
-  }
-});
-
-app.post('/api/v1/marketing/leads/:id/send-nurture', authenticateToken, requireStaffAccess, async (req, res) => {
-  try {
-    const prismaClient = await requirePrismaForRequest(res, 'Service marketing temporairement indisponible');
-    if (!prismaClient) return;
-
-    const { id } = req.params;
-    const requestedStage = typeof req.body?.stage === 'string' ? req.body.stage.trim().toLowerCase() : '';
-    const allowedRequestedStages = new Set(['j0', 'j1', 'j3', 'j6', 'j10']);
-    const requestedStageByStatus = allowedRequestedStages.has(requestedStage) ? requestedStage : 'j0';
-
-    const rows = await prismaClient.$queryRawUnsafe(`
-      SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1
-    `, id);
-    const lead = rows?.[0] || null;
-
-    if (!lead) {
-      return res.status(404).json({ message: 'Lead introuvable' });
-    }
-
-    const normalizedLead = serializeMarketingLead(lead);
-    if (normalizedLead.marketingOptIn === false || normalizedLead.unsubscribedAt) {
-      return res.status(409).json({ message: 'Ce lead est desinscrit des relances marketing.' });
-    }
-
-    const stage = requestedStage
-      ? requestedStageByStatus
-      : resolveMarketingOutboundStage(normalizedLead.nurtureStage);
-
-    const resendContactId = await registerLeadInResend(normalizedLead);
-    if (resendContactId) {
-      await markLeadMarketingProgress(normalizedLead.id, { resendContactId });
-    }
-
-    await sendLeadNurtureStage(normalizedLead, stage);
-
-    const refreshed = await prismaClient.$queryRawUnsafe(`
-      SELECT * FROM marketing_leads WHERE id = $1::text LIMIT 1
-    `, id);
-
-    return res.json({
-      success: true,
-      message: `Email ${stage.toUpperCase()} envoye.`,
-      lead: refreshed?.[0] ? serializeMarketingLead(refreshed[0]) : null,
-    });
-  } catch (error) {
-    console.error('Error sending nurture email:', error);
-    res.status(500).json({ message: 'Erreur lors de l’envoi de l’email marketing' });
-  }
+// ====== MARKETING (routes extraites dans routes/marketing.js) ======
+const { registerMarketingRoutes } = require('./routes/marketing');
+registerMarketingRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requirePrismaForRequest,
+  getPrismaClientOrThrow,
+  authenticateToken,
+  requireStaffAccess,
+  marketingEarlyAccessLimiter,
+  marketingAuditLimiter,
+  marketingFeatureIdeaLimiter,
+  getClientIp,
+  auditStepFromStage,
+  buildAuditIssuesList,
+  buildAuditReportHtml,
+  buildLeadTrimmedInput,
+  buildMarketingAuditPdfBuffer,
+  ensureAuditBeforeAfter,
+  formatAuditBlocage,
+  markLeadMarketingProgress,
+  maybeGenerateMarketingAuditReport,
+  normalizeMarketingLeadSource,
+  normalizeTargetChannels,
+  recordMarketingClick,
+  registerLeadInResend,
+  renderAuditReportPdf,
+  resolveMarketingOutboundStage,
+  resolveMarketingRedirectHref,
+  sendAuditNurtureForLead,
+  sendLeadNurtureStage,
+  serializeMarketingAudit,
+  serializeMarketingLead,
+  stringifyEncryptedJson,
+  upsertMarketingLeadForAudit,
+  validateMarketingSubmission,
+  APP_URL,
+  MARKETING_STAGE_DONE,
+  MARKETING_STAGE_J0,
 });
 
 // ====== AUTHENTICATION ======
 
 // Routes d'authentification
-app.post('/api/v1/auth/login', smartAuthLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const clientIp = getClientIp(req);
-    const failureStatus = await getLoginFailureStatus(clientIp);
-
-    if (failureStatus.blocked) {
-      return res.status(429).json({
-        message: `Trop de tentatives de connexion échouées. Réessayez dans ${failureStatus.remainingTime} minute(s).`,
-      });
-    }
-
-    const user = await findUserByEmail(email);
-
-    if (!user) {
-      await recordLoginFailure(clientIp);
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
-
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-      await recordLoginFailure(clientIp);
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
-
-    await recordLoginSuccess(clientIp);
-    await markMarketingLeadConverted(user.email).catch((conversionError) => {
-      console.warn('Lead marketing non converti après connexion:', conversionError.message);
-    });
-    const { accessToken, refreshToken } = issueAuthTokens(user);
-
-    res.json({
-      accessToken,
-      refreshToken,
-      token: accessToken,
-      user: buildAuthUser(user, req)
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Erreur lors de la connexion' });
-  }
-});
-
-// Inscription
-app.post('/api/v1/auth/register', registerLimiter, async (req, res) => {
-  try {
-    const {
-      email,
-      password,
-      firstName,
-      lastName,
-      company,
-      accountName,
-      captchaToken,
-      companyWebsite,
-      formStartedAt,
-    } = req.body;
-    const normalizedEmail = String(email || '').trim().toLowerCase();
-    
-    if (!normalizedEmail || !password) {
-      return res.status(400).json({ message: 'Email et mot de passe requis' });
-    }
-    
-    // Validation email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({ message: 'Format d\'email invalide' });
-    }
-
-    if (String(companyWebsite || '').trim().length > 0) {
-      return res.status(400).json({ message: 'Inscription refusée' });
-    }
-
-    const startedAtMs = Number(formStartedAt);
-    if (Number.isFinite(startedAtMs)) {
-      const elapsedMs = Date.now() - startedAtMs;
-      if (elapsedMs < 3000) {
-        return res.status(400).json({ message: 'Inscription refusée' });
-      }
-      if (elapsedMs > 1000 * 60 * 60 * 6) {
-        return res.status(400).json({ message: 'Session d’inscription expirée. Rechargez la page puis réessayez.' });
-      }
-    }
-
-    // Les emails staff ne doivent jamais être promus via l'inscription locale,
-    // car l'app ne vérifie pas encore la propriété de l'adresse email.
-    if (isStaffForUser({ email: normalizedEmail })) {
-      return res.status(403).json({
-        message: 'Cette adresse email est réservée. Utilisez le compte interne existant ou contactez un administrateur FeedPlug.'
-      });
-    }
-    
-    const passwordValidation = validatePasswordPolicy(password);
-    if (!passwordValidation.valid) {
-      return res.status(400).json({ message: passwordValidation.message });
-    }
-
-    const captchaCheck = await verifyTurnstileToken({
-      token: captchaToken,
-      remoteIp: getClientIp(req),
-    });
-    if (!captchaCheck.ok) {
-      return res.status(400).json({ message: captchaCheck.message || 'Captcha invalide' });
-    }
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    // Vérifier si l'email existe déjà
-    const existing = await findUserByEmail(normalizedEmail);
-    if (existing) {
-      return res.status(409).json({ message: 'Un compte avec cet email existe déjà' });
-    }
-    
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const accountId = crypto.randomUUID();
-    const userId = crypto.randomUUID();
-    const finalAccountName = accountName || company || `${firstName || ''} ${lastName || ''}`.trim() || 'Mon entreprise';
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
-    // Créer le compte avec essai gratuit 30 jours
-    await prisma.$executeRaw`
-      INSERT INTO "Account" (id, name, plan, email, trialendsat, createdat, updatedat)
-      VALUES (${accountId}::text, ${finalAccountName}::text, 'STARTER', ${normalizedEmail}::text, ${trialEndsAt}, NOW(), NOW())
-    `;
-    
-    // Créer l'utilisateur
-    await prisma.$executeRaw`
-      INSERT INTO "User" (id, email, password, firstname, lastname, role, accountid, provider, createdat, updatedat)
-      VALUES (${userId}::text, ${normalizedEmail}::text, ${hashedPassword}::text, ${firstName || ''}::text, ${lastName || ''}::text, 'OWNER', ${accountId}::text, 'local', NOW(), NOW())
-    `;
-    
-    const authUser = {
-      id: userId,
-      email: normalizedEmail,
-      firstname: firstName || '',
-      lastname: lastName || '',
-      role: 'OWNER',
-      accountid: accountId,
-      accountname: finalAccountName,
-      trialendsat: trialEndsAt.toISOString()
-    };
-    const convertedLead = await markMarketingLeadConverted(normalizedEmail).catch((conversionError) => {
-      console.warn('Lead marketing non converti après inscription:', conversionError.message);
-      return null;
-    });
-    const { accessToken, refreshToken } = issueAuthTokens(authUser);
-    
-    // Envoyer email de bienvenue (async, ne bloque pas la réponse)
-    sendWelcomeEmail(normalizedEmail, firstName, convertedLead?.locale || 'fr').catch(e => console.warn('Email bienvenue non envoyé:', e.message));
-    
-    res.status(201).json({
-      accessToken,
-      refreshToken,
-      token: accessToken, // rétro-compatibilité
-      user: buildAuthUser(authUser, req)
-    });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Erreur lors de l\'inscription' });
-  }
-});
-
-// Profil utilisateur courant
-app.get('/api/v1/auth/me', authenticateToken, async (req, res) => {
-  try {
-    const user = await findUserById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'Utilisateur non trouvé' });
-    }
-    res.json({
-      id: user.id,
-      email: user.email,
-      firstName: user.firstname,
-      lastName: user.lastname,
-      role: user.role,
-      accountId: user.accountid,
-      account: user.accountname ? { name: user.accountname, plan: user.accountplan || 'STARTER', slug: (user.accountname || '').toLowerCase().replace(/\s+/g, '-') } : undefined,
-      accountName: user.accountname,
-      plan: user.accountplan || 'STARTER',
-      trialEndsAt: user.trialendsat || null,
-      billingStatus: user.billingstatus || null,
-      paymentGraceUntil: user.paymentgraceuntil || null,
-      isStaff: isStaffUser(req)
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
-
-app.post('/api/v1/auth/refresh', async (req, res) => {
-  try {
-    const refreshToken = req.body?.refreshToken;
-    if (!refreshToken) {
-      return res.status(400).json({ message: 'Refresh token requis' });
-    }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(refreshToken, EFFECTIVE_JWT_REFRESH_SECRET);
-    } catch (_) {
-      return res.status(401).json({ message: 'Refresh token invalide ou expiré' });
-    }
-
-    const user = await findUserById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non trouvé' });
-    }
-
-    const tokens = issueAuthTokens(user);
-    res.json(tokens);
-  } catch (error) {
-    console.error('Refresh token error:', error);
-    res.status(500).json({ message: 'Erreur lors du refresh du token' });
-  }
-});
-
-app.post('/api/v1/auth/logout', async (req, res) => {
-  res.status(204).send();
+const { registerAuthRoutes } = require('./routes/auth');
+registerAuthRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  authenticateToken,
+  smartAuthLimiter,
+  registerLimiter,
+  getClientIp,
+  getLoginFailureStatus,
+  recordLoginFailure,
+  recordLoginSuccess,
+  findUserByEmail,
+  findUserById,
+  issueAuthTokens,
+  buildAuthUser,
+  markMarketingLeadConverted,
+  isStaffForUser,
+  isStaffUser,
+  verifyTurnstileToken,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  jwtRefreshSecret: EFFECTIVE_JWT_REFRESH_SECRET,
+  jwtVerifyOptions: JWT_VERIFY_OPTIONS,
 });
 
 let ensureCompanyInfoSchemaPromise = null;
@@ -9439,26 +10184,23 @@ app.put('/api/v1/account/company-info', authenticateToken, async (req, res) => {
     if (!accountId) return res.status(403).json({ message: 'Compte non associé' });
     const body = req.body || {};
     const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : null;
-    const phoneE164 = typeof body.phoneE164 === 'string' ? body.phoneE164.trim() : null;
-    const billingEmail = typeof body.billingEmail === 'string' ? body.billingEmail.trim() : null;
-    if (!companyName || !phoneE164 || !billingEmail) {
-      return res.status(400).json({ message: 'Nom de l\'entreprise, téléphone et email de facturation sont requis.' });
+    if (!companyName) {
+      return res.status(400).json({ message: 'Le nom de l\'entreprise est requis.' });
     }
+    // Activation : seul le nom de l'entreprise est requis à l'onboarding.
+    // Téléphone, TVA, SIREN et adresse sont optionnels ici — les informations
+    // de facturation complètes sont collectées au moment du checkout.
+    const phoneE164 = typeof body.phoneE164 === 'string' ? body.phoneE164.trim() || null : null;
+    const billingEmail = typeof body.billingEmail === 'string' ? body.billingEmail.trim() || null : null;
     const vatNumber = typeof body.vatNumber === 'string' ? body.vatNumber.trim() || null : null;
     const siren = typeof body.siren === 'string' ? body.siren.trim().replace(/\s/g, '') || null : null;
-    if (!vatNumber) {
-      return res.status(400).json({ message: 'Le numéro de TVA intracommunautaire est requis.' });
-    }
-    if (!siren || siren.length !== 9) {
-      return res.status(400).json({ message: 'Le SIREN est requis (9 chiffres).' });
+    if (siren && siren.length !== 9) {
+      return res.status(400).json({ message: 'Le SIREN doit comporter 9 chiffres.' });
     }
     const addressLine1 = typeof body.addressLine1 === 'string' ? body.addressLine1.trim() || null : null;
     const postalCode = typeof body.postalCode === 'string' ? body.postalCode.trim() || null : null;
     const city = typeof body.city === 'string' ? body.city.trim() || null : null;
     const country = typeof body.country === 'string' ? body.country.trim() || 'FR' : 'FR';
-    if (!addressLine1 || !postalCode || !city || !country) {
-      return res.status(400).json({ message: 'L\'adresse de facturation est obligatoire (adresse, code postal, ville, pays).' });
-    }
     await prisma.$executeRawUnsafe(`
       UPDATE "Account" SET companyname = $1::text, phonee164 = $2::text, billingemail = $3::text, updatedat = NOW()
       WHERE id = $4::text
@@ -9795,43 +10537,6 @@ app.post('/api/v1/accounts/users/invite', authenticateToken, async (req, res) =>
 });
 
 // Changer le mot de passe (utilisateur connecté)
-app.put('/api/v1/auth/me/password', authenticateToken, async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    const { currentPassword, newPassword } = req.body || {};
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Mot de passe actuel et nouveau requis' });
-    }
-    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre' });
-    }
-    const userId = req.user.id;
-    const users = await prisma.$queryRawUnsafe(`
-      SELECT id, password FROM "User" WHERE id = $1::text LIMIT 1
-    `, userId);
-    if (!users || users.length === 0) {
-      return res.status(404).json({ message: 'Utilisateur non trouvé' });
-    }
-    const user = users[0];
-    if (!user.password) {
-      return res.status(400).json({ message: 'Compte connecté via Google. Utilisez la déconnexion puis la réinitialisation si besoin.' });
-    }
-    const valid = await bcrypt.compare(currentPassword, user.password);
-    if (!valid) {
-      return res.status(401).json({ message: 'Mot de passe actuel incorrect' });
-    }
-    const hashed = await bcrypt.hash(newPassword, 12);
-    await prisma.$executeRawUnsafe(`
-      UPDATE "User" SET password = $1::text, updatedat = NOW() WHERE id = $2::text
-    `, hashed, userId);
-    res.json({ message: 'Mot de passe modifié avec succès' });
-  } catch (error) {
-    console.error('PUT /auth/me/password error:', error);
-    res.status(500).json({ message: 'Erreur lors du changement de mot de passe' });
-  }
-});
 
 app.get('/api/v1/markets', authenticateToken, async (req, res) => {
   try {
@@ -10229,6 +10934,23 @@ app.post('/api/v1/markets/:marketId/channels', authenticateToken, async (req, re
     if (!candidate.platformKey || !MARKET_PLATFORM_OPTIONS.includes(candidate.platformKey)) {
       return res.status(400).json({ message: 'platformKey invalide pour ce marché.' });
     }
+
+    // Quota canaux : un nouveau canal de marché compte dans max_channels au
+    // même titre qu'un canal d'export (compteur unifié).
+    const existingChannelRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "MarketChannel" WHERE marketid = $1::text AND platformkey = $2::text LIMIT 1`,
+      marketId,
+      candidate.platformKey
+    );
+    const isNewChannel = !existingChannelRows?.[0];
+    if (isNewChannel) {
+      const currentChannels = await countChannelsForAccount(prisma, accountId);
+      const channelLimit = await checkChannelLimit(prisma, accountId, currentChannels);
+      if (!channelLimit.allowed) {
+        return res.status(403).json({ code: 'PLAN_LIMIT', message: channelLimit.message });
+      }
+    }
+
     const platformAccounts = await listPlatformAccountsForAccount(accountId);
     await upsertMarketChannels(marketRow, [candidate], platformAccounts);
     await syncDestinationsForMarket(accountId, marketId);
@@ -10444,79 +11166,6 @@ app.get('/api/v1/markets/:marketId/preview', authenticateToken, async (req, res)
   }
 });
 
-// Google Auth - Connexion / Inscription avec Google
-const GOOGLE_AUTH_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-app.post('/api/v1/auth/google', smartAuthLimiter, async (req, res) => {
-  try {
-    const { credential } = req.body;
-    if (!credential) {
-      return res.status(400).json({ message: 'Token Google requis' });
-    }
-    if (!GOOGLE_AUTH_CLIENT_ID) {
-      console.error('GOOGLE_CLIENT_ID non configuré pour auth Google');
-      return res.status(500).json({ message: 'Authentification Google non configurée' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-
-    const client = new OAuth2Client(GOOGLE_AUTH_CLIENT_ID);
-    const ticket = await client.verifyIdToken({ idToken: credential, audience: GOOGLE_AUTH_CLIENT_ID });
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      return res.status(400).json({ message: 'Token Google invalide' });
-    }
-
-    const email = payload.email;
-    const googleId = payload.sub;
-    const givenName = payload.given_name || '';
-    const familyName = payload.family_name || '';
-
-    let user = await findUserByEmail(email);
-    const isNewGoogleUser = !user;
-    if (user) {
-      if (user.provider !== 'google') {
-        return res.status(409).json({ message: 'Un compte existe déjà avec cet email. Connectez-vous avec votre mot de passe.' });
-      }
-    } else {
-      const accountId = crypto.randomUUID();
-      const userId = crypto.randomUUID();
-      const googleAccountName = payload.name || `${givenName} ${familyName}`.trim() || 'Mon entreprise';
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
-      await prisma.$executeRaw`
-        INSERT INTO "Account" (id, name, plan, email, trialendsat, createdat, updatedat)
-        VALUES (${accountId}::text, ${googleAccountName}::text, 'STARTER', ${email}::text, ${trialEndsAt}, NOW(), NOW())
-      `;
-      await prisma.$executeRaw`
-        INSERT INTO "User" (id, email, password, firstname, lastname, role, accountid, provider, providerid, createdat, updatedat)
-        VALUES (${userId}::text, ${email}::text, NULL, ${givenName}::text, ${familyName}::text, 'OWNER', ${accountId}::text, 'google', ${googleId}::text, NOW(), NOW())
-      `;
-      user = await findUserByEmail(email);
-    }
-
-    const convertedLead = await markMarketingLeadConverted(email).catch((conversionError) => {
-      console.warn('Lead marketing non converti après auth Google:', conversionError.message);
-      return null;
-    });
-    if (isNewGoogleUser) {
-      sendWelcomeEmail(email, givenName, convertedLead?.locale || 'fr').catch(e => console.warn('Email bienvenue non envoyé:', e.message));
-    }
-
-    const { accessToken, refreshToken } = issueAuthTokens(user);
-
-    res.json({
-      accessToken,
-      refreshToken,
-      token: accessToken,
-      user: buildAuthUser(user, req)
-    });
-  } catch (error) {
-    console.error('Google auth error:', error);
-    res.status(500).json({ message: error.message || 'Erreur lors de la connexion Google' });
-  }
-});
 
 // Onboarding + Billing B2B + Stripe
 const { registerOnboardingBillingRoutes } = require('./routes/onboarding-billing');
@@ -10536,7 +11185,7 @@ app.get('/api/v1/ingestion/items/:id/enrichment-analysis', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Récupérer l'item (support UUID, MPN ou SKU) — avec isolation multi-tenant
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -10602,7 +11251,7 @@ app.post('/api/v1/ingestion/items/:id/enrich', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
 
     // Récupérer l'item — avec isolation multi-tenant
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -11211,7 +11860,7 @@ app.get('/api/v1/ingestion/items/:id/enrichment-history', async (req, res) => {
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Prisma non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!(await verifyItemAccess(itemId, accountId))) return res.status(403).json({ message: 'Accès refusé' });
@@ -11248,7 +11897,7 @@ app.get('/api/v1/ingestion/items/:id/revisions', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11267,7 +11916,7 @@ app.post('/api/v1/ingestion/items/:id/restore', async (req, res) => {
     const { revisionId } = req.body || {};
     if (!revisionId) return res.status(400).json({ message: 'revisionId requis' });
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11314,7 +11963,7 @@ app.post('/api/v1/ingestion/items/:id/revert-to-feed', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11397,7 +12046,7 @@ app.put('/api/v1/ingestion/items/:id', async (req, res) => {
     const { id } = req.params;
     const body = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11490,7 +12139,7 @@ app.patch('/api/v1/ingestion/items/:id/channels', async (req, res) => {
     const { id } = req.params;
     const body = req.body || {};
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11527,7 +12176,7 @@ app.get('/api/v1/ingestion/items/:id/destinations', async (req, res) => {
   try {
     const { id } = req.params;
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11549,7 +12198,7 @@ app.patch('/api/v1/ingestion/items/:id/destinations/:destinationId', async (req,
       return res.status(400).json({ message: 'isEnabled (boolean) est requis.' });
     }
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11602,7 +12251,7 @@ app.patch('/api/v1/ingestion/items/:id/optimized', async (req, res) => {
       return res.status(400).json({ message: 'platform requis (gmc|meta|amazon|chatgpt)' });
     }
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Prisma non disponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const itemId = await resolveItemId(prisma, id, accountId);
     if (!itemId) return res.status(404).json({ message: 'Item non trouvé' });
     if (!await verifyItemAccess(itemId, accountId)) return res.status(403).json({ message: 'Accès refusé' });
@@ -11963,7 +12612,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
     if (!prismaReady || !prisma) {
       return res.status(503).json({ message: 'Service non disponible' });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
@@ -12012,949 +12661,19 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
   }
 });
 
-// Optimiser le titre d'un produit (optionnel: savePlatform = gmc|meta|amazon|chatgpt pour sauvegarder dans optimized[platform])
-app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
-  try {
-    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
-    
-    if (!itemId) {
-      return res.status(400).json({ message: 'itemId requis' });
-    }
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const accountId = req.accountId || 'default-account';
-    const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
-    if (!addonIA.allowed) {
-      return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
-    }
-    const resolvedId = await resolveItemId(prisma, String(itemId), accountId);
-    if (!resolvedId) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    if (!(await verifyItemAccess(resolvedId, accountId))) {
-      return res.status(403).json({ message: 'Accès refusé à ce produit' });
-    }
-    
-    const items = await prisma.$queryRawUnsafe(`SELECT * FROM "FeedItem" WHERE id = $1::text`, resolvedId);
-    
-    if (!items || items.length === 0) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    
-    const plat = platform || 'GMC';
-    const targetDestinationContext = saveDestinationId
-      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
-      : null;
-    const result = await optimizeTitleWithAI(prisma, items[0], {
-      platform: plat,
-      industry,
-      forceRefresh: forceRefresh || false,
-      destinationContext: targetDestinationContext,
-    });
-    
-    if (savePlatform && result.optimizedTitle && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
-      const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
-      if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
-        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
-          ? targetDestinationContext
-          : saveDestinationId
-            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
-            : null;
-        let cf = items[0].customfields;
-        try { cf = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {}); } catch (e) { cf = {}; }
-        const newCf = mergeOptimizedContent(cf, platKey, { title: result.optimizedTitle }, destinationContext ? {
-          destinationId: destinationContext.id,
-          marketCode: destinationContext.marketCode,
-          localeCode: destinationContext.localeCode || null,
-        } : {});
-        await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), items[0].id);
-      }
-    }
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Erreur optimize-title:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Optimiser la description d'un produit (optionnel: savePlatform pour sauvegarder dans optimized[platform])
-app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
-  try {
-    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
-    
-    if (!itemId) {
-      return res.status(400).json({ message: 'itemId requis' });
-    }
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const accountId = req.accountId || 'default-account';
-    const resolvedId = await resolveItemId(prisma, String(itemId), accountId);
-    if (!resolvedId) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    if (!(await verifyItemAccess(resolvedId, accountId))) {
-      return res.status(403).json({ message: 'Accès refusé à ce produit' });
-    }
-    
-    const items = await prisma.$queryRawUnsafe(`SELECT * FROM "FeedItem" WHERE id = $1::text`, resolvedId);
-    
-    if (!items || items.length === 0) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    
-    const plat = platform || 'GMC';
-    const targetDestinationContext = saveDestinationId
-      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
-      : null;
-    const result = await optimizeDescriptionWithAI(prisma, items[0], {
-      platform: plat,
-      industry,
-      forceRefresh: forceRefresh || false,
-      destinationContext: targetDestinationContext,
-    });
-    
-    if (savePlatform && result.optimizedDescription && (await verifyItemAccess(items[0].id, req.accountId || 'default-account'))) {
-      const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
-      if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
-        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
-          ? targetDestinationContext
-          : saveDestinationId
-            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
-            : null;
-        let cf = items[0].customfields;
-        try { cf = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {}); } catch (e) { cf = {}; }
-        const newCf = mergeOptimizedContent(cf, platKey, { description: result.optimizedDescription }, destinationContext ? {
-          destinationId: destinationContext.id,
-          marketCode: destinationContext.marketCode,
-          localeCode: destinationContext.localeCode || null,
-        } : {});
-        await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), items[0].id);
-      }
-    }
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Erreur optimize-description:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Générer des highlights (bullet points) pour un produit avec IA
-app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
-  try {
-    const { itemId, platform, industry, forceRefresh, savePlatform, saveDestinationId } = req.body;
-
-    if (!itemId) {
-      return res.status(400).json({ message: 'itemId requis' });
-    }
-
-    const accountId = req.accountId || 'default-account';
-    if (prismaReady && prisma) {
-      const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
-      if (!addonIA.allowed) {
-        return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
-      }
-    }
-
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Prisma non disponible' });
-    }
-
-    const resolvedId = await resolveItemId(prisma, String(itemId), accountId);
-    if (!resolvedId) {
-      return res.status(404).json({ message: 'Produit introuvable' });
-    }
-    if (!(await verifyItemAccess(resolvedId, accountId))) {
-      return res.status(403).json({ message: 'Accès refusé à ce produit' });
-    }
-
-    const items = await prisma.$queryRawUnsafe(`
-      SELECT id, title, descriptiontext AS "descriptionText", descriptionhtml AS "descriptionHtml",
-             imageurl AS "imageUrl", brand, sku, price, currency, gtin, mpn, condition, inventory, customfields
-      FROM "FeedItem" WHERE id = $1::text LIMIT 1
-    `, resolvedId);
-
-    if (!items || items.length === 0) {
-      return res.status(404).json({ message: 'Produit introuvable' });
-    }
-
-    const item = items[0];
-    let cf;
-    try { cf = typeof item.customfields === 'string' ? JSON.parse(item.customfields || '{}') : (item.customfields || {}); } catch (e) { cf = {}; }
-    const product = { ...item, customfields: cf };
-
-    const plat = platform ? String(platform).toUpperCase() : 'GMC';
-    const targetDestinationContext = saveDestinationId
-      ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
-      : null;
-    const result = await generateHighlightsWithAI(prisma, product, {
-      platform: plat,
-      industry,
-      forceRefresh: forceRefresh || false,
-      destinationContext: targetDestinationContext,
-    });
-
-    // Sauvegarder si demandé
-    if (savePlatform && result.highlights && result.highlights.length > 0) {
-      const platKey = String(savePlatform).toLowerCase().replace('google', 'gmc');
-      if (['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) {
-        const destinationContext = targetDestinationContext && platKey === normalizePlatformKey(targetDestinationContext.platformKey)
-          ? targetDestinationContext
-          : saveDestinationId
-            ? await getDestinationPushContext(accountId, String(saveDestinationId), platKey)
-            : null;
-        const newCf = mergeOptimizedContent(cf, platKey, { highlights: result.highlights }, destinationContext ? {
-          destinationId: destinationContext.id,
-          marketCode: destinationContext.marketCode,
-          localeCode: destinationContext.localeCode || null,
-        } : {});
-        await prisma.$executeRawUnsafe(`UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`, JSON.stringify(newCf), item.id);
-      }
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error('Erreur generate-highlights:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Optimiser l'image d'un produit
-app.post('/api/v1/enrichment/optimize-image', async (req, res) => {
-  try {
-    const { imageUrl, platform, quality, format } = req.body;
-    
-    if (!imageUrl) {
-      return res.status(400).json({ message: 'imageUrl requis' });
-    }
-    const accountId = req.accountId || 'default-account';
-    if (prismaReady && prisma) {
-      const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
-      if (!addonIA.allowed) {
-        return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
-      }
-    }
-    
-    const result = await optimizeImage(imageUrl, { platform: platform || 'GMC', quality: quality || 85, format: format || 'webp' });
-    res.json(result);
-  } catch (error) {
-    console.error('Erreur optimize-image:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Générer une image "mise en situation" (lifestyle) à partir de l'image produit (Fal Bria Product Shot ou Vertex)
-// Accepte imageUrl, ou imageBase64 + imageMimeType. Si feedItemId fourni : l'image envoyée est sauvegardée en GCS
-// et réutilisée automatiquement pour ce produit (plus besoin de ré-uploader).
-app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
-  try {
-    const {
-      imageUrl,
-      imageBase64,
-      imageMimeType,
-      sceneDescription,
-      scenePreset,
-      customScene,
-      mannequinProfile,
-      feedItemId,
-      productPageUrl,
-      productTitle,
-      productBrand,
-      productDescription,
-      provider: bodyProvider,
-      model: bodyModel
-    } = req.body;
-    if (!imageUrl && !imageBase64) {
-      return res.status(400).json({ message: 'imageUrl ou imageBase64 requis' });
-    }
-    const accountId = req.accountId || 'default-account';
-    if (prismaReady && prisma) {
-      const addonIA = await canUseFeature(prisma, accountId, 'addonIA');
-      if (!addonIA.allowed) {
-        return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
-      }
-    }
-    const baseSceneDescription = sceneDescription || (scenePreset && PRESET_SCENES[scenePreset]) || PRESET_SCENES.living_room;
-    const customSceneText = typeof customScene === 'string' ? customScene.trim() : '';
-    const mannequinValue = typeof mannequinProfile === 'string' ? mannequinProfile.trim().toLowerCase() : 'none';
-    const mannequinPrompt = mannequinValue === 'woman'
-      ? 'Include a realistic adult female mannequin or model when relevant to present the product naturally. Keep the product as the hero and avoid extra accessories.'
-      : mannequinValue === 'man'
-        ? 'Include a realistic adult male mannequin or model when relevant to present the product naturally. Keep the product as the hero and avoid extra accessories.'
-        : mannequinValue === 'child'
-          ? 'Include a realistic child mannequin or child model when relevant to present the product naturally. Keep the product as the hero and avoid extra accessories.'
-          : '';
-    const description = [
-      baseSceneDescription,
-      customSceneText ? `Specific business context to follow: ${customSceneText}.` : '',
-      mannequinPrompt,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const productContext = [productTitle, productBrand].filter(Boolean).join(' — ') || null;
-    const productDescShort = productDescription && String(productDescription).trim().slice(0, 500) || null;
-
-    let refererOrigin = null;
-    if (productPageUrl && typeof productPageUrl === 'string') {
-      try {
-        refererOrigin = new URL(productPageUrl.trim()).origin;
-      } catch (_) {}
-    }
-
-    let imageUrlToUse = imageUrl || null;
-    let options = imageBase64 ? { imageBase64, imageMimeType: imageMimeType || 'image/jpeg' } : {};
-    if (refererOrigin) options.refererOrigin = refererOrigin;
-    if (productContext) options.productContext = productContext;
-    if (productDescShort) options.productDescription = productDescShort;
-    if (bodyProvider && ['vertex', 'fal'].includes(String(bodyProvider).toLowerCase())) options.provider = String(bodyProvider).toLowerCase();
-    if (bodyModel && typeof bodyModel === 'string' && bodyModel.trim()) options.model = bodyModel.trim();
-
-    let effectiveItemId = null;
-    if (feedItemId && prismaReady && prisma) {
-      effectiveItemId = (await resolveItemId(prisma, String(feedItemId), accountId)) || feedItemId;
-    }
-    if (effectiveItemId && prismaReady && prisma) {
-      const hasAccess = await verifyItemAccess(effectiveItemId, accountId);
-      if (hasAccess) {
-        const catalogPrefix = `catalog/${accountId}/${effectiveItemId}`;
-        const bucket = storage.bucket(bucketName);
-
-        if (imageBase64) {
-          const ext = (imageMimeType || 'image/jpeg').includes('png') ? 'png' : 'jpg';
-          const path = `${catalogPrefix}/product.${ext}`;
-          const file = bucket.file(path);
-          const buffer = Buffer.from(imageBase64, 'base64');
-          await file.save(buffer, {
-            metadata: { contentType: imageMimeType || 'image/jpeg' },
-            resumable: false,
-          });
-          imageUrlToUse = null;
-          options = { imageBase64, imageMimeType: imageMimeType || 'image/jpeg' };
-        } else {
-          const [jpgExists] = await bucket.file(`${catalogPrefix}/product.jpg`).exists().catch(() => [false]);
-          const [pngExists] = await bucket.file(`${catalogPrefix}/product.png`).exists().catch(() => [false]);
-          if (jpgExists) {
-            const file = bucket.file(`${catalogPrefix}/product.jpg`);
-            const [buf] = await file.download();
-            options = { imageBase64: buf.toString('base64'), imageMimeType: 'image/jpeg' };
-            imageUrlToUse = null;
-          } else if (pngExists) {
-            const file = bucket.file(`${catalogPrefix}/product.png`);
-            const [buf] = await file.download();
-            options = { imageBase64: buf.toString('base64'), imageMimeType: 'image/png' };
-            imageUrlToUse = null;
-          }
-          // si ni jpg ni png : imageUrlToUse reste l’URL produit (peut donner 403 si le marchand bloque)
-        }
-      }
-      // Si hasAccess est false, on ignore feedItemId et on continue avec imageUrl/imageBase64 (pas de 403)
-    }
-
-    // Si on a encore une URL produit (pas de base64) : la résoudre avec plusieurs stratégies pour contourner 403 / CDN
-    if (imageUrlToUse && !options.imageBase64) {
-      let resolved = null;
-      const productOrigin = refererOrigin || null;
-      let imageOrigin = null;
-      try {
-        imageOrigin = new URL(imageUrlToUse).origin;
-      } catch (_) {}
-      const strategies = [];
-      if (productOrigin) strategies.push({ refererOrigin: productOrigin });
-      if (imageOrigin && imageOrigin !== productOrigin) strategies.push({ refererOrigin: imageOrigin });
-      strategies.push({ refererOrigin: null });
-      for (const s of strategies) {
-        try {
-          resolved = await downloadImageAsBase64(imageUrlToUse, s);
-          break;
-        } catch (err) {
-          console.warn('Lifestyle: téléchargement image produit échoué (stratégie referer):', err.message);
-        }
-      }
-      if (resolved) {
-        options.imageBase64 = resolved.base64;
-        options.imageMimeType = resolved.mimeType || 'image/jpeg';
-        imageUrlToUse = null;
-        if (effectiveItemId && prismaReady && prisma) {
-          const hasAccess = await verifyItemAccess(effectiveItemId, accountId);
-          if (hasAccess) {
-            const catalogPrefix = `catalog/${accountId}/${effectiveItemId}`;
-            const ext = (resolved.mimeType || '').includes('png') ? 'png' : 'jpg';
-            const path = `${catalogPrefix}/product.${ext}`;
-            try {
-              await storage.bucket(bucketName).file(path).save(Buffer.from(resolved.base64, 'base64'), {
-                metadata: { contentType: resolved.mimeType || 'image/jpeg' },
-                resumable: false,
-              });
-            } catch (saveErr) {
-              console.warn('Lifestyle: sauvegarde image catalogue ignorée:', saveErr.message);
-            }
-          }
-        }
-      } else {
-        return res.status(403).json({
-          message: 'Image produit inaccessible (blocage par le site marchand). Utilisez « Envoyer une image » pour téléverser l\'image produit, elle sera enregistrée pour ce produit.',
-        });
-      }
-    }
-
-    // Timeout 180s : la génération Vertex (image in → image out) peut être très lente
-    const LIFESTYLE_TIMEOUT_MS = 180000;
-    const result = await Promise.race([
-      generateLifestyleImage(imageUrlToUse, description, options),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Génération trop longue (timeout). Réessayez.')), LIFESTYLE_TIMEOUT_MS)
-      ),
-    ]);
-    // URL signée pour que le navigateur puisse afficher l'image (bucket souvent privé). Ne jamais renvoyer l'URL brute.
-    let urlToReturn = result.url;
-    if (result.url && result.url.startsWith(`https://storage.googleapis.com/${bucketName}/`)) {
-      const path = result.url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
-      const file = storage.bucket(bucketName).file(path);
-      try {
-        const [signedUrl] = await file.getSignedUrl({
-          version: 'v4',
-          action: 'read',
-          expires: Date.now() + 2 * 60 * 60 * 1000, // 2 h
-        });
-        urlToReturn = signedUrl;
-      } catch (signErr) {
-        console.error('Signed URL lifestyle image:', signErr.message);
-        return res.status(500).json({ message: 'Image générée mais impossible de créer l\'URL de prévisualisation. Vérifiez la config GCS (compte de service, permissions).' });
-      }
-    }
-    res.json({ url: urlToReturn, contentType: result.contentType });
-  } catch (error) {
-    console.error('Erreur generate-lifestyle-image:', error);
-    const status = error.status || error.statusCode;
-    const isTimeout = error.message && String(error.message).includes('timeout');
-    const msg = error.message || 'Génération impossible';
-    const is422 = status === 422 || (typeof msg === 'string' && (msg.includes('Unprocessable') || msg.includes('422')));
-    const is403 = status === 403 || (typeof msg === 'string' && (msg.includes('403') || msg.includes('Image inaccessible')));
-    const userMessage = isTimeout
-      ? 'La génération a pris trop de temps. Réessayez.'
-      : is403
-        ? "Image inaccessible (403). Envoyez une image une fois : elle sera enregistrée pour ce produit et réutilisée automatiquement."
-        : is422
-          ? "L'image produit n'a pas pu être utilisée. Vérifiez que l'URL est accessible ou envoyez une image."
-          : msg;
-    const httpStatus = isTimeout ? 504 : is403 ? 403 : (status && status >= 400 && status < 600 ? status : 500);
-    res.status(httpStatus).json({ message: userMessage });
-  }
-});
-
-// Obtenir une URL signée pour une image lifestyle (pour « Copier l'URL » : lien valide même si l'ancienne URL a expiré).
-app.post('/api/v1/enrichment/sign-lifestyle-url', async (req, res) => {
-  try {
-    const { url } = req.body;
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ message: 'url requis' });
-    }
-    const base = `https://storage.googleapis.com/${bucketName}/`;
-    const urlWithoutQuery = url.split('?')[0];
-    if (!urlWithoutQuery.startsWith(base)) {
-      return res.status(400).json({ message: 'URL non autorisée (bucket différent)' });
-    }
-    const path = urlWithoutQuery.replace(base, '').replace(/^\//, '');
-    if (!path.startsWith('lifestyle/')) {
-      return res.status(400).json({ message: 'Seules les images lifestyle sont autorisées' });
-    }
-    const file = storage.bucket(bucketName).file(path);
-    const [signedUrl] = await file.getSignedUrl({
-      version: 'v4',
-      action: 'read',
-      expires: Date.now() + 2 * 60 * 60 * 1000, // 2 h
-    });
-    res.json({ url: signedUrl });
-  } catch (e) {
-    console.error('Erreur sign-lifestyle-url:', e.message);
-    res.status(500).json({ message: 'Impossible de générer l\'URL. Vérifiez que le fichier existe.' });
-  }
-});
-
-// Proxy image : récupère une image produit (avec Referer anti-403) et renvoie une URL signée GCS.
-// Utilisable partout (front, flux, lifestyle) pour contourner les CDN qui bloquent les requêtes sans Referer.
-app.post('/api/v1/enrichment/proxy-image', async (req, res) => {
-  try {
-    const { imageUrl, productPageUrl } = req.body;
-    if (!imageUrl || typeof imageUrl !== 'string') {
-      return res.status(400).json({ message: 'imageUrl requis' });
-    }
-    const accountId = req.accountId || 'default-account';
-    let refererOrigin = null;
-    if (productPageUrl && typeof productPageUrl === 'string') {
-      try {
-        refererOrigin = new URL(productPageUrl.trim()).origin;
-      } catch (_) {}
-    }
-    const { base64, mimeType } = await downloadImageAsBase64(imageUrl, { refererOrigin });
-    const ext = mimeType && mimeType.includes('png') ? 'png' : 'jpg';
-    const hash = crypto.createHash('sha256').update(imageUrl + (refererOrigin || '')).digest('hex').slice(0, 16);
-    const path = `proxy/${accountId}/${hash}.${ext}`;
-    const bucket = storage.bucket(bucketName);
-    const file = bucket.file(path);
-    const buffer = Buffer.from(base64, 'base64');
-    await file.save(buffer, {
-      metadata: { contentType: mimeType || 'image/jpeg' },
-      resumable: false,
-    });
-    const [signedUrl] = await file.getSignedUrl({
-      version: 'v4',
-      action: 'read',
-      expires: Date.now() + 24 * 60 * 60 * 1000, // 24 h
-    });
-    res.json({ url: signedUrl, contentType: mimeType || 'image/jpeg' });
-  } catch (error) {
-    console.error('Erreur proxy-image:', error.message);
-    const msg = error.message || 'Impossible de récupérer l\'image';
-    const status = msg.includes('403') || msg.includes('Image inaccessible') ? 403 : 500;
-    res.status(status).json({ message: msg });
-  }
-});
-
-// Optimiser plusieurs produits en batch (support multi-plateforme : platforms = ['gmc','meta','amazon','chatgpt'])
-// saveToCatalog: false = ne pas écrire en base (pour tests A/B : on ne garde que les résultats)
-app.post('/api/v1/enrichment/batch', async (req, res) => {
-  try {
-    const { itemIds, optimizations, platform, platforms, saveToCatalog = true, saveDestinationId } = req.body;
-    
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'itemIds requis (array)' });
-    }
-    
-    if (itemIds.length > 1000) {
-      return res.status(400).json({ message: 'Maximum 1000 produits par batch' });
-    }
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const rawPlatform = platform ? String(platform) : 'GMC';
-    const rawPlatforms = Array.isArray(platforms) && platforms.length > 0
-      ? platforms
-      : [rawPlatform];
-    const normalizedPlatforms = rawPlatforms.map(p => {
-      const s = String(p).toUpperCase().replace(/GOOGLE/, 'GMC');
-      return s || 'GMC';
-    });
-    
-    const placeholders = itemIds.map((_, i) => `$${i + 1}::text`).join(',');
-    const acctParam = `$${itemIds.length + 1}::text`;
-    const products = await prisma.$queryRawUnsafe(
-      `SELECT i.* FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id WHERE i.id IN (${placeholders}) AND f.accountid = ${acctParam}`,
-      ...itemIds, req.accountId
-    );
-    
-    const accountId = req.accountId || 'default-account';
-    const results = { total: itemIds.length, found: products.length, titles: null, descriptions: null, images: null, totalCost: 0 };
-    
-    const platformResults = {};
-    for (const plat of normalizedPlatforms) {
-      platformResults[plat] = { titles: null, descriptions: null };
-    }
-
-    const shouldWriteLegacyOptimizedFields = !String(saveDestinationId || '').trim();
-    const destinationContextByPlatform = {};
-    if (!shouldWriteLegacyOptimizedFields) {
-      for (const plat of normalizedPlatforms) {
-        const platKey = (plat === 'GMC' ? 'gmc' : plat.toLowerCase());
-        if (!['gmc', 'meta', 'amazon', 'chatgpt'].includes(platKey)) continue;
-        destinationContextByPlatform[platKey] = await getDestinationPushContext(accountId, String(saveDestinationId), platKey);
-      }
-    }
-    
-    for (const plat of normalizedPlatforms) {
-      const platKey = (plat === 'GMC' ? 'gmc' : plat.toLowerCase());
-      const destinationContext = destinationContextByPlatform[platKey] || null;
-      if (optimizations?.titles) {
-        const titleResults = await optimizeTitlesBatch(prisma, products, { platform: plat, destinationContext });
-        platformResults[plat].titles = titleResults;
-        results.totalCost += titleResults.totalCost;
-      }
-      if (optimizations?.descriptions) {
-        const descResults = await optimizeDescriptionsBatch(prisma, products, { platform: plat, destinationContext });
-        platformResults[plat].descriptions = descResults;
-        results.totalCost += descResults.totalCost;
-      }
-    }
-    
-    if (optimizations?.images) {
-      const imageProducts = products.filter(p => p.imageurl || p.imageUrl);
-      const imageUrls = imageProducts.map(p => p.imageurl || p.imageUrl);
-      if (imageUrls.length > 0) {
-        const imageResults = await optimizeImagesBatch(imageUrls, { platform: normalizedPlatforms[0] || 'GMC' });
-        imageResults.results.forEach((r, i) => {
-          r.productId = imageProducts[i]?.id;
-          r.optimizedImageUrl = r.optimized?.main?.url || r.optimized?.url;
-        });
-        results.images = imageResults;
-      }
-    }
-    
-    results.titles = platformResults[normalizedPlatforms[0]]?.titles || null;
-    results.descriptions = platformResults[normalizedPlatforms[0]]?.descriptions || null;
-    
-    const savedCount = { titles: 0, descriptions: 0 };
-    if (!saveToCatalog) {
-      results.saved = savedCount;
-      return res.json(results);
-    }
-
-    for (const product of products) {
-      try {
-        let currentCf = product.customfields;
-        try {
-          currentCf = typeof currentCf === 'string' ? JSON.parse(currentCf || '{}') : (currentCf || {});
-        } catch (e) {
-          currentCf = {};
-        }
-        
-        let nextCf = currentCf;
-        let hasContentUpdates = false;
-        const legacyUpdates = {};
-        let firstTitle = null;
-        let firstDesc = null;
-        
-        for (const plat of normalizedPlatforms) {
-          const platKey = (plat === 'GMC' ? 'gmc' : plat.toLowerCase());
-          const platContent = {};
-          
-          if (optimizations?.titles && platformResults[plat]?.titles?.results) {
-            const tr = platformResults[plat].titles.results.find(r => r.productId === product.id && r.success);
-            if (tr?.optimizedTitle) {
-              platContent.title = tr.optimizedTitle;
-              if (!firstTitle) firstTitle = tr.optimizedTitle;
-            }
-          }
-          if (optimizations?.descriptions && platformResults[plat]?.descriptions?.results) {
-            const dr = platformResults[plat].descriptions.results.find(r => r.productId === product.id && r.success);
-            if (dr?.optimizedDescription) {
-              platContent.description = dr.optimizedDescription;
-              if (!firstDesc) firstDesc = dr.optimizedDescription;
-            }
-          }
-          if (Object.keys(platContent).length > 0) {
-            const destinationContext = destinationContextByPlatform[platKey];
-            nextCf = mergeOptimizedContent(nextCf, platKey, platContent, destinationContext ? {
-              destinationId: destinationContext.id,
-              marketCode: destinationContext.marketCode,
-              localeCode: destinationContext.localeCode || null,
-            } : {});
-            hasContentUpdates = true;
-          }
-        }
-        
-        if (firstTitle) {
-          if (shouldWriteLegacyOptimizedFields) {
-            legacyUpdates.optimized_title = firstTitle;
-            legacyUpdates.title_optimized_at = new Date().toISOString();
-          }
-          savedCount.titles++;
-        }
-        if (firstDesc) {
-          if (shouldWriteLegacyOptimizedFields) {
-            legacyUpdates.optimized_description = firstDesc;
-            legacyUpdates.description_optimized_at = new Date().toISOString();
-          }
-          savedCount.descriptions++;
-        }
-        
-        if (hasContentUpdates || Object.keys(legacyUpdates).length > 0) {
-          const newCf = Object.keys(legacyUpdates).length > 0 ? { ...nextCf, ...legacyUpdates } : nextCf;
-          await prisma.$executeRawUnsafe(
-            `UPDATE "FeedItem" SET customfields = $1::jsonb, updatedat = NOW() WHERE id = $2::text`,
-            JSON.stringify(newCf),
-            product.id
-          );
-        }
-      } catch (saveErr) {
-        console.warn(`Erreur sauvegarde enrichissement ${product.id}:`, saveErr.message);
-      }
-    }
-    
-    results.saved = savedCount;
-    
-    res.json(results);
-  } catch (error) {
-    console.error('Erreur batch:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// === Calculer les scores en batch (pour la page /ia) ===
-app.post('/api/v1/enrichment/scores', async (req, res) => {
-  try {
-    const { itemIds } = req.body;
-    
-    if (!itemIds || !Array.isArray(itemIds)) {
-      return res.status(400).json({ message: 'itemIds requis (array)' });
-    }
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const placeholders = itemIds.map((_, i) => `$${i + 1}::text`).join(',');
-    const acctParam2 = `$${itemIds.length + 1}::text`;
-    const products = await prisma.$queryRawUnsafe(
-      `SELECT i.* FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id WHERE i.id IN (${placeholders}) AND f.accountid = ${acctParam2}`,
-      ...itemIds, req.accountId
-    );
-    
-    const scores = {};
-    for (const product of products) {
-      const titleScore = calculateTitleScore(product.title || '', product);
-      const descText = product.descriptiontext || '';
-      const descriptionScore = calculateDescriptionScore(descText, product);
-      
-      let imageScore = 0;
-      if (product.imageurl) imageScore += 60;
-      
-      let technicalScore = 0;
-      const cf = product.customfields && typeof product.customfields === 'object' ? product.customfields : {};
-      if (product.gtin || cf.gtin) technicalScore += 30;
-      if (product.mpn || cf.mpn) technicalScore += 20;
-      if (cf.google_product_category) technicalScore += 30;
-      if (product.brand) technicalScore += 20;
-      
-      const globalScore = Math.round(
-        titleScore * 0.30 + descriptionScore * 0.25 + imageScore * 0.25 + technicalScore * 0.20
-      );
-      
-      scores[product.id] = {
-        global: globalScore,
-        title: titleScore,
-        description: descriptionScore,
-        image: imageScore,
-        technical: technicalScore,
-        hasOptimizedTitle: !!cf.optimized_title,
-        hasOptimizedDescription: !!cf.optimized_description
-      };
-    }
-    
-    res.json({ scores });
-  } catch (error) {
-    console.error('Erreur scores batch:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Calculer le score FeedPlug d'un produit
-app.get('/api/v1/enrichment/score/:itemId', async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    const accountId = req.accountId || 'default-account';
-    if (!(await verifyItemAccess(itemId, accountId))) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    
-    const items = await prisma.$queryRawUnsafe(`
-      SELECT i.* FROM "FeedItem" i
-      JOIN "Feed" f ON i.feedid = f.id
-      WHERE i.id = $1::text AND f.accountid = $2::text
-    `, itemId, accountId);
-    
-    if (!items || items.length === 0) {
-      return res.status(404).json({ message: 'Produit non trouvé' });
-    }
-    
-    const product = items[0];
-    const titleScore = calculateTitleScore(product.title || '', product);
-    const descriptionScore = calculateDescriptionScore(product.descriptiontext || product.descriptionText || '', product);
-    
-    let imageScore = 0;
-    if (product.imageurl || product.imageUrl) {
-      imageScore += 60;
-    }
-    
-    let technicalScore = 0;
-    if (product.gtin || product.customfields?.gtin) technicalScore += 30;
-    if (product.mpn || product.customfields?.mpn) technicalScore += 20;
-    if (product.customfields?.google_product_category) technicalScore += 30;
-    if (product.brand) technicalScore += 20;
-    
-    const globalScore = Math.round(titleScore * 0.30 + descriptionScore * 0.25 + imageScore * 0.25 + technicalScore * 0.20);
-    
-    const recommendations = [];
-    if (titleScore < 70) recommendations.push({ type: 'title', priority: 'high', message: 'Titre à optimiser', action: 'Utilisez l\'optimisation IA' });
-    if (descriptionScore < 60) recommendations.push({ type: 'description', priority: 'high', message: 'Description insuffisante', action: 'Générez une description optimisée' });
-    if (imageScore < 60) recommendations.push({ type: 'image', priority: 'medium', message: 'Images à optimiser', action: 'Compressez et optimisez vos images' });
-    if (technicalScore < 70) recommendations.push({ type: 'technical', priority: 'high', message: 'Données techniques manquantes', action: 'Ajoutez GTIN, MPN et catégorie' });
-    
-    res.json({
-      globalScore,
-      breakdown: {
-        title: { score: titleScore, weight: '30%' },
-        description: { score: descriptionScore, weight: '25%' },
-        images: { score: imageScore, weight: '25%' },
-        technical: { score: technicalScore, weight: '20%' }
-      },
-      recommendations
-    });
-  } catch (error) {
-    console.error('Erreur score:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// === Segments pour A/B test ===
-app.get('/api/v1/enrichment/segments', async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const acct = req.accountId;
-    
-    // Marques (top 30) — filtré par account
-    const brands = await prisma.$queryRawUnsafe(`
-      SELECT i.brand, COUNT(*)::int as count 
-      FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id
-      WHERE i.brand IS NOT NULL AND i.brand != '' AND f.accountid = $1::text
-      GROUP BY i.brand ORDER BY count DESC LIMIT 30
-    `, acct);
-    
-    // Catégories produit (top 30)
-    const categories = await prisma.$queryRawUnsafe(`
-      SELECT i.customfields->>'product_type' as category, COUNT(*)::int as count
-      FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id
-      WHERE i.customfields->>'product_type' IS NOT NULL AND f.accountid = $1::text
-      GROUP BY 1 ORDER BY count DESC LIMIT 30
-    `, acct);
-    
-    // Tranches de prix
-    const priceRanges = await prisma.$queryRawUnsafe(`
-      SELECT 
-        COUNT(CASE WHEN i.price < 10 THEN 1 END)::int as "under10",
-        COUNT(CASE WHEN i.price >= 10 AND i.price < 30 THEN 1 END)::int as "10to30",
-        COUNT(CASE WHEN i.price >= 30 AND i.price < 50 THEN 1 END)::int as "30to50",
-        COUNT(CASE WHEN i.price >= 50 AND i.price < 100 THEN 1 END)::int as "50to100",
-        COUNT(CASE WHEN i.price >= 100 THEN 1 END)::int as "over100"
-      FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id
-      WHERE i.price IS NOT NULL AND f.accountid = $1::text
-    `, acct);
-    
-    // Stock
-    const stockInfo = await prisma.$queryRawUnsafe(`
-      SELECT 
-        COUNT(CASE WHEN i.inventory > 0 THEN 1 END)::int as "inStock",
-        COUNT(CASE WHEN i.inventory = 0 OR i.inventory IS NULL THEN 1 END)::int as "outOfStock"
-      FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id
-      WHERE f.accountid = $1::text
-    `, acct);
-    
-    // Score (déjà optimisé vs pas)
-    const enrichmentInfo = await prisma.$queryRawUnsafe(`
-      SELECT 
-        COUNT(CASE WHEN i.customfields->>'optimized_title' IS NOT NULL THEN 1 END)::int as "hasOptTitle",
-        COUNT(CASE WHEN i.customfields->>'optimized_title' IS NULL THEN 1 END)::int as "noOptTitle",
-        COUNT(CASE WHEN i.customfields->>'optimized_description' IS NOT NULL THEN 1 END)::int as "hasOptDesc",
-        COUNT(CASE WHEN i.customfields->>'optimized_description' IS NULL THEN 1 END)::int as "noOptDesc",
-        COUNT(*)::int as total
-      FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id
-      WHERE f.accountid = $1::text
-    `, acct);
-    
-    res.json({
-      brands: brands || [],
-      categories: categories || [],
-      priceRanges: priceRanges?.[0] || {},
-      stock: stockInfo?.[0] || {},
-      enrichment: enrichmentInfo?.[0] || {},
-      total: enrichmentInfo?.[0]?.total || 0
-    });
-  } catch (error) {
-    console.error('Erreur segments:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Filtrer les items par segment
-app.post('/api/v1/enrichment/filter-items', async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-    
-    const { brands, categories, priceRange, stockFilter, enrichmentFilter, limit } = req.body;
-    
-    let conditions = [];
-    let params = [];
-    let paramIdx = 1;
-    
-    if (brands && brands.length > 0) {
-      const placeholders = brands.map(() => `$${paramIdx++}::text`).join(',');
-      conditions.push(`brand IN (${placeholders})`);
-      params.push(...brands);
-    }
-    
-    if (categories && categories.length > 0) {
-      const placeholders = categories.map(() => `$${paramIdx++}::text`).join(',');
-      conditions.push(`customfields->>'product_type' IN (${placeholders})`);
-      params.push(...categories);
-    }
-    
-    if (priceRange) {
-      if (priceRange.min !== undefined) {
-        conditions.push(`price >= $${paramIdx++}::numeric`);
-        params.push(priceRange.min);
-      }
-      if (priceRange.max !== undefined) {
-        conditions.push(`price <= $${paramIdx++}::numeric`);
-        params.push(priceRange.max);
-      }
-    }
-    
-    if (stockFilter === 'in_stock') {
-      conditions.push(`inventory > 0`);
-    } else if (stockFilter === 'out_of_stock') {
-      conditions.push(`(inventory = 0 OR inventory IS NULL)`);
-    }
-    
-    if (enrichmentFilter === 'not_optimized') {
-      conditions.push(`(customfields->>'optimized_title' IS NULL)`);
-    } else if (enrichmentFilter === 'already_optimized') {
-      conditions.push(`(customfields->>'optimized_title' IS NOT NULL)`);
-    }
-    
-    // Ajouter filtre multi-tenant via JOIN Feed
-    conditions.push(`f.accountid = $${paramIdx}::text`);
-    params.push(req.accountId);
-    paramIdx++;
-    
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const maxLimit = Math.min(parseInt(limit) || 5000, 10000);
-    
-    const query = `SELECT i.id FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id ${where} LIMIT $${paramIdx}::int`;
-    params.push(maxLimit);
-    
-    const items = await prisma.$queryRawUnsafe(query, ...params);
-    
-    // Compter le total (sans limit)
-    const countQuery = `SELECT COUNT(*)::int as total FROM "FeedItem" i JOIN "Feed" f ON i.feedid = f.id ${where}`;
-    const countParams = params.slice(0, -1); // sans le limit
-    const countResult = await prisma.$queryRawUnsafe(countQuery, ...countParams);
-    
-    res.json({
-      itemIds: (items || []).map((i) => i.id),
-      total: countResult?.[0]?.total || 0,
-      limited: maxLimit
-    });
-  } catch (error) {
-    console.error('Erreur filter-items:', error);
-    res.status(500).json({ message: error.message });
-  }
+// ====== ENRICHISSEMENT IA (routes extraites dans routes/enrichment.js) ======
+const { registerEnrichmentRoutes } = require('./routes/enrichment');
+registerEnrichmentRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  storage,
+  bucketName,
+  normalizePlatformKey,
+  canUseFeature,
+  trackAiUsage,
+  verifyItemAccess,
+  getDestinationPushContext,
+  resolveItemId,
 });
 
 // ====== TESTS A/B (témoin + variant, statistiquement cohérents) ======
@@ -12973,7 +12692,8 @@ try {
 try {
   const { registerChannelScoringRoutes } = require('./routes/channel-scoring');
   registerChannelScoringRoutes(app, {
-    prisma,
+    // Getter : `prisma` est initialisé après l'enregistrement des routes.
+    getPrisma: () => prisma,
     authenticateToken,
     getAccountId: (req) => req.accountId
   });
@@ -12983,10 +12703,14 @@ try {
 
 // ====== PERFORMANCE PAR CANAL (historique + purge) ======
 // GET /api/v1/performance/dashboard — agrégats par plateforme, top produits, par catégorie (ROAS, coût, revenus)
+// Auth mixte : JWT cookie (dashboard standalone via proxy Next) ou session token Shopify (embedded).
 app.get('/api/v1/performance/dashboard', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
+    if (!accountId) {
+      return res.status(403).json({ message: 'Compte non associé au token' });
+    }
     const feedId = req.query.feedId || null;
     const limitProducts = Math.min(100, parseInt(req.query.limitProducts || '30', 10));
 
@@ -13087,7 +12811,7 @@ app.get('/api/v1/performance/history', async (req, res) => {
     if (CHANNELS.indexOf(channel) === -1) {
       return res.status(400).json({ message: 'channel invalide. Valeurs: ' + CHANNELS.join(', ') });
     }
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     if (!(await verifyItemAccess(itemId, accountId))) {
       return res.status(404).json({ message: 'Produit non trouvé' });
     }
@@ -13121,7 +12845,7 @@ app.get('/api/v1/performance/history', async (req, res) => {
 app.post('/api/v1/performance/sync/google-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
     const clientId = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
@@ -13168,7 +12892,7 @@ app.post('/api/v1/performance/sync/google-ads', async (req, res) => {
 app.post('/api/v1/performance/sync/meta-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     let adAccountId = req.body?.adAccountId || null;
     let accessToken = req.body?.accessToken || null;
@@ -13204,7 +12928,7 @@ app.post('/api/v1/performance/sync/meta-ads', async (req, res) => {
 app.post('/api/v1/performance/sync/amazon-ads', async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service indisponible' });
-    const accountId = req.accountId || 'default-account';
+    const accountId = req.accountId;
     const feedId = req.query.feedId || req.body?.feedId || null;
     const region = (req.query.region || req.body?.region || 'eu').toLowerCase();
     let profileId = req.body?.profileId || null;
@@ -13277,7 +13001,7 @@ app.get('/api/v1/platforms/gmc/oauth-config', requireAuth, (req, res) => {
 });
 
 // 1. Générer l'URL d'autorisation OAuth2 GMC
-app.get('/api/v1/platforms/gmc/auth-url', requireAuth, (req, res) => {
+app.get('/api/v1/platforms/gmc/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Merchant Center non configurée.' });
   }
@@ -13286,15 +13010,38 @@ app.get('/api/v1/platforms/gmc/auth-url', requireAuth, (req, res) => {
     'https://www.googleapis.com/auth/userinfo.email'    // Email utilisateur
   ];
   const locale = normalizeAppLocale(req.query.locale);
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-  
+
+  // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
+  // de l'embarquer dans le state OAuth (qui pouvait être forgé par un tiers).
+  const stateId = crypto.randomUUID();
+  try {
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      payload: {
+        accountId: req.accountId,
+        locale,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
+      ttlMs: 10 * 60 * 1000,
+    });
+  } catch (stateError) {
+    console.error('GMC auth-url state store:', stateError);
+    return res.status(503).json({ message: 'Connexion Google Merchant Center temporairement indisponible.' });
+  }
+
   const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',      // Pour obtenir un refresh_token
+    access_type: 'offline',
     prompt: 'consent select_account',
     scope: scopes,
-    state: JSON.stringify({ accountId: req.accountId, locale })
+    state: stateId,
   });
-  
+
   res.json({ authUrl });
 });
 
@@ -13318,11 +13065,19 @@ app.get('/api/v1/marketing/audits/:shareToken/platforms/gmc/auth-url', async (re
       'https://www.googleapis.com/auth/userinfo.email'
     ];
     const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const stateId = crypto.randomUUID();
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      payload: { auditShareToken: shareToken, locale: rows[0].locale || 'fr', mode: 'marketing_audit_gmc' },
+      ttlMs: 10 * 60 * 1000,
+    });
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent select_account',
       scope: scopes,
-      state: JSON.stringify({ auditShareToken: shareToken, locale: rows[0].locale || 'fr', mode: 'marketing_audit_gmc' })
+      state: stateId,
     });
     res.json({ authUrl });
   } catch (error) {
@@ -13345,17 +13100,46 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     let auditShareToken;
     let auditLocale = 'fr';
     let dashboardLocale = 'fr';
+    let embeddedSurface = false;
+    let embeddedReturnTo = '/embedded/channels';
+    // On récupère le payload via l'UUID opaque stocké côté serveur — il a été
+    // émis par nous, à usage unique, et expire en 10 min (CSRF guard).
+    let stateData;
     try {
-      const stateData = JSON.parse(state);
-      accountId = stateData.accountId;
-      auditShareToken = stateData.auditShareToken;
-      auditLocale = normalizeAppLocale(stateData.locale || 'fr');
-      dashboardLocale = normalizeAppLocale(stateData.locale || 'fr');
-    } catch {
+      stateData = await consumeOAuthEphemeralState({
+        id: String(state || ''),
+        provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+        flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+      });
+    } catch (stateError) {
+      console.error('GMC callback state lookup:', stateError);
       return res.redirect(buildFluxRedirectUrl(appUrl, 'fr', { gmc: 'error', message: 'Etat OAuth Google invalide.' }));
     }
+    if (!stateData) {
+      return res.redirect(buildFluxRedirectUrl(appUrl, 'fr', { gmc: 'error', message: 'Etat OAuth Google invalide ou expiré.' }));
+    }
+    accountId = stateData.accountId;
+    auditShareToken = stateData.auditShareToken;
+    auditLocale = normalizeAppLocale(stateData.locale || 'fr');
+    dashboardLocale = normalizeAppLocale(stateData.locale || 'fr');
+    embeddedSurface = stateData.surface === 'embedded';
+    embeddedReturnTo = normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels');
 
     if (!accountId && !auditShareToken) {
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'error',
+            message: 'Compte FeedPlug manquant pour la connexion GMC.',
+          }),
+          params: {
+            gmc: 'error',
+            message: 'Compte FeedPlug manquant pour la connexion GMC.',
+          },
+        }));
+      }
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'error',
         message: 'Compte FeedPlug manquant pour la connexion GMC.',
@@ -13407,6 +13191,20 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       if (auditShareToken) {
         return res.redirect(`${appUrl}/${auditLocale}/audit-flux/${auditShareToken}?error=no_merchant_account`);
       }
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'error',
+            message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
+          }),
+          params: {
+            gmc: 'error',
+            message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
+          },
+        }));
+      }
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'error',
         message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
@@ -13432,6 +13230,21 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         ttlMs: GMC_SELECTION_TTL_MS,
       });
 
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+            gmc: 'select',
+            selection: selectionId,
+          }),
+          params: {
+            gmc: 'select',
+            selection: selectionId,
+          },
+        }));
+      }
+
       return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
         gmc: 'select',
         selection: selectionId,
@@ -13449,6 +13262,9 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         email,
         scope: tokens.scope || '',
       });
+      // Premier push immédiat : le marchand attend de voir ses produits dans
+      // Merchant Center dès la connexion, sans passer par la page Flux.
+      scheduleAutoGmcPush(accountId, null, 'connexion GMC', 0);
     }
     
     if (prismaReady && prisma && auditShareToken) {
@@ -13479,6 +13295,21 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     }
 
     // Rediriger vers le frontend avec succès (APP_URL pour multi-env)
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: buildFluxRedirectUrl(appUrl, dashboardLocale, {
+          gmc: 'connected',
+          merchant: selectedMerchant.merchantId || '',
+        }),
+        params: {
+          gmc: 'connected',
+          merchant: selectedMerchant.merchantId || '',
+        },
+      }));
+    }
+
     res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
       gmc: 'connected',
       merchant: selectedMerchant.merchantId || '',
@@ -13494,7 +13325,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
 });
 
 // 3. Statut de la connexion GMC
-app.get('/api/v1/platforms/gmc/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/gmc/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ connected: false });
@@ -13526,7 +13357,7 @@ app.get('/api/v1/platforms/gmc/status', requireAuth, async (req, res) => {
 });
 
 // 4. Déconnecter GMC
-app.delete('/api/v1/platforms/gmc/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/gmc/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       const connections = await prisma.$queryRawUnsafe(`
@@ -13552,7 +13383,7 @@ app.delete('/api/v1/platforms/gmc/disconnect', requireAuth, async (req, res) => 
   }
 });
 
-app.get('/api/v1/platforms/gmc/selection/:selectionId', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/gmc/selection/:selectionId', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const selectionId = String(req.params.selectionId || '').trim();
     if (!selectionId) {
@@ -13579,7 +13410,7 @@ app.get('/api/v1/platforms/gmc/selection/:selectionId', requireAuth, async (req,
   }
 });
 
-app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/gmc/select-merchant', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const selectionId = String(req.body?.selectionId || '').trim();
     const merchantId = String(req.body?.merchantId || '').trim();
@@ -13620,6 +13451,9 @@ app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) 
       flow: OAUTH_EPHEMERAL_FLOW_GMC_SELECTION,
     });
 
+    // Premier push immédiat après le choix du compte Merchant Center.
+    scheduleAutoGmcPush(req.accountId, null, 'connexion GMC', 0);
+
     res.json({
       connected: true,
       merchantId: selectedMerchant.merchantId,
@@ -13632,17 +13466,37 @@ app.post('/api/v1/platforms/gmc/select-merchant', requireAuth, async (req, res) 
 });
 
 // ===== GOOGLE ADS — Connexion OAuth2 pour sync performance (shopping_performance_view) =====
-app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, (req, res) => {
+app.get('/api/v1/platforms/google-ads/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
     return res.status(503).json({ message: 'Connexion Google Ads non configurée (GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET).' });
   }
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const stateId = crypto.randomUUID();
+  try {
+    await storeOAuthEphemeralState({
+      id: stateId,
+      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+      flow: OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE,
+      payload: {
+        accountId: req.accountId,
+        platform: 'google_ads',
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
+      ttlMs: 10 * 60 * 1000,
+    });
+  } catch (stateError) {
+    console.error('Google Ads auth-url state store:', stateError);
+    return res.status(503).json({ message: 'Connexion Google Ads temporairement indisponible.' });
+  }
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: scopes,
-    state: JSON.stringify({ accountId: req.accountId, platform: 'google_ads' })
+    state: stateId,
   });
   res.json({ authUrl });
 });
@@ -13650,17 +13504,35 @@ app.get('/api/v1/platforms/google-ads/auth-url', requireAuth, (req, res) => {
 app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
   const appUrl = (process.env.APP_URL || 'https://app.feedplug.com').replace(/\/$/, '');
   const performanceRedirect = `${appUrl}/performance`;
+  let stateData = null;
   try {
     const { code, state } = req.query;
     if (!code) return res.redirect(`${performanceRedirect}?error=no_code`);
-    let accountId;
     try {
-      const stateData = JSON.parse(state);
-      accountId = stateData.accountId;
-    } catch {
+      stateData = await consumeOAuthEphemeralState({
+        id: String(state || ''),
+        provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
+        flow: OAUTH_EPHEMERAL_FLOW_GOOGLE_ADS_OAUTH_STATE,
+      });
+    } catch (stateError) {
+      console.error('Google Ads callback state lookup:', stateError);
       return res.redirect(`${performanceRedirect}?error=invalid_state`);
     }
+    if (!stateData) {
+      return res.redirect(`${performanceRedirect}?error=invalid_state`);
+    }
+    const accountId = stateData.accountId;
+    const embeddedSurface = stateData.surface === 'embedded';
+    const embeddedReturnTo = normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels');
     if (!accountId || !GOOGLE_ADS_CLIENT_ID || !GOOGLE_ADS_CLIENT_SECRET) {
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${performanceRedirect}?error=config`,
+          params: { google_ads: 'error', message: 'Configuration Google Ads manquante.' },
+        }));
+      }
       return res.redirect(`${performanceRedirect}?error=config`);
     }
     const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
@@ -13703,14 +13575,31 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         metadata: {},
       });
     }
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`,
+        params: { google_ads: 'connected', customer: customerId || '' },
+      }));
+    }
+
     res.redirect(`${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`);
   } catch (error) {
     console.error('Google Ads OAuth callback error:', error);
+    if (stateData?.surface === 'embedded') {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId: stateData.accountId,
+        returnTo: normalizeEmbeddedReturnTo(stateData.returnTo, '/embedded/channels'),
+        fallbackUrl: `${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`,
+        params: { google_ads: 'error', message: error.message || 'Connexion Google Ads impossible.' },
+      }));
+    }
     res.redirect(`${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
   }
 });
 
-app.get('/api/v1/platforms/google-ads/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/google-ads/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) return res.json({ connected: false });
     const connections = await prisma.$queryRawUnsafe(
@@ -13730,7 +13619,7 @@ app.get('/api/v1/platforms/google-ads/status', requireAuth, async (req, res) => 
   }
 });
 
-app.delete('/api/v1/platforms/google-ads/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/google-ads/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       await prisma.$executeRawUnsafe(`DELETE FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'google_ads'`, req.accountId);
@@ -13743,7 +13632,7 @@ app.delete('/api/v1/platforms/google-ads/disconnect', requireAuth, async (req, r
 
 // ===== AMAZON — Canaux (FR, UK, DE, IT, ES) + Export =====
 // 1. Liste des canaux Amazon du compte
-app.get('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/channels', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ channels: [] });
@@ -13762,7 +13651,7 @@ app.get('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
 });
 
 // 2. Créer un canal Amazon (amazon_fr, amazon_uk, amazon_de, amazon_it, amazon_es)
-app.post('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/amazon/channels', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const { channelKey } = req.body || {};
     const key = (channelKey || '').toLowerCase();
@@ -13803,7 +13692,7 @@ app.post('/api/v1/platforms/amazon/channels', requireAuth, async (req, res) => {
 });
 
 // 3. Supprimer (désactiver) un canal Amazon
-app.delete('/api/v1/platforms/amazon/channels/:channelKey', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/amazon/channels/:channelKey', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const key = (req.params.channelKey || '').toLowerCase();
     if (!AMAZON_CHANNEL_CONFIG[key]) {
@@ -13836,21 +13725,525 @@ app.get('/api/v1/platforms/amazon/channels/available', (_req, res) => {
   });
 });
 
+// ===== GOOGLE LOCAL INVENTORY ADS (LIA) — Magasins + inventaire par magasin =====
+// 1. Liste des magasins actifs du compte
+app.get('/api/v1/platforms/lia/stores', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ stores: [] });
+    }
+    const stores = await prisma.$queryRawUnsafe(`
+      SELECT id, storecode AS "storeCode", name, address, isactive AS "isActive", createdat AS "createdAt"
+      FROM "StoreLocation"
+      WHERE accountid = $1::text AND isactive = true
+      ORDER BY storecode
+    `, req.accountId);
+    res.json({ stores: stores || [] });
+  } catch (error) {
+    console.error('LIA stores list error:', error);
+    res.status(500).json({ message: error.message, stores: [] });
+  }
+});
+
+// 2. Créer / mettre à jour un magasin (storeCode = code magasin Google Business Profile)
+app.post('/api/v1/platforms/lia/stores', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateStoreInput } = require('./lib/local-inventory');
+    const validation = validateStoreInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.error });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const { storeCode, name, address } = validation.value;
+    const storeId = crypto.randomUUID();
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "StoreLocation" (id, accountid, storecode, name, address, isactive, createdat, updatedat)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, true, NOW(), NOW())
+      ON CONFLICT (accountid, storecode) DO UPDATE SET
+        name = $4::text,
+        address = $5::text,
+        isactive = true,
+        updatedat = NOW()
+    `, storeId, req.accountId, storeCode, name, address);
+    const [created] = await prisma.$queryRawUnsafe(`
+      SELECT id, storecode AS "storeCode", name, address, isactive AS "isActive", createdat AS "createdAt"
+      FROM "StoreLocation"
+      WHERE accountid = $1::text AND storecode = $2::text
+    `, req.accountId, storeCode);
+    res.status(201).json(created || { storeCode, name, address });
+  } catch (error) {
+    console.error('LIA store create error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 3. Supprimer (désactiver) un magasin
+app.delete('/api/v1/platforms/lia/stores/:storeCode', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const storeCode = normalizeStoreCode(req.params.storeCode);
+    if (!storeCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    await prisma.$executeRawUnsafe(`
+      UPDATE "StoreLocation" SET isactive = false, updatedat = NOW()
+      WHERE accountid = $1::text AND storecode = $2::text
+    `, req.accountId, storeCode);
+    res.json({ message: `Magasin ${storeCode} désactivé` });
+  } catch (error) {
+    console.error('LIA store delete error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 4. Inventaire par magasin — lecture (filtre optionnel ?storeCode=)
+app.get('/api/v1/platforms/lia/inventory', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ inventory: [] });
+    }
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const requestedStoreCode = req.query.storeCode ? normalizeStoreCode(req.query.storeCode) : null;
+    if (req.query.storeCode && !requestedStoreCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    const limit = Math.min(parseInt(req.query.limit) || 1000, 5000);
+    const params = [req.accountId];
+    let where = 'accountid = $1::text';
+    if (requestedStoreCode) {
+      params.push(requestedStoreCode);
+      where += ' AND storecode = $2::text';
+    }
+    params.push(limit);
+    const inventory = await prisma.$queryRawUnsafe(`
+      SELECT storecode AS "storeCode", offerid AS "offerId", quantity, availability,
+             price, saleprice AS "salePrice", pickupmethod AS "pickupMethod", pickupsla AS "pickupSla",
+             updatedat AS "updatedAt"
+      FROM "LocalInventory"
+      WHERE ${where}
+      ORDER BY storecode, offerid
+      LIMIT $${params.length}::int
+    `, ...params);
+    res.json({ inventory: inventory || [] });
+  } catch (error) {
+    console.error('LIA inventory list error:', error);
+    res.status(500).json({ message: error.message, inventory: [] });
+  }
+});
+
+// 5. Inventaire par magasin — upsert en masse { rows: [{ storeCode, offerId, quantity, ... }] }
+app.post('/api/v1/platforms/lia/inventory', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateInventoryRows } = require('./lib/local-inventory');
+    const validation = validateInventoryRows(req.body?.rows);
+    if (!validation.ok) {
+      return res.status(400).json({ message: 'Lignes d\'inventaire invalides', errors: validation.errors.slice(0, 20) });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    // Les codes magasins référencés doivent exister (et être actifs) sur le compte
+    const stores = await prisma.$queryRawUnsafe(`
+      SELECT storecode FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true
+    `, req.accountId);
+    const knownStores = new Set((stores || []).map(s => s.storecode));
+    const unknown = [...new Set(validation.rows.map(r => r.storeCode).filter(code => !knownStores.has(code)))];
+    if (unknown.length > 0) {
+      return res.status(400).json({ message: `Magasins inconnus : ${unknown.slice(0, 10).join(', ')}. Créez-les d'abord.` });
+    }
+    const CHUNK = 500;
+    for (let offset = 0; offset < validation.rows.length; offset += CHUNK) {
+      const chunk = validation.rows.slice(offset, offset + CHUNK);
+      const values = [];
+      const params = [req.accountId];
+      for (const row of chunk) {
+        const base = params.length;
+        params.push(crypto.randomUUID(), row.storeCode, row.offerId, row.quantity, row.availability, row.price, row.salePrice, row.pickupMethod, row.pickupSla);
+        values.push(`($${base + 1}::text, $1::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::int, $${base + 5}::text, $${base + 6}::numeric, $${base + 7}::numeric, $${base + 8}::text, $${base + 9}::text, NOW(), NOW())`);
+      }
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "LocalInventory" (id, accountid, storecode, offerid, quantity, availability, price, saleprice, pickupmethod, pickupsla, createdat, updatedat)
+        VALUES ${values.join(', ')}
+        ON CONFLICT (accountid, storecode, offerid) DO UPDATE SET
+          quantity = EXCLUDED.quantity,
+          availability = EXCLUDED.availability,
+          price = EXCLUDED.price,
+          saleprice = EXCLUDED.saleprice,
+          pickupmethod = EXCLUDED.pickupmethod,
+          pickupsla = EXCLUDED.pickupsla,
+          updatedat = NOW()
+      `, ...params);
+    }
+    res.json({ message: `${validation.rows.length} ligne(s) d'inventaire enregistrée(s)`, upserted: validation.rows.length });
+  } catch (error) {
+    console.error('LIA inventory upsert error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 7. URL publique du flux LIA pour configuration Google Merchant Center.
+// Retourne l'URL d'export prête à coller dans GMC (Feeds → Add primary feed).
+// Une URL globale + une URL par store actif (au cas où le merchant configure
+// un flux par magasin dans GMC).
+app.get('/api/v1/platforms/lia/feed-url', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const feedRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Feed" WHERE accountid = $1::text AND status = 'ACTIVE'::text ORDER BY createdat ASC LIMIT 1`,
+      req.accountId
+    );
+    const feedId = feedRows?.[0]?.id;
+    if (!feedId) {
+      return res.status(404).json({
+        message: 'Aucun flux actif sur ce compte. Synchronisez d\'abord votre catalogue.',
+      });
+    }
+    const stores = await prisma.$queryRawUnsafe(
+      `SELECT storecode AS "storeCode" FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true ORDER BY storecode`,
+      req.accountId
+    );
+    const apiBase = (process.env.API_PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const globalUrl = `${apiBase}/api/v1/ingestion/feeds/${encodeURIComponent(feedId)}/export?platform=lia&format=csv`;
+    const perStoreUrls = (stores || []).map((s) => ({
+      storeCode: s.storeCode,
+      url: `${globalUrl}&storeCode=${encodeURIComponent(s.storeCode)}`,
+    }));
+    return res.json({
+      feedId,
+      globalUrl,
+      perStoreUrls,
+      stores: stores?.length || 0,
+    });
+  } catch (error) {
+    console.error('LIA feed-url error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 6. Inventaire par magasin — DELETE unitaire (1 store × 1 offre)
+app.delete('/api/v1/platforms/lia/inventory/:storeCode/:offerId', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { normalizeStoreCode } = require('./lib/local-inventory');
+    const storeCode = normalizeStoreCode(req.params.storeCode);
+    if (!storeCode) {
+      return res.status(400).json({ message: 'Code magasin invalide' });
+    }
+    const offerId = String(req.params.offerId || '').trim();
+    if (!offerId) {
+      return res.status(400).json({ message: 'offerId manquant' });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM "LocalInventory"
+      WHERE accountid = $1::text AND storecode = $2::text AND offerid = $3::text
+    `, req.accountId, storeCode, offerId);
+    res.json({ message: `Ligne d'inventaire supprimée (${storeCode} × ${offerId})` });
+  } catch (error) {
+    console.error('LIA inventory delete error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ===== LIA × SHOPIFY POS — stock par emplacement Shopify =====
+// Le marchand lie ses emplacements Shopify (POS) à ses codes magasins Google
+// Business Profile ; le stock "available" par emplacement est ensuite
+// synchronisé dans LocalInventory (à la demande + après chaque sync Shopify).
+// Nécessite les scopes optionnels read_locations + read_inventory.
+
+// Résout l'accès Admin API Shopify du compte (boutique + token déchiffré).
+async function getShopifyAdminAccessForAccount(accountId) {
+  const feed = await findShopifyFeedForAccount(accountId);
+  if (!feed || !feed.shop || !feed.credentialId) return null;
+  const credRows = await prisma.$queryRawUnsafe(
+    `SELECT secretjson FROM "Credential" WHERE id = $1::text LIMIT 1`,
+    feed.credentialId
+  );
+  if (!credRows?.length) return null;
+  const secret = decryptObjectSecrets(
+    typeof credRows[0].secretjson === 'string' ? JSON.parse(credRows[0].secretjson) : credRows[0].secretjson
+  );
+  const accessToken = secret.accessToken || secret.access_token;
+  if (!accessToken) return null;
+  return { shop: feed.shop, accessToken, feedId: feed.feedId };
+}
+
+async function shopifyAdminGraphql({ shop, accessToken, query, variables }) {
+  const response = await fetch(buildShopifyAdminGraphqlUrl(shop), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
+    body: JSON.stringify({ query, variables: variables || {} }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const err = new Error(`Shopify Admin API a répondu ${response.status}`);
+    err.statusCode = 502;
+    throw err;
+  }
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    const message = data.errors.map((e) => e?.message).filter(Boolean).join(' | ');
+    const accessDenied = data.errors.some(
+      (e) => e?.extensions?.code === 'ACCESS_DENIED' || /access denied/i.test(String(e?.message || ''))
+    );
+    const err = new Error(message || 'Erreur GraphQL Shopify');
+    err.statusCode = accessDenied ? 403 : 502;
+    err.scopeMissing = accessDenied;
+    throw err;
+  }
+  return data?.data || {};
+}
+
+function respondLiaScopeMissing(res) {
+  return res.status(403).json({
+    code: 'SCOPE_MISSING',
+    message: 'FeedPlug a besoin des autorisations Shopify "read_locations" et "read_inventory" pour lire le stock par emplacement.',
+    requiredScopes: ['read_locations', 'read_inventory'],
+  });
+}
+
+// 8. Emplacements Shopify du marchand + mapping actuel vers les magasins LIA.
+app.get('/api/v1/platforms/lia/shopify/locations', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const access = await getShopifyAdminAccessForAccount(req.accountId);
+    if (!access) {
+      return res.status(404).json({ message: 'Aucune boutique Shopify connectée à ce compte.' });
+    }
+    const data = await shopifyAdminGraphql({
+      ...access,
+      query: `
+        query LiaLocations {
+          locations(first: 50, includeInactive: false) {
+            edges { node { id name fulfillsOnlineOrders address { formatted } } }
+          }
+        }
+      `,
+    });
+    const mappings = await prisma.$queryRawUnsafe(
+      `SELECT storecode, shopifylocationid FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true AND shopifylocationid IS NOT NULL`,
+      req.accountId
+    );
+    const storeCodeByLocation = new Map((mappings || []).map((m) => [m.shopifylocationid, m.storecode]));
+    const locations = (data?.locations?.edges || []).map(({ node }) => ({
+      id: node.id,
+      name: node.name || '',
+      address: Array.isArray(node.address?.formatted) ? node.address.formatted.join(', ') : '',
+      fulfillsOnlineOrders: node.fulfillsOnlineOrders === true,
+      storeCode: storeCodeByLocation.get(node.id) || null,
+    }));
+    res.json({ locations });
+  } catch (error) {
+    if (error?.scopeMissing) return respondLiaScopeMissing(res);
+    console.error('LIA shopify locations error:', error);
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+// 9. Lier un emplacement Shopify à un code magasin Google Business Profile.
+app.post('/api/v1/platforms/lia/shopify/locations/link', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    const { validateStoreInput } = require('./lib/local-inventory');
+    const locationId = String(req.body?.locationId || '').trim();
+    if (!/^gid:\/\/shopify\/Location\/\d+$/.test(locationId)) {
+      return res.status(400).json({ message: 'locationId Shopify invalide.' });
+    }
+    const validation = validateStoreInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.error });
+    }
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const { storeCode, name, address } = validation.value;
+    // Un emplacement Shopify ne peut alimenter qu'un seul magasin LIA :
+    // on détache l'éventuel mapping précédent avant l'upsert.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "StoreLocation" SET shopifylocationid = NULL, updatedat = NOW() WHERE accountid = $1::text AND shopifylocationid = $2::text AND storecode <> $3::text`,
+      req.accountId, locationId, storeCode
+    );
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "StoreLocation" (id, accountid, storecode, name, address, shopifylocationid, isactive, createdat, updatedat)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, true, NOW(), NOW())
+      ON CONFLICT (accountid, storecode) DO UPDATE SET
+        name = COALESCE($4::text, "StoreLocation".name),
+        address = COALESCE($5::text, "StoreLocation".address),
+        shopifylocationid = $6::text,
+        isactive = true,
+        updatedat = NOW()
+    `, crypto.randomUUID(), req.accountId, storeCode, name, address, locationId);
+    res.status(201).json({ storeCode, locationId });
+  } catch (error) {
+    console.error('LIA shopify link error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Récupère le stock "available" par emplacement Shopify et l'upserte dans
+// LocalInventory pour les magasins liés. offerId = FeedItem.originid (GID
+// variant sans le préfixe gid://shopify/), identique au push GMC.
+async function executeLiaShopifySync(accountId) {
+  const mappings = await prisma.$queryRawUnsafe(
+    `SELECT storecode, shopifylocationid FROM "StoreLocation" WHERE accountid = $1::text AND isactive = true AND shopifylocationid IS NOT NULL`,
+    accountId
+  );
+  if (!mappings || mappings.length === 0) {
+    return { synced: 0, stores: 0 };
+  }
+  const access = await getShopifyAdminAccessForAccount(accountId);
+  if (!access) {
+    const err = new Error('Aucune boutique Shopify connectée à ce compte.');
+    err.statusCode = 404;
+    throw err;
+  }
+  const storeCodeByLocation = new Map(mappings.map((m) => [m.shopifylocationid, m.storecode]));
+
+  const rows = [];
+  let cursor = null;
+  let hasNextPage = true;
+  let pages = 0;
+  while (hasNextPage && pages < 200) {
+    pages += 1;
+    const data = await shopifyAdminGraphql({
+      ...access,
+      query: `
+        query LiaInventory($first: Int!, $after: String) {
+          productVariants(first: $first, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            edges { node {
+              id
+              inventoryItem {
+                inventoryLevels(first: 50) {
+                  edges { node {
+                    location { id }
+                    quantities(names: ["available"]) { name quantity }
+                  } }
+                }
+              }
+            } }
+          }
+        }
+      `,
+      variables: { first: 100, after: cursor },
+    });
+    const connection = data?.productVariants;
+    for (const edge of connection?.edges || []) {
+      const node = edge?.node;
+      const offerId = String(node?.id || '').replace(/^gid:\/\/shopify\//, '').substring(0, 50);
+      if (!offerId) continue;
+      for (const levelEdge of node?.inventoryItem?.inventoryLevels?.edges || []) {
+        const level = levelEdge?.node;
+        const storeCode = storeCodeByLocation.get(level?.location?.id);
+        if (!storeCode) continue;
+        const available = (level?.quantities || []).find((q) => q?.name === 'available');
+        const quantity = Number(available?.quantity);
+        if (!Number.isFinite(quantity)) continue;
+        rows.push({ storeCode, offerId, quantity: Math.max(0, Math.trunc(quantity)) });
+      }
+    }
+    hasNextPage = connection?.pageInfo?.hasNextPage === true;
+    cursor = connection?.pageInfo?.endCursor || null;
+  }
+
+  const CHUNK = 500;
+  for (let offset = 0; offset < rows.length; offset += CHUNK) {
+    const chunk = rows.slice(offset, offset + CHUNK);
+    const values = [];
+    const params = [accountId];
+    for (const row of chunk) {
+      const base = params.length;
+      params.push(crypto.randomUUID(), row.storeCode, row.offerId, row.quantity);
+      values.push(`($${base + 1}::text, $1::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::int, NOW(), NOW())`);
+    }
+    // availability remis à NULL : pour une ligne pilotée par le stock POS, la
+    // disponibilité doit se déduire de la quantité (buildLiaRows), pas d'un
+    // ancien import CSV qui dirait "in stock" avec un stock à zéro.
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "LocalInventory" (id, accountid, storecode, offerid, quantity, createdat, updatedat)
+      VALUES ${values.join(', ')}
+      ON CONFLICT (accountid, storecode, offerid) DO UPDATE SET
+        quantity = EXCLUDED.quantity,
+        availability = NULL,
+        updatedat = NOW()
+    `, ...params);
+  }
+  return { synced: rows.length, stores: mappings.length };
+}
+
+// Sync LIA automatique (fire-and-forget, débouncée par compte) après les
+// ingestions Shopify. No-op si aucun emplacement n'est lié.
+const autoLiaSyncTimers = new Map();
+function scheduleAutoLiaSync(accountId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
+  if (!accountId) return;
+  const existing = autoLiaSyncTimers.get(accountId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoLiaSyncTimers.delete(accountId);
+    try {
+      const result = await executeLiaShopifySync(accountId);
+      if (result.synced > 0) {
+        console.log(`🏬 Sync LIA auto (${reason}) : ${result.synced} lignes de stock sur ${result.stores} magasin(s)`);
+      }
+    } catch (err) {
+      console.warn(`⚠️ Sync LIA auto (${reason}) échouée pour account ${accountId}:`, err?.message || err);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoLiaSyncTimers.set(accountId, timer);
+}
+
+// 10. Sync manuelle du stock POS → inventaire LIA.
+app.post('/api/v1/platforms/lia/shopify/sync', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const result = await executeLiaShopifySync(req.accountId);
+    res.json({
+      message: result.stores === 0
+        ? 'Aucun emplacement Shopify lié à un magasin. Liez vos emplacements d\'abord.'
+        : `${result.synced} ligne(s) de stock synchronisée(s) depuis ${result.stores} emplacement(s) Shopify`,
+      ...result,
+    });
+  } catch (error) {
+    if (error?.scopeMissing) return respondLiaScopeMissing(res);
+    console.error('LIA shopify sync error:', error);
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 // 5. Connexion Amazon — auth-url pour OAuth LWA
-app.get('/api/v1/platforms/amazon/auth-url', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/auth-url', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID || !AMAZON_REDIRECT_URI || !AMAZON_LOGIN_URI) {
-    return res.status(503).json({
-      message: 'Connexion Amazon OAuth non configurée. Définissez AMAZON_APPLICATION_ID, AMAZON_REDIRECT_URI, AMAZON_LOGIN_URI.',
+    // État normal (Amazon SP-API pas encore activé), pas une erreur
+    // serveur : 200 + configured:false. Cf /connect-init pour la raison.
+    return res.status(200).json({
+      message: 'Amazon OAuth non configuré',
       configured: false
     });
   }
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
   const state = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
       id: state,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_STATE,
-      payload: { accountId: req.accountId },
+      payload: {
+        accountId: req.accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: AMAZON_STATE_TTL_MS,
     });
   } catch (error) {
@@ -13917,9 +14310,19 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=invalid_state`);
   }
   const accountId = stored.accountId;
+  const embeddedSurface = stored.surface === 'embedded';
+  const embeddedReturnTo = normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels');
   const sellerId = selling_partner_id || stored.sellingPartnerId || null;
   if (!AMAZON_LWA_CLIENT_ID || !AMAZON_LWA_CLIENT_SECRET || !AMAZON_REDIRECT_URI) {
-    return res.redirect(`${APP_URL}/flux?amazon=error&reason=config`);
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=error&reason=config`,
+        params: { amazon: 'error', reason: 'config' },
+      }));
+    }
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'config' }));
   }
   try {
     const tokenRes = await fetch('https://api.amazon.com/auth/o2/token', {
@@ -13933,10 +14336,34 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         client_secret: AMAZON_LWA_CLIENT_SECRET
       }).toString()
     });
+    // Amazon peut répondre 4xx/5xx (redirect_uri non enregistrée, client
+    // invalide…) : on lit le corps brut pour le log avant de tenter le JSON,
+    // sinon on masque la vraie cause derrière une erreur de parse opaque.
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text().catch(() => '');
+      console.error('Amazon token exchange HTTP error:', tokenRes.status, errBody.substring(0, 500));
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${APP_URL}/flux?amazon=error&reason=token_exchange`,
+          params: { amazon: 'error', reason: 'token_exchange' },
+        }));
+      }
+      return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'token_exchange' }));
+    }
     const tokens = await tokenRes.json();
     if (!tokens.access_token || !tokens.refresh_token) {
       console.error('Amazon token exchange failed:', tokens);
-      return res.redirect(`${APP_URL}/flux?amazon=error&reason=token_exchange`);
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${APP_URL}/flux?amazon=error&reason=token_exchange`,
+          params: { amazon: 'error', reason: 'token_exchange' },
+        }));
+      }
+      return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'token_exchange' }));
     }
     const expiry = tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null;
     if (prismaReady && prisma) {
@@ -13958,25 +14385,52 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         `, connId, accountId, sellerId || null, encryptSecret(tokens.access_token), encryptSecret(tokens.refresh_token), expiry, meta);
       }
     }
-    return res.redirect(`${APP_URL}/flux?amazon=connected&seller=${sellerId || ''}`);
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=connected&seller=${sellerId || ''}`,
+        params: { amazon: 'connected', seller: sellerId || '' },
+      }));
+    }
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'connected', seller: sellerId || '' }));
   } catch (e) {
     console.error('Amazon callback error:', e);
-    return res.redirect(`${APP_URL}/flux?amazon=error&reason=server`);
+    if (embeddedSurface) {
+      return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+        accountId,
+        returnTo: embeddedReturnTo,
+        fallbackUrl: `${APP_URL}/flux?amazon=error&reason=server`,
+        params: { amazon: 'error', reason: 'server' },
+      }));
+    }
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'server' }));
   }
 });
 
 // 5d. Init connexion — retourne l'URL à visiter pour lancer le flow OAuth
-app.get('/api/v1/platforms/amazon/connect-init', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/connect-init', authenticateJwtOrShopifySession, async (req, res) => {
   if (!AMAZON_APPLICATION_ID) {
-    return res.status(503).json({ configured: false, message: 'Amazon OAuth non configuré' });
+    // État normal (Amazon SP-API pas encore activé côté infra), pas une
+    // erreur serveur : 200 + flag configured:false. Évite que les clics
+    // répétés du merchant ne polluent les alertes Cloud Monitoring 5xx.
+    return res.status(200).json({ configured: false, message: 'Amazon OAuth non configuré' });
   }
+  const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, '/flux');
   const code = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
       id: code,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_CONNECT,
-      payload: { accountId: req.accountId },
+      payload: {
+        accountId: req.accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo,
+      },
       ttlMs: AMAZON_CONNECT_CODE_TTL_MS,
     });
   } catch (error) {
@@ -14010,6 +14464,10 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=invalid_code`);
   }
   const accountId = stored.accountId;
+  const embeddedSurface = stored.surface === 'embedded';
+  const safeReturnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(stored.returnTo, '/flux');
   if (!AMAZON_APPLICATION_ID) {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=not_configured`);
   }
@@ -14019,7 +14477,11 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
       id: state,
       provider: OAUTH_EPHEMERAL_PROVIDER_AMAZON,
       flow: OAUTH_EPHEMERAL_FLOW_AMAZON_STATE,
-      payload: { accountId },
+      payload: {
+        accountId,
+        surface: embeddedSurface ? 'embedded' : 'dashboard',
+        returnTo: safeReturnTo,
+      },
       ttlMs: AMAZON_STATE_TTL_MS,
     });
   } catch (error) {
@@ -14038,7 +14500,7 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
 });
 
 // 5f. Connexion manuelle (refresh_token) — pour tests ou app privée
-app.post('/api/v1/platforms/amazon/connect', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/amazon/connect', authenticateJwtOrShopifySession, async (req, res) => {
   const { refresh_token, seller_id } = req.body || {};
   if (!refresh_token) {
     return res.status(400).json({ message: 'refresh_token requis' });
@@ -14088,7 +14550,7 @@ app.post('/api/v1/platforms/amazon/connect', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/v1/platforms/amazon/status', requireAuth, async (req, res) => {
+app.get('/api/v1/platforms/amazon/status', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
       return res.json({ connected: false });
@@ -14112,7 +14574,7 @@ app.get('/api/v1/platforms/amazon/status', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/v1/platforms/amazon/disconnect', requireAuth, async (req, res) => {
+app.delete('/api/v1/platforms/amazon/disconnect', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     if (prismaReady && prisma) {
       await prisma.$executeRawUnsafe(`
@@ -14171,6 +14633,12 @@ async function refreshAmazonToken(connection) {
       client_secret: AMAZON_LWA_CLIENT_SECRET
     }).toString()
   });
+  if (!tokenRes.ok) {
+    const errBody = await tokenRes.text().catch(() => '');
+    console.error('Amazon refresh token HTTP error:', tokenRes.status, errBody.substring(0, 500));
+    // refresh_token révoqué/invalide (400 invalid_grant) → reconnexion requise.
+    throw new Error('Token Amazon expiré ou révoqué — reconnectez Seller Central');
+  }
   const tokens = await tokenRes.json();
   if (!tokens.access_token) {
     throw new Error(tokens.error_description || 'Erreur refresh token Amazon');
@@ -14624,6 +15092,8 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
   let succeeded = 0;
   let failed = 0;
   const errors = [];
+  let authFailure = false;   // 401/403 SP-API → access token invalide, reconnexion requise
+  let rateLimited = false;   // 429 SP-API → throttling Amazon
   const marketplaceId = channelConfig.marketplaceId;
   const currency = channelConfig.currency;
 
@@ -14662,9 +15132,11 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
       if (putRes.ok) {
         succeeded++;
       } else {
-        const errText = await putRes.text();
+        const errText = await putRes.text().catch(() => '');
         failed++;
-        errors.push({ sku, error: errText.substring(0, 200) });
+        if (putRes.status === 401 || putRes.status === 403) authFailure = true;
+        if (putRes.status === 429) rateLimited = true;
+        errors.push({ sku, status: putRes.status, error: errText.substring(0, 200) });
       }
     } catch (e) {
       failed++;
@@ -14689,12 +15161,27 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
     errors.length > 0 ? JSON.stringify(errors.slice(0, 5)) : null
   );
 
+  // Tout a échoué sur une erreur d'auth → l'access token est invalide même
+  // après refresh : on demande explicitement une reconnexion côté UI.
+  if (succeeded === 0 && authFailure) {
+    throw createPushError(
+      'Connexion Amazon refusée par SP-API. Reconnectez Seller Central.',
+      401,
+      { reconnect: true, logId }
+    );
+  }
+
   const destinationLabel = buildDestinationPushLabel(destinationContext) || channelConfig.label;
+  let message = `Push Amazon ${destinationLabel} : ${succeeded} produits envoyés, ${failed} erreurs`;
+  if (rateLimited) {
+    message += ' (throttling Amazon détecté — réessayez dans quelques minutes)';
+  }
   return {
-    message: `Push Amazon ${destinationLabel} : ${succeeded} produits envoyés, ${failed} erreurs`,
+    message,
     total: items.length,
     succeeded,
     failed,
+    rateLimited,
     errors: errors.slice(0, 10),
     logId,
     destinationId: destinationContext?.id || null,
@@ -14735,7 +15222,12 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
     `,
     feedId
   );
+  const itemsBeforeDestFilter = items.length;
   items = await filterItemsForDestinationActivation(items, destinationContext);
+  // Diag : si push retourne "Aucun produit à pousser" sans log applicatif,
+  // on ne sait pas si le feed est vide en BDD, si le filter Google les a
+  // exclus, ou si le filter destination a tout retiré. Log ces compteurs.
+  console.log(`[gmc-push] account=${accountId} feed=${feedId} merchantId=${conn.merchantid} itemsAfterSqlFilter=${itemsBeforeDestFilter} itemsAfterDestActivation=${items.length} destinationContext=${destinationContext ? destinationContext.slug || destinationContext.id : 'default'}`);
 
   // Traduction par marché (v2) — best-effort.
   try {
@@ -14894,6 +15386,168 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
   };
 }
 
+// ===== Push GMC automatique (fire-and-forget) =====
+// Déclenché à la connexion GMC et après chaque ingestion réussie, pour que le
+// Merchant Center reste synchronisé sans action manuelle. Best-effort : no-op
+// si GMC n'est pas connecté, erreurs en log + ExportLog (via executeGmcPush),
+// jamais remontées à l'appelant. Débouncé par feed pour absorber les rafales
+// de webhooks produits.
+const autoGmcPushTimers = new Map();
+const AUTO_GMC_PUSH_DEBOUNCE_MS = Number(process.env.AUTO_GMC_PUSH_DEBOUNCE_MS || 30_000);
+
+async function resolveDefaultFeedIdForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT f.id
+      FROM "Feed" f
+      WHERE f.accountid = $1::text
+      ORDER BY (SELECT COUNT(*) FROM "FeedItem" fi WHERE fi.feedid = f.id) DESC, f.createdat ASC
+      LIMIT 1
+    `,
+    accountId
+  );
+  return rows?.[0]?.id || null;
+}
+
+function scheduleAutoGmcPush(accountId, feedId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
+  if (!accountId) return;
+  const key = `${accountId}:${feedId || 'default'}`;
+  const existing = autoGmcPushTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoGmcPushTimers.delete(key);
+    try {
+      const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
+      if (!conn || !conn.merchantid) return;
+      const targetFeedId = feedId || await resolveDefaultFeedIdForAccount(accountId);
+      if (!targetFeedId) return;
+      const result = await executeGmcPush({ accountId, userId: null, feedId: targetFeedId });
+      console.log(`🔄 Push GMC auto (${reason}) : feed ${targetFeedId} → ${result.succeeded} envoyés, ${result.failed} erreurs`);
+    } catch (err) {
+      console.warn(`⚠️ Push GMC auto (${reason}) échoué pour account ${accountId}:`, err?.message || err);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoGmcPushTimers.set(key, timer);
+}
+
+// Auto-optim IA après ingestion : sans ce hook, les FeedItems sont pushés
+// sur GMC/Amazon/Meta avec leurs titres et descriptions Shopify bruts.
+// Aucune valeur ajoutée vs un feed direct. Ce scheduler tourne en background
+// (debounce 15s pour absorber les bursts de webhooks) et appelle
+// optimizeTitleWithAI + optimizeDescriptionWithAI sur les items sans
+// customfields.optimized.gmc. Une fois l'optim faite, déclenche
+// automatiquement scheduleAutoGmcPush pour propager les contenus optimisés.
+const autoOptimizationTimers = new Map();
+const AUTO_OPTIM_DEBOUNCE_MS = Number(process.env.AUTO_OPTIM_DEBOUNCE_MS || 15_000);
+const AUTO_OPTIM_BATCH_SIZE = Number(process.env.AUTO_OPTIM_BATCH_SIZE || 50);
+
+function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTIM_DEBOUNCE_MS) {
+  if (!accountId) return;
+  // Pas de feedId connu = fallback direct sur push GMC (le push résoudra le
+  // default feed lui-même). On ne peut pas optimiser sans target feed.
+  if (!feedId) {
+    scheduleAutoGmcPush(accountId, feedId, reason);
+    return;
+  }
+  const key = `${accountId}:${feedId}`;
+  const existing = autoOptimizationTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoOptimizationTimers.delete(key);
+    try {
+      const items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+          AND (
+            customfields IS NULL
+            OR customfields->'optimized'->'gmc'->>'title' IS NULL
+            OR customfields->'optimized'->'gmc'->>'title' = ''
+          )
+        LIMIT ${AUTO_OPTIM_BATCH_SIZE}
+      `, feedId);
+
+      if (!items?.length) {
+        console.log(`✨ Auto-optim (${reason}) feed ${feedId} : aucun produit à optimiser → push direct`);
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → push direct`, 0);
+        return;
+      }
+
+      let succeeded = 0;
+      let failed = 0;
+      for (const item of items) {
+        try {
+          const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
+          const product = {
+            id: item.id,
+            title: item.title || '',
+            description: item.descriptiontext || String(item.descriptionhtml || '').replace(/<[^>]+>/g, ' ').trim(),
+            brand: item.brand,
+            sku: item.sku,
+            gtin: item.gtin,
+            mpn: item.mpn,
+            price: item.price,
+            currency: item.currency,
+            customfields: cf,
+          };
+          const [titleRes, descRes] = await Promise.all([
+            optimizeTitleWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
+              console.warn(`⚠️ Auto-optim title ${item.id} :`, e?.message);
+              return null;
+            }),
+            optimizeDescriptionWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
+              console.warn(`⚠️ Auto-optim desc ${item.id} :`, e?.message);
+              return null;
+            }),
+          ]);
+
+          const optimizedTitle = titleRes?.optimizedTitle || product.title;
+          const optimizedDescription = descRes?.optimizedDescription || product.description;
+          if (!optimizedTitle && !optimizedDescription) {
+            failed++;
+            continue;
+          }
+
+          const payload = {
+            title: optimizedTitle,
+            description: optimizedDescription,
+            optimizedAt: new Date().toISOString(),
+          };
+
+          await prisma.$executeRawUnsafe(
+            `UPDATE "FeedItem"
+             SET customfields = jsonb_set(
+               COALESCE(customfields, '{}'::jsonb),
+               '{optimized,gmc}',
+               $1::jsonb,
+               true
+             ),
+             updatedat = NOW()
+             WHERE id = $2::text`,
+            JSON.stringify(payload),
+            item.id
+          );
+          succeeded++;
+        } catch (itemErr) {
+          console.warn(`⚠️ Auto-optim item ${item.id} échoué :`, itemErr?.message || itemErr);
+          failed++;
+        }
+      }
+      console.log(`✨ Auto-optim (${reason}) feed ${feedId} : ${succeeded} optimisés, ${failed} erreurs (sur ${items.length}) → push GMC`);
+      scheduleAutoGmcPush(accountId, feedId, `${reason} → post-optim`, 0);
+    } catch (err) {
+      console.warn(`⚠️ Auto-optim (${reason}) échoué pour feed ${feedId} :`, err?.message || err);
+      // Fallback : push GMC quand même, mieux du brut que rien.
+      scheduleAutoGmcPush(accountId, feedId, `${reason} → fallback (optim KO)`, 0);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoOptimizationTimers.set(key, timer);
+}
+
 // Push produits vers Amazon SP-API (Listings Items API)
 app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) => {
   try {
@@ -14924,7 +15578,7 @@ app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) 
 });
 
 // Push produits vers Google Merchant Center
-app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => {
+app.post('/api/v1/platforms/gmc/push/:feedId', authenticateJwtOrShopifySession, async (req, res) => {
   try {
     const { feedId } = req.params;
     if (!prismaReady || !prisma) {
@@ -14938,7 +15592,7 @@ app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => 
       : null;
     const result = await executeGmcPush({
       accountId: req.accountId,
-      userId: req.user.id,
+      userId: req.user?.id || null,
       feedId,
       destinationContext,
     });
@@ -14949,6 +15603,66 @@ app.post('/api/v1/platforms/gmc/push/:feedId', requireAuth, async (req, res) => 
       message: error.message,
       reconnect: error.reconnect === true || undefined,
     });
+  }
+});
+
+// Variante sans feedId : pousse le feed par défaut du compte. Utilisée par
+// l'app Shopify embedded, qui ne connaît pas les ids de feeds (les routes
+// /ingestion sont réservées au dashboard JWT).
+app.post('/api/v1/platforms/gmc/push', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    const feedId = await resolveDefaultFeedIdForAccount(req.accountId);
+    if (!feedId) {
+      return res.status(404).json({ message: 'Aucun flux produit trouvé pour ce compte.' });
+    }
+    const result = await executeGmcPush({
+      accountId: req.accountId,
+      userId: req.user?.id || null,
+      feedId,
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('GMC push (default feed) error:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message,
+      reconnect: error.reconnect === true || undefined,
+    });
+  }
+});
+
+// Dernier push GMC du compte (pour afficher l'état de sync dans l'app embedded).
+app.get('/api/v1/platforms/gmc/last-push', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.json({ lastPush: null });
+    }
+    const rows = await prisma.$queryRawUnsafe(
+      `
+        SELECT status, totalproducts, succeeded, failed, errormessage, createdat
+        FROM "ExportLog"
+        WHERE accountid = $1::text AND platform = 'gmc'
+        ORDER BY createdat DESC
+        LIMIT 1
+      `,
+      req.accountId
+    );
+    const row = rows?.[0];
+    res.json({
+      lastPush: row
+        ? {
+            status: row.status,
+            total: row.totalproducts,
+            succeeded: row.succeeded,
+            failed: row.failed,
+            createdAt: row.createdat,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -14979,7 +15693,7 @@ app.get('/api/v1/dashboard/overview', requireAuth, async (req, res) => {
       return res.status(503).json({ message: 'Service non disponible' });
     }
 
-    const acct = req.accountId || 'default-account';
+    const acct = req.accountId;
 
     // Nombre de sources
     const sourcesResult = await prisma.$queryRawUnsafe(`
@@ -15119,168 +15833,6 @@ app.get('/api/v1/dashboard/overview', requireAuth, async (req, res) => {
   }
 });
 
-// ====== FORGOT PASSWORD ======
-
-app.post('/api/v1/auth/forgot-password', smartAuthLimiter, async (req, res) => {
-  try {
-    const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    if (!normalizedEmail) {
-      return res.status(400).json({ message: 'Email requis' });
-    }
-
-    // Toujours retourner succès (même si email n'existe pas) pour ne pas révéler les comptes
-    const user = await findUserByEmail(normalizedEmail);
-    if (user && prismaReady && prisma) {
-      // Générer un token de reset (expire dans 1h)
-      const resetToken = crypto.randomUUID();
-      const resetTokenHash = hashAuthActionToken(resetToken);
-      const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-
-      await prisma.$executeRawUnsafe(`
-        UPDATE "User" SET 
-          resettoken = $1::text,
-          resettokenexpiry = $2::timestamptz,
-          updatedat = NOW()
-        WHERE id = $3::text
-      `, resetTokenHash, expiry, user.id);
-
-      // Envoyer l'email de reset
-      sendPasswordResetEmail(normalizedEmail, resetToken).catch(e => console.warn('Email reset non envoyé:', e.message));
-      console.log(`Password reset requested for ${normalizedEmail}`);
-    }
-
-    res.json({ message: 'Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.' });
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
-
-app.post('/api/v1/auth/reset-password', smartAuthLimiter, async (req, res) => {
-  try {
-    const normalizedToken = normalizeAuthActionToken(req.body?.token);
-    const { password } = req.body || {};
-    if (!normalizedToken || !password) {
-      return res.status(400).json({ message: 'Token et nouveau mot de passe requis' });
-    }
-
-    const passwordValidation = validatePasswordPolicy(password);
-    if (!passwordValidation.valid) {
-      return res.status(400).json({ message: passwordValidation.message });
-    }
-
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-
-    const hashedToken = hashAuthActionToken(normalizedToken);
-    const users = await prisma.$queryRawUnsafe(`
-      SELECT id
-      FROM "User"
-      WHERE (resettoken = $1::text OR resettoken = $2::text)
-        AND resettokenexpiry > NOW()
-      LIMIT 1
-    `, hashedToken, normalizedToken);
-
-    if (!users || users.length === 0) {
-      return res.status(400).json({ message: 'Token invalide ou expiré' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    await prisma.$executeRawUnsafe(`
-      UPDATE "User" SET 
-        password = $1::text,
-        resettoken = NULL,
-        resettokenexpiry = NULL,
-        updatedat = NOW()
-      WHERE id = $2::text
-    `, hashedPassword, users[0].id);
-
-    res.json({ message: 'Mot de passe réinitialisé avec succès' });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
-
-// ====== ACCEPT INVITATION (définir mot de passe pour un utilisateur invité) ======
-
-app.post('/api/v1/auth/accept-invitation', smartAuthLimiter, async (req, res) => {
-  try {
-    const normalizedToken = normalizeAuthActionToken(req.body?.token);
-    const { password } = req.body || {};
-    if (!normalizedToken || !password) {
-      return res.status(400).json({ message: 'Token et mot de passe requis' });
-    }
-
-    const passwordValidation = validatePasswordPolicy(password);
-    if (!passwordValidation.valid) {
-      return res.status(400).json({ message: passwordValidation.message });
-    }
-
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service non disponible' });
-    }
-
-    const hashedToken = hashAuthActionToken(normalizedToken);
-    const users = await prisma.$queryRawUnsafe(`
-      SELECT id
-      FROM "User"
-      WHERE (resettoken = $1::text OR resettoken = $2::text)
-        AND resettokenexpiry > NOW()
-      LIMIT 1
-    `, hashedToken, normalizedToken);
-
-    if (!users || users.length === 0) {
-      return res.status(400).json({ message: 'Lien d\'invitation invalide ou expiré' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const userId = users[0].id;
-
-    // Mettre à jour le mot de passe et activer le compte (status si la colonne existe)
-    try {
-      await prisma.$executeRawUnsafe(`
-        UPDATE "User" SET 
-          password = $1::text,
-          resettoken = NULL,
-          resettokenexpiry = NULL,
-          status = 'ACTIVE',
-          updatedat = NOW()
-        WHERE id = $2::text
-      `, hashedPassword, userId);
-    } catch (colErr) {
-      if (colErr.message && colErr.message.includes('status')) {
-        await prisma.$executeRawUnsafe(`
-          UPDATE "User" SET 
-            password = $1::text,
-            resettoken = NULL,
-            resettokenexpiry = NULL,
-            updatedat = NOW()
-          WHERE id = $2::text
-        `, hashedPassword, userId);
-      } else throw colErr;
-    }
-
-    const user = await findUserById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'Utilisateur non trouvé' });
-    }
-
-    const { accessToken, refreshToken } = issueAuthTokens(user);
-    res.json({
-      message: 'Compte activé avec succès',
-      accessToken,
-      refreshToken,
-      token: accessToken,
-      user: buildAuthUser(user, req)
-    });
-  } catch (error) {
-    console.error('Accept invitation error:', error);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
 
 // ====== SHOPIFY OAUTH CONNECTORS ======
 // APP_URL déjà déclaré plus haut dans run()
@@ -15321,13 +15873,12 @@ app.get('/api/v1/connectors/shopify/install', async (req, res) => {
     if (!shop || !hmac) {
       return res.status(400).send('Paramètres shop et hmac requis');
     }
+    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
+      return res.status(400).send('Signature HMAC invalide');
+    }
     const normalizedShop = normalizeShopifyShop(shop);
     if (!normalizedShop) {
       return res.status(400).send('Nom de boutique Shopify invalide');
-    }
-    const query = { shop: normalizedShop, timestamp: timestamp || '', hmac: String(hmac) };
-    if (!verifyShopifyInstallHmac(query, SHOPIFY_API_SECRET)) {
-      return res.status(400).send('Signature HMAC invalide');
     }
     const state = crypto.randomUUID();
     try {
@@ -15565,12 +16116,18 @@ app.post('/api/v1/marketing/audits/:shareToken/connectors/file/connect', async (
 app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
   try {
     const { shop, code, state } = req.query;
+    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+      return res.status(500).send('Clés Shopify non configurées');
+    }
     if (!shop || !code || !state) {
       return res.status(400).send('Requête invalide (shop/code/state manquant)');
     }
     const normalizedShop = normalizeShopifyShop(shop);
     if (!normalizedShop) {
       return res.status(400).send('Nom de boutique Shopify invalide');
+    }
+    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
+      return res.status(400).send('Signature HMAC Shopify invalide');
     }
 
     let oauthContext = null;
@@ -15645,8 +16202,31 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
             VALUES ($1::text, $2::text, $3::text, 'DAILY'::text, 'ACTIVE'::text, $4::jsonb, 'guid_or_url'::text, $5::timestamptz, $5::timestamptz, $6::text)
           `, feedId, 'Flux principal - ' + sourceName, sourceId, mappingData, now, oauthContext.accountId);
           console.log('✅ Shopify credential + source + feed créés pour ' + normalizedShop + ' (account: ' + oauthContext.accountId + ')');
+        } else if (isGuestInstall && !oauthContext?.auditShareToken) {
+          // Install depuis Shopify App Store : auto-provision un Account
+          // FeedPlug pour que le merchant soit utilisable immédiatement
+          // (requis pour Built for Shopify : pas d'étape de signup séparée).
+          try {
+            const provision = await shopifyProvisioning.provisionAccountFromShopify({
+              prisma,
+              shop: normalizedShop,
+              accessToken: tokenJson.access_token,
+              credentialId: credId,
+            });
+            if (provision.provisioned) {
+              console.log(`✅ Shopify auto-provisioning : Account ${provision.accountId} créé pour ${normalizedShop}`);
+            } else if (provision.existing && provision.accountId) {
+              console.log(`✅ Shopify auto-provisioning : Account ${provision.accountId} déjà existant pour ${normalizedShop} (${provision.reason})`);
+            } else {
+              console.log(`ℹ️ Shopify auto-provisioning skipped pour ${normalizedShop} : ${provision.reason}`);
+            }
+          } catch (provisionErr) {
+            // On dégrade vers le flow guest classique : credential créé mais
+            // pas de compte. Le merchant pourra claim manuellement.
+            console.warn('⚠️ Shopify auto-provisioning échoué pour ' + normalizedShop + ':', provisionErr?.message || provisionErr);
+          }
         } else {
-          // Flux install via lien Partners (guest) : credential seulement ; à lier via /claim depuis l'app
+          // Flux install via lien Partners (guest) AVEC audit ou autre contexte non-provisionnable
           console.log(`✅ Shopify credential créé pour ${normalizedShop} (en attente de liaison)`);
           if (oauthContext?.auditShareToken) {
             try {
@@ -15687,20 +16267,46 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
     const resolvedHost = typeof req.query?.host === 'string' && req.query.host.trim()
       ? req.query.host.trim()
       : (typeof oauthContext?.host === 'string' ? oauthContext.host.trim() : '');
-    const redirectParams = new URLSearchParams({
-      shopify: 'connected',
-      shop: normalizedShop,
-    });
-    if (isGuestInstall) {
-      redirectParams.set('guest', '1');
+
+    // Quand l'install vient de Shopify (App Store / lien Partners / app embedded),
+    // on doit rediriger DANS Shopify Admin pour que l'app se charge dans l'iframe.
+    // Une redirection vers APP_URL standalone casse l'expérience embedded et
+    // déclenche un rejet "doesn't stay within the iframe" lors de la review BFS.
+    //
+    // Le flux audit-flux (audit public) garde un redirect direct vers APP_URL
+    // car ce n'est pas un contexte embedded Shopify.
+    const cameFromShopifyAdmin = isGuestInstall || Boolean(resolvedHost);
+    const isAuditFlow = Boolean(oauthContext?.auditShareToken);
+
+    let redirectUrl;
+    if (cameFromShopifyAdmin && !isAuditFlow && SHOPIFY_API_KEY) {
+      // Redirige vers l'URL canonique de l'app embedded dans Shopify Admin.
+      // Format : https://{shop}/admin/apps/{api_key}
+      // Shopify Admin charge alors notre iframe avec les bons paramètres host/embedded.
+      const embeddedParams = new URLSearchParams({
+        shopify: 'connected',
+        shop: normalizedShop,
+      });
+      if (isGuestInstall) embeddedParams.set('guest', '1');
+      redirectUrl = `https://${normalizedShop}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}?${embeddedParams.toString()}`;
+    } else if (isAuditFlow) {
+      redirectUrl = `${APP_URL}/${resolvedLocale}/audit-flux/${encodeURIComponent(oauthContext.auditShareToken)}?shopify=connected`;
+    } else {
+      // Install initié depuis feedplug.com (user déjà loggué, pas de contexte Shopify Admin) :
+      // retour direct sur le dashboard FeedPlug.
+      const redirectParams = new URLSearchParams({
+        shopify: 'connected',
+        shop: normalizedShop,
+      });
+      if (isGuestInstall) {
+        redirectParams.set('guest', '1');
+      }
+      if (resolvedHost) {
+        redirectParams.set('host', resolvedHost);
+        redirectParams.set('embedded', '1');
+      }
+      redirectUrl = `${APP_URL}/${resolvedLocale}/sources?${redirectParams.toString()}`;
     }
-    if (resolvedHost) {
-      redirectParams.set('host', resolvedHost);
-      redirectParams.set('embedded', '1');
-    }
-    const redirectUrl = oauthContext?.auditShareToken
-      ? `${APP_URL}/${resolvedLocale}/audit-flux/${encodeURIComponent(oauthContext.auditShareToken)}?shopify=connected`
-      : `${APP_URL}/${resolvedLocale}/sources?${redirectParams.toString()}`;
     res.redirect(302, redirectUrl);
   } catch (err) {
     console.error('Shopify callback error:', err);
@@ -15756,30 +16362,780 @@ app.post('/api/v1/connectors/shopify/claim', authenticateToken, async (req, res)
   }
 });
 
+// ============================================================
+// Shopify Billing API (AppSubscription) — pour merchants installés via App Store
+// ============================================================
+
+/**
+ * Récupère le credential Shopify lié à un account (le plus récent).
+ * Retourne { credentialId, shop, accessToken } ou null si absent.
+ */
+async function findShopifyCredentialForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT c.id, c.secretjson
+      FROM "Credential" c
+      JOIN "FeedSource" s ON s.credentialid = c.id
+      WHERE s.accountid = $1::text
+        AND c.connector = 'SHOPIFY'::text
+      ORDER BY c.createdat DESC
+      LIMIT 1
+    `,
+    accountId
+  );
+  if (!rows || rows.length === 0) return null;
+  const secret = rows[0].secretjson;
+  const data = decryptObjectSecrets(typeof secret === 'string' ? JSON.parse(secret) : secret);
+  const accessToken = data.accessToken || data.access_token;
+  const shop = normalizeShopifyShop(data.shop || '');
+  if (!accessToken || !shop) return null;
+  return { credentialId: rows[0].id, shop, accessToken };
+}
+
+// POST /subscribe — Managed Pricing : retourne l'URL Shopify Admin où le
+// merchant va choisir/approuver son plan. Plus de call appSubscriptionCreate :
+// les apps Managed Pricing ne peuvent pas créer de charges via l'API.
+// Après approbation, Shopify envoie le webhook app_subscriptions/update.
+app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const planHandle = String(req.body?.plan || '').trim().toLowerCase();
+    const plan = shopifyManagedPricing.getPlan(planHandle);
+    if (!plan) {
+      return res.status(400).json({
+        message: 'Plan inconnu. Valeurs valides : starter, pro, business, premium.',
+      });
+    }
+
+    const credential = await findShopifyCredentialForAccount(accountId);
+    if (!credential) {
+      return res.status(409).json({
+        message: 'Boutique Shopify non connectée.',
+      });
+    }
+
+    const confirmationUrl = shopifyManagedPricing.buildManagedPricingUrl({
+      shop: credential.shop,
+      planHandle: plan.handle,
+    });
+
+    // Trace la tentative en DB (status PENDING). Le subscription_id réel est
+    // attribué par Shopify lors de l'approbation et nous arrive via webhook
+    // app_subscriptions/update. Ici on stocke un id provisoire.
+    await shopifyBilling.upsertShopifySubscription({
+      prisma,
+      row: {
+        accountId,
+        shopDomain: credential.shop,
+        shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
+        planKey: plan.handle.toUpperCase(),
+        priceAmount: plan.priceEur,
+        currency: 'EUR',
+        interval: 'EVERY_30_DAYS',
+        status: 'PENDING',
+        trialDays: plan.trialDays || 0,
+        confirmationUrl,
+        returnUrl: null,
+        testMode: process.env.NODE_ENV !== 'production',
+      },
+    });
+
+    return res.json({
+      confirmationUrl,
+      plan: plan.handle,
+      priceEur: plan.priceEur,
+    });
+  } catch (err) {
+    console.error('Shopify managed pricing subscribe error:', err);
+    return res.status(500).json({ message: 'Erreur création abonnement Shopify', detail: err?.message });
+  }
+});
+
+// GET /return — appelé par Shopify après que le merchant approuve l'abonnement
+// Met à jour le status localement, puis redirige vers l'app embedded.
+app.get('/api/v1/billing/shopify/return', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).send('Service indisponible');
+    }
+    const accountId = String(req.query.account || '').trim();
+    if (!accountId) {
+      return res.status(400).send('account manquant');
+    }
+
+    const subRow = await shopifyBilling.findActiveSubscriptionForAccount({ prisma, accountId });
+    if (!subRow) {
+      return res.status(404).send('Aucune subscription en attente');
+    }
+
+    const credential = await findShopifyCredentialForAccount(accountId);
+    if (credential) {
+      try {
+        const fresh = await shopifyBilling.getAppSubscription({
+          shop: credential.shop,
+          accessToken: credential.accessToken,
+          subscriptionId: subRow.shopify_subscription_id,
+        });
+        if (fresh?.status) {
+          await shopifyBilling.markShopifySubscriptionStatus({
+            prisma,
+            shopifySubscriptionId: subRow.shopify_subscription_id,
+            status: fresh.status,
+            currentPeriodEnd: fresh.currentPeriodEnd,
+          });
+          if (fresh.status === 'ACTIVE') {
+            await prisma.$executeRawUnsafe(
+              `
+                UPDATE "Account"
+                SET plan = $2::text,
+                    billing_provider = 'SHOPIFY'::text,
+                    billingstatus = 'active'::text,
+                    paymentgraceuntil = NULL,
+                    updatedat = NOW()
+                WHERE id = $1::text
+              `,
+              accountId,
+              subRow.plan_key
+            );
+          }
+        }
+      } catch (verifyErr) {
+        console.warn('Shopify billing return verify failed:', verifyErr?.message);
+      }
+    }
+
+    const shopForRedirect = subRow.shop_domain;
+    if (SHOPIFY_API_KEY && shopForRedirect) {
+      return res.redirect(302, `https://${shopForRedirect}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}?billing=ok`);
+    }
+    return res.redirect(302, `${APP_URL}/fr/facturation?shopify=connected`);
+  } catch (err) {
+    console.error('Shopify billing return error:', err);
+    return res.status(500).send('Erreur traitement retour Shopify Billing');
+  }
+});
+
+// POST /cancel — annule la subscription Shopify active du compte
+// GET /current — état de la subscription Shopify active du compte
+app.get('/api/v1/billing/shopify/current', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const sub = await shopifyBilling.findActiveSubscriptionForAccount({
+      prisma,
+      accountId: req.user.accountId,
+    });
+    if (!sub) {
+      return res.json({ active: false });
+    }
+    return res.json({
+      active: sub.status === 'ACTIVE' || sub.status === 'PENDING',
+      subscriptionId: sub.shopify_subscription_id,
+      planKey: sub.plan_key,
+      priceAmount: Number(sub.price_amount),
+      currency: sub.currency,
+      interval: sub.interval,
+      status: sub.status,
+      trialEndsAt: sub.trial_ends_at,
+      currentPeriodEnd: sub.current_period_end,
+      testMode: sub.test_mode === true,
+    });
+  } catch (err) {
+    console.error('Shopify billing current error:', err);
+    return res.status(500).json({ message: 'Erreur récupération abonnement', detail: err?.message });
+  }
+});
+
+app.post('/api/v1/billing/shopify/cancel', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const subRow = await shopifyBilling.findActiveSubscriptionForAccount({ prisma, accountId });
+    if (!subRow) {
+      return res.status(404).json({ message: 'Aucune subscription Shopify active' });
+    }
+    const credential = await findShopifyCredentialForAccount(accountId);
+    const subId = subRow.shopify_subscription_id || '';
+    const isPendingPlaceholder = subId.startsWith('pending_');
+
+    // Cas 1 : sub PENDING (placeholder, jamais approuvée) ou pas de credential valide
+    //         → on annule juste localement, pas de call Shopify (qui échouerait
+    //         de toutes façons : pas de subscription Shopify à annuler).
+    // Cas 2 : sub ACTIVE avec credential valide → on call Shopify pour annuler.
+    if (!isPendingPlaceholder && credential) {
+      try {
+        await shopifyBilling.cancelAppSubscription({
+          shop: credential.shop,
+          accessToken: credential.accessToken,
+          subscriptionId: subId,
+          prorate: Boolean(req.body?.prorate),
+        });
+      } catch (cancelErr) {
+        // Si le token est invalide (merchant a désinstallé puis revenu) ou la
+        // sub n'existe plus côté Shopify, on tombe quand même en CANCELLED
+        // localement plutôt que de bloquer le merchant.
+        console.warn('Shopify cancel API failed, marking cancelled locally only:', cancelErr?.message || cancelErr);
+      }
+    }
+
+    await shopifyBilling.markShopifySubscriptionStatus({
+      prisma,
+      shopifySubscriptionId: subId,
+      status: 'CANCELLED',
+      cancelled: true,
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Shopify billing cancel error:', err);
+    return res.status(500).json({ message: 'Erreur annulation', detail: err?.message });
+  }
+});
+
+// ============================================================
+// Embedded Shopify — Sources (vue catalogue dans l'iframe Shopify Admin)
+// ============================================================
+
+/**
+ * Retourne le feed Shopify principal d'un account (le plus récemment créé).
+ * Convention FeedPlug : un install Shopify crée 1 Credential + 1 Source + 1 Feed.
+ */
+async function findShopifyFeedForAccount(accountId) {
+  if (!accountId || !prismaReady || !prisma) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT f.id AS feed_id, f.name AS feed_name, f.status AS feed_status,
+             s.id AS source_id, s.name AS source_name, s.status AS source_status,
+             s.lastrunat AS last_run_at, s.createdat AS connected_at,
+             c.secretjson AS secretjson, c.id AS credential_id
+      FROM "Feed" f
+      JOIN "FeedSource" s ON s.id = f.sourceid
+      JOIN "Credential" c ON c.id = s.credentialid
+      WHERE f.accountid = $1::text
+        AND s.connector = 'SHOPIFY'::text
+      ORDER BY f.createdat DESC
+      LIMIT 1
+    `,
+    accountId
+  );
+  if (!rows || rows.length === 0) return null;
+  const row = rows[0];
+  let shop = '';
+  try {
+    const secret = decryptObjectSecrets(
+      typeof row.secretjson === 'string' ? JSON.parse(row.secretjson) : row.secretjson
+    );
+    shop = normalizeShopifyShop(secret.shop || '');
+  } catch {
+    shop = '';
+  }
+  return {
+    feedId: row.feed_id,
+    feedName: row.feed_name,
+    feedStatus: row.feed_status,
+    sourceId: row.source_id,
+    sourceName: row.source_name,
+    sourceStatus: row.source_status,
+    lastRunAt: row.last_run_at,
+    connectedAt: row.connected_at,
+    credentialId: row.credential_id,
+    shop,
+  };
+}
+
+// GET /overview — état du catalogue Shopify pour l'embedded admin
+app.get('/api/v1/embedded/sources/overview', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+
+    if (!feed) {
+      return res.json({
+        connected: false,
+        shop: null,
+        feedId: null,
+        lastSyncAt: null,
+        totalItems: 0,
+        items: [],
+      });
+    }
+
+    const countRows = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS c FROM "FeedItem" WHERE feedid = $1::text`,
+      feed.feedId
+    );
+    const totalItems = countRows?.[0]?.c ?? 0;
+
+    const itemRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT id, title, imageurl, brand, sku, price, currency, inventory,
+               url, updatedat
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+        ORDER BY COALESCE(updatedat, createdat) DESC
+        LIMIT 20
+      `,
+      feed.feedId
+    );
+    const items = (itemRows || []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      imageUrl: r.imageurl || null,
+      brand: r.brand || null,
+      sku: r.sku || null,
+      price: r.price != null ? Number(r.price) : null,
+      currency: r.currency || null,
+      inventory: r.inventory != null ? Number(r.inventory) : null,
+      url: r.url || null,
+      updatedAt: r.updatedat,
+    }));
+
+    return res.json({
+      connected: true,
+      shop: feed.shop,
+      shopName: feed.shop ? feed.shop.replace(/\.myshopify\.com$/, '') : null,
+      feedId: feed.feedId,
+      feedStatus: feed.feedStatus,
+      sourceStatus: feed.sourceStatus,
+      lastSyncAt: feed.lastRunAt,
+      connectedAt: feed.connectedAt,
+      totalItems,
+      items,
+    });
+  } catch (err) {
+    console.error('Embedded sources overview error:', err);
+    return res.status(500).json({ message: 'Erreur récupération catalogue', detail: err?.message });
+  }
+});
+
+// POST /sync — déclenche une re-sync du feed Shopify principal (manuel)
+app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.status(404).json({ message: 'Aucune source Shopify connectée' });
+    }
+    if (!feed.shop) {
+      return res.status(409).json({ message: 'Domaine boutique manquant dans la credential' });
+    }
+
+    // Récupère le credential déchiffré
+    const credRows = await prisma.$queryRawUnsafe(
+      `SELECT secretjson FROM "Credential" WHERE id = $1::text LIMIT 1`,
+      feed.credentialId
+    );
+    if (!credRows?.length) {
+      return res.status(404).json({ message: 'Credential introuvable' });
+    }
+    const secret = decryptObjectSecrets(
+      typeof credRows[0].secretjson === 'string' ? JSON.parse(credRows[0].secretjson) : credRows[0].secretjson
+    );
+    const accessToken = secret.accessToken || secret.access_token;
+    if (!accessToken) {
+      return res.status(409).json({ message: 'Token Shopify expiré, reconnectez la boutique' });
+    }
+
+    // Lance la re-sync de manière asynchrone : on répond 202 immédiatement
+    // pour que le bouton "Synchroniser" ne bloque pas l'UI plus de quelques
+    // secondes. Le polling de /overview affichera la nouvelle valeur de
+    // lastSyncAt quand la run sera terminée.
+    const startedAt = new Date().toISOString();
+    (async () => {
+      try {
+        await ingestShopifyFromApi({
+          prisma,
+          feed: {
+            id: feed.feedId,
+            name: feed.feedName,
+            sourceId: feed.sourceId,
+            mappingJson: {},
+          },
+          shop: feed.shop,
+          accessToken,
+        });
+        await prisma.$executeRawUnsafe(
+          `UPDATE "FeedSource" SET lastrunat = $1::timestamptz, updatedat = $1::timestamptz WHERE id = $2::text`,
+          new Date().toISOString(),
+          feed.sourceId
+        );
+        console.log('✅ Embedded sync done for shop=' + feed.shop + ' accountid=' + accountId);
+        scheduleAutoOptimization(accountId, feed.feedId, 'sync embedded');
+        scheduleAutoLiaSync(accountId, 'sync embedded');
+      } catch (asyncErr) {
+        console.error('Embedded sync async error:', asyncErr?.message || asyncErr);
+      }
+    })();
+
+    return res.status(202).json({ accepted: true, startedAt, feedId: feed.feedId });
+  } catch (err) {
+    console.error('Embedded sources sync error:', err);
+    return res.status(500).json({ message: 'Erreur déclenchement sync', detail: err?.message });
+  }
+});
+
+// GET /diagnostic/overview — agrégats qualité catalogue Shopify pour l'embedded admin.
+// THE feature : "Vous avez X produits suspendus, top raisons : GTIN manquant, prix nul, ..."
+// C'est ce qui justifie le pricing FeedPlug vs un simple feed builder. Sans cette vue le
+// reviewer BFS flag "incomplete embedded experience".
+app.get('/api/v1/embedded/diagnostic/overview', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.json({
+        connected: false,
+        totalItems: 0,
+        buckets: { critical: 0, error: 0, warning: 0, ok: 0 },
+        averageScore: null,
+        topIssues: [],
+        worstProducts: [],
+      });
+    }
+
+    // Buckets de quality score :
+    //   critical (0-39)  → produit sera rejeté par Google Merchant
+    //   error    (40-59) → champs obligatoires manquants, risque rejet
+    //   warning  (60-79) → améliorations recommandées (titre court, GTIN, etc.)
+    //   ok       (80-100) → conforme
+    const bucketRows = await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE ps.qualityscore < 40) AS critical,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 40 AND ps.qualityscore < 60) AS error,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 60 AND ps.qualityscore < 80) AS warning,
+          COUNT(*) FILTER (WHERE ps.qualityscore >= 80) AS ok,
+          COUNT(*) AS total,
+          ROUND(AVG(ps.qualityscore)::numeric, 1) AS avg_score
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        WHERE fi.feedid = $1::text
+      `,
+      feed.feedId
+    );
+    const b = bucketRows?.[0] || {};
+    const totalScored = Number(b.total) || 0;
+
+    // Top 10 raisons : on flatten le tableau jsonb d'issues et on groupe par
+    // champ + sévérité. Le frontend affiche "47 produits sans GTIN" etc.
+    const issueRows = totalScored > 0 ? await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          COALESCE(issue->>'field', 'unknown') AS field,
+          COALESCE(issue->>'severity', 'warning') AS severity,
+          COUNT(*) AS occurrences
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(ps.qualitydetails->'issues', '[]'::jsonb)
+        ) AS issue
+        WHERE fi.feedid = $1::text
+        GROUP BY field, severity
+        ORDER BY occurrences DESC, field ASC
+        LIMIT 10
+      `,
+      feed.feedId
+    ) : [];
+
+    // 20 produits avec les pires scores — ceux que le merchant devrait corriger en priorité.
+    const worstRows = totalScored > 0 ? await prisma.$queryRawUnsafe(
+      `
+        SELECT fi.id, fi.originid AS "originId", fi.title, fi.imageurl, fi.sku, fi.url,
+               ps.qualityscore, ps.qualitydetails
+        FROM "FeedItem" fi
+        JOIN "ProductScore" ps ON ps.itemid = fi.id
+        WHERE fi.feedid = $1::text
+        ORDER BY ps.qualityscore ASC, fi.updatedat DESC
+        LIMIT 20
+      `,
+      feed.feedId
+    ) : [];
+
+    const worstProducts = worstRows.map((r) => {
+      const details = typeof r.qualitydetails === 'string'
+        ? (() => { try { return JSON.parse(r.qualitydetails); } catch { return null; } })()
+        : r.qualitydetails;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return {
+        id: r.id,
+        // originId est le path Shopify (`Product/8765...` ou `ProductVariant/N`)
+        // après strip du préfixe `gid://shopify/`. Le frontend construit
+        // l'URL Admin avec ça (cf bouton "Fix") — utiliser fi.id directement
+        // renvoie une 404 car c'est l'UUID interne FeedPlug.
+        originId: r.originId || null,
+        title: r.title,
+        imageUrl: r.imageurl || null,
+        sku: r.sku || null,
+        url: r.url || null,
+        qualityScore: Number(r.qualityscore),
+        topIssues: issues.slice(0, 3).map((iss) => ({
+          field: iss.field || null,
+          severity: iss.severity || 'warning',
+          message: iss.message || '',
+        })),
+      };
+    });
+
+    return res.json({
+      connected: true,
+      feedId: feed.feedId,
+      shop: feed.shop,
+      totalItems: totalScored,
+      buckets: {
+        critical: Number(b.critical) || 0,
+        error: Number(b.error) || 0,
+        warning: Number(b.warning) || 0,
+        ok: Number(b.ok) || 0,
+      },
+      averageScore: b.avg_score != null ? Number(b.avg_score) : null,
+      topIssues: issueRows.map((r) => ({
+        field: r.field,
+        severity: r.severity,
+        occurrences: Number(r.occurrences),
+      })),
+      worstProducts,
+    });
+  } catch (err) {
+    console.error('Embedded diagnostic overview error:', err);
+    return res.status(500).json({ message: 'Erreur récupération diagnostic', detail: err?.message });
+  }
+});
+
+// Cœur produit FeedPlug : optimisation IA multi-canal en masse.
+// Body : { productIds?: string[], platforms: string[] }
+//   - productIds vide / non fourni → tous les produits du feed (LIMIT 100
+//     pour éviter d'exploser quota Gemini, batchs successifs sinon).
+//   - platforms : sous-ensemble de ['gmc','meta','amazon','tiktok','pinterest']
+//     (chaque optimizer adapte limites et style au canal — cf PLATFORM_LIMITS
+//     dans title-optimizer.js).
+// Le travail est async : 202 immédiat, puis worker dépile et stocke chaque
+// version optimisée dans customfields.optimized.{platform}. Le push vers
+// chaque canal récupère la bonne version via getOptimizedContentForPlatform.
+app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const { productIds, platforms } = req.body || {};
+
+    const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'tiktok', 'pinterest'];
+    const requestedPlatforms = (Array.isArray(platforms) ? platforms : [])
+      .map((p) => String(p || '').toLowerCase().trim())
+      .filter((p) => SUPPORTED_PLATFORMS.includes(p));
+    if (!requestedPlatforms.length) {
+      return res.status(400).json({ message: 'Sélectionnez au moins un canal cible (gmc, meta, amazon, tiktok, pinterest).' });
+    }
+
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.status(404).json({ message: 'Aucun catalogue Shopify connecté.' });
+    }
+
+    let items;
+    if (Array.isArray(productIds) && productIds.length > 0) {
+      const cleanIds = productIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+        .slice(0, 200);
+      items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text AND id = ANY($2::text[])
+      `, feed.feedId, cleanIds);
+    } else {
+      items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+        LIMIT 100
+      `, feed.feedId);
+    }
+
+    if (!items?.length) {
+      return res.json({ accepted: false, message: 'Aucun produit à optimiser.', processed: 0 });
+    }
+
+    const totalOperations = items.length * requestedPlatforms.length;
+
+    res.status(202).json({
+      accepted: true,
+      productCount: items.length,
+      platforms: requestedPlatforms,
+      totalOperations,
+      estimatedSeconds: Math.ceil(totalOperations * 5),
+      message: `Optimisation lancée pour ${items.length} produit(s) sur ${requestedPlatforms.length} canal(aux).`,
+    });
+
+    // Worker async : continue après la response. Chaque échec est isolé pour
+    // ne pas casser le batch. Stockage atomique par platform via jsonb_set.
+    (async () => {
+      let succeeded = 0;
+      let failed = 0;
+      for (const item of items) {
+        const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
+        const product = {
+          id: item.id,
+          title: item.title || '',
+          description: item.descriptiontext || String(item.descriptionhtml || '').replace(/<[^>]+>/g, ' ').trim(),
+          brand: item.brand,
+          sku: item.sku,
+          gtin: item.gtin,
+          mpn: item.mpn,
+          price: item.price,
+          currency: item.currency,
+          customfields: cf,
+        };
+        for (const platform of requestedPlatforms) {
+          try {
+            const platformUpper = platform.toUpperCase();
+            const [titleRes, descRes] = await Promise.all([
+              optimizeTitleWithAI(prisma, product, { platform: platformUpper }).catch((e) => {
+                console.warn(`⚠️ Optim title ${item.id} ${platform} :`, e?.message);
+                return null;
+              }),
+              optimizeDescriptionWithAI(prisma, product, { platform: platformUpper }).catch((e) => {
+                console.warn(`⚠️ Optim desc ${item.id} ${platform} :`, e?.message);
+                return null;
+              }),
+            ]);
+            const optimizedTitle = titleRes?.optimizedTitle || product.title;
+            const optimizedDescription = descRes?.optimizedDescription || product.description;
+            const payload = {
+              title: optimizedTitle,
+              description: optimizedDescription,
+              optimizedAt: new Date().toISOString(),
+            };
+            await prisma.$executeRawUnsafe(
+              `UPDATE "FeedItem"
+               SET customfields = jsonb_set(
+                 COALESCE(customfields, '{}'::jsonb),
+                 ARRAY['optimized', $1::text],
+                 $2::jsonb,
+                 true
+               ),
+               updatedat = NOW()
+               WHERE id = $3::text`,
+              platform,
+              JSON.stringify(payload),
+              item.id
+            );
+            succeeded++;
+          } catch (itemErr) {
+            console.warn(`⚠️ Optim ${item.id}/${platform} échouée :`, itemErr?.message);
+            failed++;
+          }
+        }
+      }
+      console.log(`✨ Manual optim done : ${succeeded} ok, ${failed} ko sur ${items.length} produits × ${requestedPlatforms.length} canaux (account ${accountId})`);
+      // Si GMC est dans les plateformes optimisées, on déclenche aussi un
+      // re-push GMC pour propager immédiatement les versions fraîchement
+      // optimisées (sans attendre la prochaine ingestion).
+      if (requestedPlatforms.includes('gmc')) {
+        scheduleAutoGmcPush(accountId, feed.feedId, 'manual optim → repush', 0);
+      }
+    })().catch((workerErr) => {
+      console.error('Manual optim worker error :', workerErr);
+    });
+  } catch (err) {
+    console.error('Embedded products/optimize error :', err);
+    return res.status(500).json({ message: 'Erreur lancement optimisation', detail: err?.message });
+  }
+});
+
 // Vérification d'accès Shopify (ping Admin API)
 app.get('/api/v1/connectors/shopify/verify', authenticateToken, async (req, res) => {
   try {
-    const { shop, access_token } = req.query;
-    if (!shop || !access_token) {
-      return res.status(400).json({ message: 'shop et access_token requis' });
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
     }
-    const normalizedShop = normalizeShopifyShop(shop);
-    if (!normalizedShop) {
+    const requestedShop = typeof req.query?.shop === 'string' ? req.query.shop.trim() : '';
+    const normalizedShop = requestedShop ? normalizeShopifyShop(requestedShop) : '';
+    if (requestedShop && !normalizedShop) {
       return res.status(400).json({ message: 'Nom de boutique Shopify invalide' });
     }
-    const resp = await fetch(`https://${normalizedShop}/admin/api/2024-10/graphql.json`, {
+
+    const rows = normalizedShop
+      ? await prisma.$queryRawUnsafe(
+          `
+            SELECT c.secretjson
+            FROM "Credential" c
+            JOIN "FeedSource" s ON s.credentialid = c.id
+            WHERE c.connector = 'SHOPIFY'::text
+              AND s.accountid = $1::text
+              AND c.secretjson->>'shop' = $2::text
+            ORDER BY c.createdat DESC
+            LIMIT 1
+          `,
+          req.user.accountId,
+          normalizedShop
+        )
+      : await prisma.$queryRawUnsafe(
+          `
+            SELECT c.secretjson
+            FROM "Credential" c
+            JOIN "FeedSource" s ON s.credentialid = c.id
+            WHERE c.connector = 'SHOPIFY'::text
+              AND s.accountid = $1::text
+            ORDER BY c.createdat DESC
+            LIMIT 1
+          `,
+          req.user.accountId
+        );
+
+    if (!rows?.length) {
+      return res.status(404).json({ message: 'Aucune boutique Shopify connectée pour ce compte' });
+    }
+
+    const secret = decryptObjectSecrets(
+      typeof rows[0].secretjson === 'string' ? JSON.parse(rows[0].secretjson) : rows[0].secretjson
+    );
+    const accessToken = secret.accessToken || secret.access_token || '';
+    const resolvedShop = normalizeShopifyShop(secret.shop || normalizedShop);
+    if (!resolvedShop || !accessToken) {
+      return res.status(409).json({ message: 'Connexion Shopify incomplète, reconnectez la boutique' });
+    }
+
+    const resp = await fetch(buildShopifyAdminGraphqlUrl(resolvedShop), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': String(access_token),
+        'X-Shopify-Access-Token': String(accessToken),
       },
       body: JSON.stringify({ query: '{ shop { name } }' }),
     });
-    const json = await resp.json();
+    const json = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      return res.status(resp.status).json(json);
+      return res.status(resp.status).json({
+        message: 'Erreur de verification Shopify',
+        detail: json,
+        shop: resolvedShop,
+        apiVersion: SHOPIFY_ADMIN_API_VERSION,
+      });
     }
-    res.json({ ok: true, data: json });
+    res.json({
+      ok: true,
+      shop: resolvedShop,
+      apiVersion: SHOPIFY_ADMIN_API_VERSION,
+      data: json.data || json,
+    });
   } catch (err) {
     console.error('Shopify verify error:', err);
     res.status(500).json({ message: 'Erreur vérification Shopify' });
@@ -15840,5 +17196,25 @@ app.use((err, req, res, next) => {
 console.log(`🚀 Backend attaché (port ${port})`);
 console.log(`🌍 CORS configuré pour: ${allowedOrigins.join(', ')}`);
 console.log('📊 Stockage marketing persisté en base (fallback mémoire désactivé)');
+
+// Contrôle de configuration : alerter si des secrets webhook manquent. Sans eux,
+// les routes correspondantes ne sont pas enregistrées et l'app démarre "saine"
+// alors que la facturation / les webhooks Shopify ne se synchronisent plus.
+{
+  const missingWebhookSecrets = [];
+  if (!process.env.STRIPE_SECRET_KEY) missingWebhookSecrets.push('STRIPE_SECRET_KEY');
+  if (!process.env.STRIPE_WEBHOOK_SECRET) missingWebhookSecrets.push('STRIPE_WEBHOOK_SECRET');
+  if (!SHOPIFY_API_SECRET) missingWebhookSecrets.push('SHOPIFY_API_SECRET');
+  if (missingWebhookSecrets.length > 0) {
+    const detail = missingWebhookSecrets.join(', ');
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`⛔ CONFIG WEBHOOK INCOMPLÈTE en production: ${detail} manquant(s). Les webhooks associés ne sont PAS enregistrés (facturation Stripe / conformité Shopify non synchronisées).`);
+    } else {
+      console.warn(`⚠️  Secrets webhook manquants: ${detail}. Webhooks associés désactivés (attendu hors production).`);
+    }
+  } else {
+    console.log('✅ Secrets webhook (Stripe + Shopify) présents.');
+  }
+}
 
 } // fin run()

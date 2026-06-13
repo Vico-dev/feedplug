@@ -230,7 +230,7 @@ function RegisterPageContent() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <input
             type="text"
-            name="website"
+            name="ax_check_value" autoCorrect="off" spellCheck={false}
             value={companyWebsite}
             onChange={(e) => setCompanyWebsite(e.target.value)}
             tabIndex={-1}

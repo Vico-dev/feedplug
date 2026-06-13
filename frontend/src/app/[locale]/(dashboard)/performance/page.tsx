@@ -25,46 +25,18 @@ import {
 } from "@/components/layout";
 import { getLocalePrefixFromPathname } from "@/lib/locale-navigation";
 import { apiClient } from "@/lib/api";
+import type {
+  ChannelStats,
+  ProductRow,
+  CategoryRow,
+  DashboardData,
+} from "@/lib/shopify/types";
 
 const CHANNEL_LABELS: Record<string, string> = {
   GOOGLE_ADS: "Google Ads",
   META_ADS: "Meta Ads",
   AMAZON: "Amazon",
 };
-
-interface ChannelStats {
-  channel: string;
-  impressions: number;
-  clicks: number;
-  cost: number;
-  revenue: number;
-  roas: number;
-  productCount: number;
-}
-
-interface ProductRow {
-  itemId: string;
-  title: string;
-  sku: string | null;
-  channel: string;
-  channelScore: number;
-  metrics: Record<string, unknown>;
-}
-
-interface CategoryRow {
-  category: string;
-  channel: string;
-  cost: number;
-  revenue: number;
-  roas: number;
-  productCount: number;
-}
-
-interface DashboardData {
-  byChannel: ChannelStats[];
-  topProducts: ProductRow[];
-  byCategory: CategoryRow[];
-}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("fr-FR", {

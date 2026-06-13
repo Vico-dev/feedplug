@@ -13,12 +13,16 @@ const CHANNELS = [
 ];
 
 function registerChannelScoringRoutes(app, deps) {
-  const { prisma, authenticateToken, getAccountId } = deps;
-  const accountId = (req) => (getAccountId ? getAccountId(req) : req.accountId) || 'default-account';
+  // Getter (et non valeur capturée) : `prisma` est initialisé après l'appel
+  // à registerChannelScoringRoutes(). Capturer la valeur ici donnait `undefined`.
+  const { getPrisma, authenticateToken, getAccountId } = deps;
+  const accountId = (req) => (getAccountId ? getAccountId(req) : req.accountId);
 
   /** Liste des canaux disponibles + configs du compte */
   app.get('/api/v1/scoring-canaux', authenticateToken, async (req, res) => {
     try {
+      const prisma = getPrisma();
+      if (!prisma) return res.status(503).json({ message: 'Service non disponible' });
       const acct = accountId(req);
       const configs = await prisma.channelScoringConfig.findMany({
         where: { accountId: acct },
@@ -53,6 +57,8 @@ function registerChannelScoringRoutes(app, deps) {
   /** Détail d'une config pour un canal */
   app.get('/api/v1/scoring-canaux/:channel', authenticateToken, async (req, res) => {
     try {
+      const prisma = getPrisma();
+      if (!prisma) return res.status(503).json({ message: 'Service non disponible' });
       const acct = accountId(req);
       const channel = (req.params.channel || '').toUpperCase();
       if (!CHANNELS.some((c) => c.key === channel)) {
@@ -94,6 +100,8 @@ function registerChannelScoringRoutes(app, deps) {
   /** Créer ou mettre à jour la config pour un canal */
   app.put('/api/v1/scoring-canaux/:channel', authenticateToken, async (req, res) => {
     try {
+      const prisma = getPrisma();
+      if (!prisma) return res.status(503).json({ message: 'Service non disponible' });
       const acct = accountId(req);
       const channel = (req.params.channel || '').toUpperCase();
       if (!CHANNELS.some((c) => c.key === channel)) {

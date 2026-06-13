@@ -111,7 +111,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { feedIds = [], channelIds = [], destinationIds = [], itemIds, channelId, destinationId } = req.body || {};
       const rules = await prisma.$queryRawUnsafe(`
         SELECT id, name, conditionjson, actionjson, feedids, channelids, priority, isactive, startdate, enddate
@@ -195,7 +195,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { feedId, channelId, isActive } = req.query || {};
       const rules = await prisma.$queryRawUnsafe(`
         SELECT id, name, conditionjson, actionjson, feedids, channelids,
@@ -272,7 +272,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const body = req.body || {};
       const validation = validateRule(body);
       if (!validation.valid) {
@@ -322,7 +322,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { draftRule, limit = 5, feedId, channelId, destinationId } = req.body || {};
       if (!draftRule || typeof draftRule !== 'object') {
         return res.status(400).json({ message: 'draftRule requis' });
@@ -363,7 +363,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { id } = req.params;
       const [rule] = await prisma.$queryRawUnsafe(`
         SELECT * FROM "Rule" WHERE id = $1::text AND accountid = $2::text
@@ -397,7 +397,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { id } = req.params;
       const body = req.body || {};
       const [existing] = await prisma.$queryRawUnsafe(`
@@ -485,7 +485,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { id } = req.params;
       const result = await prisma.$executeRawUnsafe(`
         DELETE FROM "Rule" WHERE id = $1::text AND accountid = $2::text
@@ -504,7 +504,7 @@ function registerRulesRoutes(app, prisma, getPrismaReady) {
       if (!getPrismaReady() || !prisma) {
         return res.status(503).json({ message: 'Base de données non disponible' });
       }
-      const accountId = req.accountId || 'default-account';
+      const accountId = req.accountId;
       const { id } = req.params;
       const { limit = 5, feedId, channelId, destinationId } = req.body || {};
       const [rule] = await prisma.$queryRawUnsafe(`

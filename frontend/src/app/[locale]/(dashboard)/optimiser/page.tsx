@@ -134,7 +134,7 @@ interface ABTestConfig {
   step: number;
   name: string;
   platform: Platform;
-  products: { filter: any; selectedIds: string[] };
+  products: { filter: Record<string, unknown>; selectedIds: string[] };
   modifications: { field: 'title' | 'description' | 'image'; changes: { type: FieldChangeType; value?: string }[] }[];
   customTransformations: CustomTransformation[];
   durationDays: number;
@@ -294,6 +294,7 @@ export default function OptimiserPage() {
   const [creatingAbTest, setCreatingAbTest] = useState(false);
   const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ used: number; softCap: number; percent: number } | null>(null);
 
   const previewMatches = useMemo(() => previewData?.preview.filter(item => item.matches) || [], [previewData]);
   const previewedRule = useMemo(() => rules.find(rule => rule.id === previewRuleId) || null, [rules, previewRuleId]);
@@ -321,6 +322,16 @@ export default function OptimiserPage() {
       const list = await getFeeds();
       setFeeds(list.map(feed => ({ id: feed.id, name: feed.name || feed.id })));
     } catch { setFeeds([]); }
+  }, []);
+
+  // Compteur de consommation IA du mois (soft cap — informatif, non bloquant).
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{ used: number; softCap: number; percent: number }>("/enrichment/ai-usage")
+      .then((res) => { if (!cancelled) setAiUsage(res.data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const fetchMarkets = useCallback(async () => {
@@ -586,9 +597,9 @@ export default function OptimiserPage() {
     if (abConfig.products.selectedIds.length === 0) return;
     setLoadingPreview(true);
     try {
-      const res = await apiClient.get<{ items: any[] }>(`/ingestion/items?ids=${abConfig.products.selectedIds.slice(0, 10).join(',')}`);
+      const res = await apiClient.get<{ items: Array<{ id: string; title?: string; description?: string; descriptiontext?: string; brand?: string; price?: string }> }>(`/ingestion/items?ids=${abConfig.products.selectedIds.slice(0, 10).join(',')}`);
       if (res.data?.items) {
-        setPreviewProducts(res.data.items.map((item: any) => ({
+        setPreviewProducts(res.data.items.map((item) => ({
           id: item.id,
           title: item.title || '',
           description: item.description || item.descriptiontext || '',
@@ -641,7 +652,26 @@ export default function OptimiserPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="Optimisation catalogue" subtitle="Transformez, enrichissez et testez vos produits pour chaque canal." />
+      <PageHeader
+        title="Optimisation catalogue"
+        subtitle="Transformez, enrichissez et testez vos produits pour chaque canal."
+        actions={aiUsage ? (
+          <span
+            title={`Optimisations IA utilisées ce mois-ci — plafond de référence ${aiUsage.softCap}/mois`}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '999px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: aiUsage.percent >= 100 ? 'var(--danger-bg)' : aiUsage.percent >= 80 ? 'var(--warning-soft)' : 'var(--paper-2)',
+              border: `1px solid ${aiUsage.percent >= 100 ? '#fecaca' : aiUsage.percent >= 80 ? 'var(--warning)' : 'var(--line)'}`,
+              color: aiUsage.percent >= 100 ? 'var(--danger)' : aiUsage.percent >= 80 ? 'var(--warning)' : 'var(--ink-2)',
+            }}
+          >
+            IA ce mois : {aiUsage.used} / {aiUsage.softCap}
+          </span>
+        ) : undefined}
+      />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--app-border)', paddingBottom: 0 }}>
@@ -935,7 +965,7 @@ export default function OptimiserPage() {
                       <div className="space-y-2">
                         {abConfig.customTransformations.filter(t => t.field === 'title').map((t, i) => (
                           <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                            <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as any })} className="px-2 py-1 border rounded text-sm">
+                            <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                               <option value="replace">Remplacer</option>
                               <option value="prepend">Ajouter au début</option>
                               <option value="append">Ajouter à la fin</option>
@@ -970,7 +1000,7 @@ export default function OptimiserPage() {
                           const realIndex = abConfig.customTransformations.findIndex((x, idx) => x.field === 'description' && idx === i);
                           return (
                             <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                              <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as any })} className="px-2 py-1 border rounded text-sm">
+                              <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                                 <option value="replace">Remplacer</option>
                                 <option value="prepend">Ajouter au début</option>
                                 <option value="append">Ajouter à la fin</option>

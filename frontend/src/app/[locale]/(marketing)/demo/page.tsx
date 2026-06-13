@@ -708,7 +708,7 @@ export default function DemoPage() {
                   <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
                     <input
                       type="text"
-                      name="website"
+                      name="ax_check_value" autoCorrect="off" spellCheck={false}
                       value={companyWebsite}
                       onChange={(event) => setCompanyWebsite(event.target.value)}
                       tabIndex={-1}

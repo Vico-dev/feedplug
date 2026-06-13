@@ -81,9 +81,11 @@ async function callAIWithCache(prisma, operation, inputs, systemPrompt, userProm
     
     console.log('✅ Clé Gemini trouvée, appel API...');
     
-    // Appeler Gemini 2.0 Flash (rapide + économique)
+    // Gemini 2.5 Flash : 2.0-flash a été déprécié par Google en 2026 (404
+    // "This model is no longer available"). 2.5-flash est le successeur
+    // rapide/économique compatible avec la même API generateContent.
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,7 +99,16 @@ async function callAIWithCache(prisma, operation, inputs, systemPrompt, userProm
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 500,
+            // 2.5 plus verbeux que 2.0 — 500 tronquait le JSON et cassait
+            // le parse côté caller. 2000 couvre largement nos opérations
+            // (audit before/after, enrichment) sans surcoût notable.
+            maxOutputTokens: 2000,
+            // Gemini 2.5 produit parfois des littéraux \n DANS les strings
+            // JSON (invalid au sens strict), ce qui faisait échouer
+            // JSON.parse côté caller. responseMimeType=application/json
+            // force le modèle à produire du JSON valide directement, sans
+            // wrapping markdown ```json ... ``` ni newlines littérales.
+            responseMimeType: 'application/json',
           }
         })
       }

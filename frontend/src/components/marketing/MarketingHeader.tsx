@@ -64,57 +64,19 @@ export default function MarketingHeader() {
           href={homeHref}
           style={{
             display: "inline-flex",
-            alignItems: "center",
-            gap: "12px",
+            alignItems: "baseline",
+            gap: "6px",
             textDecoration: "none",
             flexShrink: 0,
+            fontFamily: "var(--font-display)",
+            fontSize: "17px",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            color: "var(--ink)",
+            transition: "color var(--d-base) var(--ease)",
           }}
         >
-          <span
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "var(--r-md)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "var(--ink)",
-              color: "var(--paper)",
-              fontFamily: "var(--font-display)",
-              fontSize: "13px",
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              boxShadow: "var(--sh-sm)",
-            }}
-          >
-            FP
-          </span>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "baseline",
-              gap: "6px",
-              fontFamily: "var(--font-display)",
-              fontSize: "17px",
-              fontWeight: 700,
-              letterSpacing: "-0.025em",
-              color: "var(--ink)",
-              transition: "color var(--d-base) var(--ease)",
-            }}
-          >
-            FeedPlug
-            <span
-              aria-hidden="true"
-              style={{
-                width: "6px",
-                height: "6px",
-                borderRadius: "999px",
-                backgroundColor: "var(--accent)",
-                transform: "translateY(-2px)",
-                display: "inline-block",
-              }}
-            />
-          </span>
+          FeedPlug
         </Link>
         <MarketingNav showHome={true} locale={locale} dark={false} />
       </div>

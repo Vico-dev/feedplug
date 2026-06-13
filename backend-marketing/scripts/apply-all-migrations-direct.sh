@@ -74,6 +74,10 @@ MIGRATIONS=(
   "030_oauth_ephemeral_state.sql"
   "031_shared_rate_limits.sql"
   "032_markets_market_runtime.sql"
+  "033_stripe_webhook_events.sql"
+  "034_feed_autopush.sql"
+  "035_ai_usage.sql"
+  "036_notifications.sql"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -93,7 +97,9 @@ for migration in "${MIGRATIONS[@]}"; do
   # Migrations qui ne sont PAS idempotentes (ALTER sans IF NOT EXISTS, etc.) :
   # on les laisse échouer silencieusement si déjà jouées, sinon on plante tout
   # le script à chaque relance dès que la prod aurait avancé.
-  NON_IDEMPOTENT=("018_ab_test.sql")
+  # Toutes les migrations sont désormais idempotentes (CREATE … IF NOT EXISTS,
+  # DO $$ … EXCEPTION WHEN duplicate_object … pour les TYPES/contraintes).
+  NON_IDEMPOTENT=()
   is_non_idempotent=false
   for ni in "${NON_IDEMPOTENT[@]}"; do
     if [ "$migration" = "$ni" ]; then is_non_idempotent=true; fi

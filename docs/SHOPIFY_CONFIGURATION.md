@@ -17,6 +17,10 @@ Pour activer la connexion Shopify dans FeedPlug, il faut configurer les clés OA
      ```
    - Si tu vois « Oauth error invalid_request: The redirect_uri is not whitelisted », c’est que cette URL n’est pas (ou pas exactement) dans la liste des redirections autorisées de l’app Shopify.
 4. Récupérez **Client ID** (API Key) et **Client Secret** (API Secret).
+5. Vérifiez les paramètres d’app versionnés dans le repo :
+   - `shopify.app.toml` utilise l’Admin API / webhook version `2026-04`
+   - le scope demandé par défaut est volontairement minimal : `read_products`
+   - la synchronisation catalogue est pilotée par les webhooks `products/create`, `products/update`, `products/delete`, avec relance manuelle possible depuis l’embedded app
 
 ## 2. Créer les secrets dans GCP Secret Manager
 

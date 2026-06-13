@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import Image from "next/image";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useSidebar } from "@/components/layout/sidebar-provider";
 import { useAuth } from "@/hooks/use-auth";
@@ -182,7 +181,7 @@ export function Sidebar() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: showExpanded ? 12 : 0,
+              gap: 0,
               textDecoration: "none",
               minWidth: 0,
               width: "100%",
@@ -190,49 +189,21 @@ export function Sidebar() {
               padding: showExpanded ? "8px 10px" : "8px 0",
               borderRadius: 16,
             }}
+            aria-label="FeedPlug — retour au dashboard"
           >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "var(--r-lg)",
-                backgroundColor: "var(--ink)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "var(--sh-sm)",
-                flexShrink: 0,
-              }}
-            >
-              <Image src="/icon" alt="FeedPlug" width={22} height={22} style={{ display: "block" }} />
-            </div>
-
             {showExpanded && (
-              <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 6 }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontFamily: "var(--font-display)",
-                    fontSize: 17,
-                    fontWeight: 700,
-                    color: "var(--ink)",
-                    letterSpacing: "-0.025em",
-                  }}
-                >
-                  FeedPlug
-                </p>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    backgroundColor: "var(--accent)",
-                    transform: "translateY(-2px)",
-                    flexShrink: 0,
-                  }}
-                />
-              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-display)",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "var(--ink)",
+                  letterSpacing: "-0.025em",
+                }}
+              >
+                FeedPlug
+              </p>
             )}
           </a>
         </div>

@@ -1,8 +1,16 @@
 -- Tests A/B : bras témoin (control) + variant, durée min, prérequis, restitution
-CREATE TYPE "ABTestStatus" AS ENUM ('DRAFT', 'RUNNING', 'COMPLETED', 'CANCELLED');
-CREATE TYPE "ABTestArm" AS ENUM ('CONTROL', 'VARIANT');
+-- Migration idempotente : peut être rejouée sans casser un état partiel
+-- (types ou tables déjà créés par un run antérieur sont conservés).
 
-CREATE TABLE "ab_test" (
+DO $$ BEGIN
+  CREATE TYPE "ABTestStatus" AS ENUM ('DRAFT', 'RUNNING', 'COMPLETED', 'CANCELLED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "ABTestArm" AS ENUM ('CONTROL', 'VARIANT');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "ab_test" (
   "id" TEXT NOT NULL,
   "accountid" TEXT NOT NULL,
   "name" TEXT NOT NULL,
@@ -18,12 +26,12 @@ CREATE TABLE "ab_test" (
   "prerequisitesmet" BOOLEAN,
   "resultsummary" JSONB,
   "createdat" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedat" TIMESTAMP(3) NOT NULL,
+  "updatedat" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT "ab_test_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "ab_test_assignment" (
+CREATE TABLE IF NOT EXISTS "ab_test_assignment" (
   "id" TEXT NOT NULL,
   "testid" TEXT NOT NULL,
   "itemid" TEXT NOT NULL,
@@ -34,12 +42,19 @@ CREATE TABLE "ab_test_assignment" (
   CONSTRAINT "ab_test_assignment_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "ab_test_assignment_testid_itemid_key" ON "ab_test_assignment"("testid", "itemid");
-CREATE INDEX "ab_test_accountid_idx" ON "ab_test"("accountid");
-CREATE INDEX "ab_test_status_idx" ON "ab_test"("status");
-CREATE INDEX "ab_test_platform_idx" ON "ab_test"("platform");
-CREATE INDEX "ab_test_assignment_testid_idx" ON "ab_test_assignment"("testid");
-CREATE INDEX "ab_test_assignment_itemid_idx" ON "ab_test_assignment"("itemid");
+CREATE UNIQUE INDEX IF NOT EXISTS "ab_test_assignment_testid_itemid_key" ON "ab_test_assignment"("testid", "itemid");
+CREATE INDEX IF NOT EXISTS "ab_test_accountid_idx" ON "ab_test"("accountid");
+CREATE INDEX IF NOT EXISTS "ab_test_status_idx" ON "ab_test"("status");
+CREATE INDEX IF NOT EXISTS "ab_test_platform_idx" ON "ab_test"("platform");
+CREATE INDEX IF NOT EXISTS "ab_test_assignment_testid_idx" ON "ab_test_assignment"("testid");
+CREATE INDEX IF NOT EXISTS "ab_test_assignment_itemid_idx" ON "ab_test_assignment"("itemid");
 
-ALTER TABLE "ab_test" ADD CONSTRAINT "ab_test_accountid_fkey" FOREIGN KEY ("accountid") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ab_test_assignment" ADD CONSTRAINT "ab_test_assignment_testid_fkey" FOREIGN KEY ("testid") REFERENCES "ab_test"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "ab_test" ADD CONSTRAINT "ab_test_accountid_fkey"
+    FOREIGN KEY ("accountid") REFERENCES "Account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "ab_test_assignment" ADD CONSTRAINT "ab_test_assignment_testid_fkey"
+    FOREIGN KEY ("testid") REFERENCES "ab_test"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

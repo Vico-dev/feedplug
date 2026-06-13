@@ -120,6 +120,7 @@ model Feed {
   status          FeedStatus    @default(ACTIVE)
   mappingJson     Json          @map("mappingjson")
   dedupStrategy   String        @default("guid_or_url") @map("dedupstrategy")
+  autoPushEnabled Boolean       @default(false) @map("autopush_enabled")
   accountId       String        @default("default-account") @map("accountid")
   createdAt       DateTime      @default(now()) @map("createdat")
   updatedAt       DateTime      @updatedAt @map("updatedat")
@@ -171,6 +172,10 @@ model FeedItem {
   updatedAt       DateTime?  @map("updatedat")
   contentHash     String     @map("contenthash")
   createdAt       DateTime   @default(now()) @map("createdat")
+  gtin            String?
+  mpn             String?
+  condition       String?
+  customFields    Json?      @map("customfields")
 
   revisions       FeedItemRevision[]
 
@@ -582,6 +587,41 @@ model SharedRateLimit {
   @@id([scope, rateLimitKey])
   @@index([resetAt])
   @@map("shared_rate_limits")
+}
+
+// ===== GOOGLE LOCAL INVENTORY ADS (LIA) =====
+
+model StoreLocation {
+  id        String   @id
+  accountId String   @map("accountid")
+  storeCode String   @map("storecode")
+  name      String?
+  address   String?
+  isActive  Boolean  @default(true) @map("isactive")
+  createdAt DateTime @default(now()) @map("createdat")
+  updatedAt DateTime @updatedAt @map("updatedat")
+
+  @@unique([accountId, storeCode])
+  @@index([accountId])
+}
+
+model LocalInventory {
+  id           String   @id
+  accountId    String   @map("accountid")
+  storeCode    String   @map("storecode")
+  offerId      String   @map("offerid")
+  quantity     Int      @default(0)
+  availability String?
+  price        Decimal? @db.Decimal(12, 2)
+  salePrice    Decimal? @db.Decimal(12, 2) @map("saleprice")
+  pickupMethod String?  @map("pickupmethod")
+  pickupSla    String?  @map("pickupsla")
+  createdAt    DateTime @default(now()) @map("createdat")
+  updatedAt    DateTime @updatedAt @map("updatedat")
+
+  @@unique([accountId, storeCode, offerId])
+  @@index([accountId, offerId])
+  @@index([accountId, storeCode])
 }
 
 model ExportLog {

@@ -9,6 +9,7 @@ import {
   Shield,
   Key,
   Database,
+  MapPin,
   Save,
   Edit,
   X,
@@ -16,6 +17,9 @@ import {
   Mail,
   UserPlus,
 } from "lucide-react";
+import { StoreLocationsPanel } from "@/components/lia/store-locations-panel";
+import { LocalInventoryPanel } from "@/components/lia/local-inventory-panel";
+import { FeedUrlPanel } from "@/components/lia/feed-url-panel";
 import {
   DashboardStatGrid,
   DashboardStatCard,
@@ -29,7 +33,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api";
 
-type TabId = "profile" | "notifications" | "security" | "integrations" | "billing" | "team";
+type TabId = "profile" | "notifications" | "security" | "integrations" | "billing" | "team" | "stores";
 
 interface Account {
   id: string;
@@ -294,6 +298,7 @@ export default function ParametresPage() {
     { id: "integrations", labelKey: "parametres.tabIntegrations", icon: Database },
     { id: "billing", labelKey: "parametres.tabBilling", icon: Settings },
     { id: "team", labelKey: "parametres.tabTeam", icon: Users },
+    { id: "stores", labelKey: "parametres.tabStores", icon: MapPin },
   ];
   const ROLE_LABELS: Record<string, string> = {
     OWNER: t("parametres.owner"),
@@ -710,6 +715,14 @@ export default function ParametresPage() {
                   </ul>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === "stores" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <StoreLocationsPanel />
+              <LocalInventoryPanel />
+              <FeedUrlPanel />
             </div>
           )}
 

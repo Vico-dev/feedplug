@@ -10,7 +10,7 @@ const DEFAULT_MIN_DURATION_DAYS = 14;
 
 function registerAbTestRoutes(app, deps) {
   const { prisma, authenticateToken, getAccountId } = deps;
-  const accountId = (req) => getAccountId ? getAccountId(req) : (req.accountId || 'default-account');
+  const accountId = (req) => getAccountId ? getAccountId(req) : req.accountId;
 
   // Liste des tests A/B du compte
   app.get('/api/v1/ab-tests', authenticateToken, async (req, res) => {

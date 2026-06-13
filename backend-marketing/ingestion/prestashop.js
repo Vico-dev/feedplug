@@ -184,7 +184,10 @@ async function fetchPrestashopXml({ baseUrl, apiKey, resourcePath }) {
   const authToken = Buffer.from(`${apiKey}:`).toString('base64');
   const url = `${normalizedBaseUrl}${resourcePath}`;
 
-  const response = await fetch(url, {
+  // SSRF guard : baseUrl est fourni par le marchand — on refuse les IP
+  // privées / metadata cloud (169.254.169.254 etc.).
+  const { safeFetch } = require('../lib/safe-url');
+  const response = await safeFetch(url, {
     headers: {
       Authorization: `Basic ${authToken}`,
       Accept: 'application/xml',

@@ -19,6 +19,33 @@ const AUTH_TOKEN_PATHS = new Set([
 ]);
 const LOGOUT_PATH = "auth/logout";
 
+// Méthodes qui modifient l'état → soumises à la protection CSRF.
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+// Origines autorisées à effectuer des mutations via le proxy cookie→bearer.
+// L'embedded Shopify utilise `Authorization: Bearer <session_token>` explicite
+// (pas le cookie), donc ne passe pas par ce contrôle.
+const ALLOWED_ORIGIN_HOSTS = new Set([
+  "feedplug.com",
+  "www.feedplug.com",
+  "app.feedplug.com",
+]);
+
+function isAllowedOrigin(origin: string | null, requestHost: string | null): boolean {
+  if (!origin) return false;
+  try {
+    const u = new URL(origin);
+    if (requestHost && u.host === requestHost) return true;
+    if (ALLOWED_ORIGIN_HOSTS.has(u.host)) return true;
+    if (process.env.NODE_ENV !== "production" && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(u.host)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export const dynamic = "force-dynamic";
 
 function applyNoStore(headers: Headers): Headers {
@@ -126,10 +153,35 @@ async function proxyRequest(
     }
   });
 
-  if (!headers.has("authorization")) {
+  const explicitBearer = headers.has("authorization");
+  if (!explicitBearer) {
     const accessToken = getCookieValue(request, ACCESS_COOKIE);
     if (accessToken) {
       headers.set("authorization", `Bearer ${accessToken}`);
+    }
+  }
+
+  // Protection CSRF : le proxy convertit le cookie en Authorization Bearer.
+  // Cookie fp_access_token est SameSite=None (requis pour iframe Shopify),
+  // donc un POST cross-origin l'envoie. Sans cette garde, un site tiers peut
+  // déclencher des mutations (delete feed, change plan…).
+  // Règle : sur une mutation où l'auth provient du cookie (pas d'un Bearer
+  // explicite), on exige une Origin dans la liste blanche FeedPlug.
+  // Les endpoints d'auth (login/register/refresh) sont publics, pas de cookie
+  // à protéger.
+  if (
+    MUTATING_METHODS.has(method) &&
+    !explicitBearer &&
+    !AUTH_TOKEN_PATHS.has(path) &&
+    headers.has("authorization")
+  ) {
+    const origin = request.headers.get("origin");
+    const requestHost = request.headers.get("host");
+    if (!isAllowedOrigin(origin, requestHost)) {
+      return new Response(
+        JSON.stringify({ message: "Origine non autorisée" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
     }
   }
 
@@ -168,9 +220,16 @@ async function proxyRequest(
   try {
     const res = await fetch(backendUrl, init);
     const contentType = res.headers.get("content-type") || "";
-    const responseText = await res.text();
+    // Lire en arrayBuffer (pas text()) pour préserver les bytes binaires :
+    // res.text() décode en UTF-8 et corrompt les PDF / images / CSV avec accents.
+    // Bug historique : PDF audit-flux retourné comme texte UTF-8 → bytes massacrés
+    // → Chrome affichait une page blanche malgré un content-type application/pdf.
+    const responseBuffer = await res.arrayBuffer();
     const responseHeaders = new Headers();
     if (contentType) responseHeaders.set("Content-Type", contentType);
+    // Preserve Content-Disposition pour les téléchargements (attachments).
+    const disposition = res.headers.get("content-disposition");
+    if (disposition) responseHeaders.set("Content-Disposition", disposition);
 
     if (path === LOGOUT_PATH) {
       responseHeaders.append("Set-Cookie", buildExpiredCookie(ACCESS_COOKIE, request));
@@ -184,6 +243,7 @@ async function proxyRequest(
     }
 
     if (AUTH_TOKEN_PATHS.has(path) && contentType.includes("application/json")) {
+      const responseText = new TextDecoder().decode(responseBuffer);
       let payload: unknown;
       try {
         payload = responseText ? JSON.parse(responseText) : {};
@@ -211,7 +271,7 @@ async function proxyRequest(
     }
 
     applyNoStore(responseHeaders);
-    return new Response(responseText, {
+    return new Response(responseBuffer, {
       status: res.status,
       statusText: res.statusText,
       headers: responseHeaders,

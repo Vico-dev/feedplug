@@ -307,7 +307,7 @@ export default function MarketingLandingPage() {
               <form onSubmit={handleEarlyAccess} className="hero-f" style={{ maxWidth: '560px' }}>
                 <input
                   type="text"
-                  name="website"
+                  name="ax_check_value" autoCorrect="off" spellCheck={false}
                   value={companyWebsite}
                   onChange={(e) => setCompanyWebsite(e.target.value)}
                   tabIndex={-1}
