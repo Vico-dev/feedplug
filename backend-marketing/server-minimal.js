@@ -15153,7 +15153,12 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
     `,
     feedId
   );
+  const itemsBeforeDestFilter = items.length;
   items = await filterItemsForDestinationActivation(items, destinationContext);
+  // Diag : si push retourne "Aucun produit à pousser" sans log applicatif,
+  // on ne sait pas si le feed est vide en BDD, si le filter Google les a
+  // exclus, ou si le filter destination a tout retiré. Log ces compteurs.
+  console.log(`[gmc-push] account=${accountId} feed=${feedId} merchantId=${conn.merchantid} itemsAfterSqlFilter=${itemsBeforeDestFilter} itemsAfterDestActivation=${items.length} destinationContext=${destinationContext ? destinationContext.slug || destinationContext.id : 'default'}`);
 
   // Traduction par marché (v2) — best-effort.
   try {
