@@ -5712,6 +5712,17 @@ function normalizeEmbeddedReturnTo(value, fallback = '/embedded/channels') {
   }
 }
 
+// Helpers dashboard (hors Shopify) extraits dans lib/platform-redirects.js pour
+// être testables en isolation. Le wrapper local injecte APP_URL.
+const {
+  normalizeDashboardReturnTo,
+  buildDashboardRedirectUrl: buildDashboardRedirectUrlBase,
+} = require('./lib/platform-redirects');
+
+function buildDashboardRedirectUrl(returnTo, params = {}, fallback = '/flux') {
+  return buildDashboardRedirectUrlBase(APP_URL, returnTo, params, fallback);
+}
+
 async function buildEmbeddedShopifyAdminRedirectUrl({
   accountId,
   shop,
@@ -14311,7 +14322,7 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         params: { amazon: 'error', reason: 'config' },
       }));
     }
-    return res.redirect(`${APP_URL}/flux?amazon=error&reason=config`);
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'config' }));
   }
   try {
     const tokenRes = await fetch('https://api.amazon.com/auth/o2/token', {
@@ -14325,10 +14336,34 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         client_secret: AMAZON_LWA_CLIENT_SECRET
       }).toString()
     });
+    // Amazon peut répondre 4xx/5xx (redirect_uri non enregistrée, client
+    // invalide…) : on lit le corps brut pour le log avant de tenter le JSON,
+    // sinon on masque la vraie cause derrière une erreur de parse opaque.
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text().catch(() => '');
+      console.error('Amazon token exchange HTTP error:', tokenRes.status, errBody.substring(0, 500));
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${APP_URL}/flux?amazon=error&reason=token_exchange`,
+          params: { amazon: 'error', reason: 'token_exchange' },
+        }));
+      }
+      return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'token_exchange' }));
+    }
     const tokens = await tokenRes.json();
     if (!tokens.access_token || !tokens.refresh_token) {
       console.error('Amazon token exchange failed:', tokens);
-      return res.redirect(`${APP_URL}/flux?amazon=error&reason=token_exchange`);
+      if (embeddedSurface) {
+        return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({
+          accountId,
+          returnTo: embeddedReturnTo,
+          fallbackUrl: `${APP_URL}/flux?amazon=error&reason=token_exchange`,
+          params: { amazon: 'error', reason: 'token_exchange' },
+        }));
+      }
+      return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'token_exchange' }));
     }
     const expiry = tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null;
     if (prismaReady && prisma) {
@@ -14358,7 +14393,7 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         params: { amazon: 'connected', seller: sellerId || '' },
       }));
     }
-    return res.redirect(`${APP_URL}/flux?amazon=connected&seller=${sellerId || ''}`);
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'connected', seller: sellerId || '' }));
   } catch (e) {
     console.error('Amazon callback error:', e);
     if (embeddedSurface) {
@@ -14369,7 +14404,7 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
         params: { amazon: 'error', reason: 'server' },
       }));
     }
-    return res.redirect(`${APP_URL}/flux?amazon=error&reason=server`);
+    return res.redirect(buildDashboardRedirectUrl(stored.returnTo, { amazon: 'error', reason: 'server' }));
   }
 });
 
@@ -14382,7 +14417,9 @@ app.get('/api/v1/platforms/amazon/connect-init', authenticateJwtOrShopifySession
     return res.status(200).json({ configured: false, message: 'Amazon OAuth non configuré' });
   }
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, '/flux');
   const code = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
@@ -14428,7 +14465,9 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
   }
   const accountId = stored.accountId;
   const embeddedSurface = stored.surface === 'embedded';
-  const embeddedReturnTo = normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels');
+  const safeReturnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(stored.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(stored.returnTo, '/flux');
   if (!AMAZON_APPLICATION_ID) {
     return res.redirect(`${APP_URL}/flux?amazon=error&reason=not_configured`);
   }
@@ -14441,7 +14480,7 @@ app.get('/api/v1/platforms/amazon/connect', async (req, res) => {
       payload: {
         accountId,
         surface: embeddedSurface ? 'embedded' : 'dashboard',
-        returnTo: embeddedReturnTo,
+        returnTo: safeReturnTo,
       },
       ttlMs: AMAZON_STATE_TTL_MS,
     });
@@ -14594,6 +14633,12 @@ async function refreshAmazonToken(connection) {
       client_secret: AMAZON_LWA_CLIENT_SECRET
     }).toString()
   });
+  if (!tokenRes.ok) {
+    const errBody = await tokenRes.text().catch(() => '');
+    console.error('Amazon refresh token HTTP error:', tokenRes.status, errBody.substring(0, 500));
+    // refresh_token révoqué/invalide (400 invalid_grant) → reconnexion requise.
+    throw new Error('Token Amazon expiré ou révoqué — reconnectez Seller Central');
+  }
   const tokens = await tokenRes.json();
   if (!tokens.access_token) {
     throw new Error(tokens.error_description || 'Erreur refresh token Amazon');
@@ -15047,6 +15092,8 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
   let succeeded = 0;
   let failed = 0;
   const errors = [];
+  let authFailure = false;   // 401/403 SP-API → access token invalide, reconnexion requise
+  let rateLimited = false;   // 429 SP-API → throttling Amazon
   const marketplaceId = channelConfig.marketplaceId;
   const currency = channelConfig.currency;
 
@@ -15085,9 +15132,11 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
       if (putRes.ok) {
         succeeded++;
       } else {
-        const errText = await putRes.text();
+        const errText = await putRes.text().catch(() => '');
         failed++;
-        errors.push({ sku, error: errText.substring(0, 200) });
+        if (putRes.status === 401 || putRes.status === 403) authFailure = true;
+        if (putRes.status === 429) rateLimited = true;
+        errors.push({ sku, status: putRes.status, error: errText.substring(0, 200) });
       }
     } catch (e) {
       failed++;
@@ -15112,12 +15161,27 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
     errors.length > 0 ? JSON.stringify(errors.slice(0, 5)) : null
   );
 
+  // Tout a échoué sur une erreur d'auth → l'access token est invalide même
+  // après refresh : on demande explicitement une reconnexion côté UI.
+  if (succeeded === 0 && authFailure) {
+    throw createPushError(
+      'Connexion Amazon refusée par SP-API. Reconnectez Seller Central.',
+      401,
+      { reconnect: true, logId }
+    );
+  }
+
   const destinationLabel = buildDestinationPushLabel(destinationContext) || channelConfig.label;
+  let message = `Push Amazon ${destinationLabel} : ${succeeded} produits envoyés, ${failed} erreurs`;
+  if (rateLimited) {
+    message += ' (throttling Amazon détecté — réessayez dans quelques minutes)';
+  }
   return {
-    message: `Push Amazon ${destinationLabel} : ${succeeded} produits envoyés, ${failed} erreurs`,
+    message,
     total: items.length,
     succeeded,
     failed,
+    rateLimited,
     errors: errors.slice(0, 10),
     logId,
     destinationId: destinationContext?.id || null,
@@ -16791,7 +16855,7 @@ app.get('/api/v1/embedded/diagnostic/overview', authenticateJwtOrShopifySession,
     // 20 produits avec les pires scores — ceux que le merchant devrait corriger en priorité.
     const worstRows = totalScored > 0 ? await prisma.$queryRawUnsafe(
       `
-        SELECT fi.id, fi.title, fi.imageurl, fi.sku, fi.url,
+        SELECT fi.id, fi.originid AS "originId", fi.title, fi.imageurl, fi.sku, fi.url,
                ps.qualityscore, ps.qualitydetails
         FROM "FeedItem" fi
         JOIN "ProductScore" ps ON ps.itemid = fi.id
@@ -16809,6 +16873,11 @@ app.get('/api/v1/embedded/diagnostic/overview', authenticateJwtOrShopifySession,
       const issues = Array.isArray(details?.issues) ? details.issues : [];
       return {
         id: r.id,
+        // originId est le path Shopify (`Product/8765...` ou `ProductVariant/N`)
+        // après strip du préfixe `gid://shopify/`. Le frontend construit
+        // l'URL Admin avec ça (cf bouton "Fix") — utiliser fi.id directement
+        // renvoie une 404 car c'est l'UUID interne FeedPlug.
+        originId: r.originId || null,
         title: r.title,
         imageUrl: r.imageurl || null,
         sku: r.sku || null,

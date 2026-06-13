@@ -42,6 +42,7 @@ type TopIssue = {
 
 type WorstProduct = {
   id: string;
+  originId: string | null;
   title: string;
   imageUrl: string | null;
   sku: string | null;
@@ -435,8 +436,16 @@ function WorstProductRow({
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   const shopHandle = shop.replace(/\.myshopify\.com$/i, "");
-  const shopifyAdminUrl = shopHandle
-    ? `https://admin.shopify.com/store/${shopHandle}/products/${encodeURIComponent(product.id)}`
+  // originId arrive du backend au format "Product/8765..." ou
+  // "ProductVariant/N" (préfixe Shopify gid:// déjà strippé à l'ingestion).
+  // Shopify Admin attend l'ID numérique seul. Fallback null si pas dispo
+  // (legacy items pré-feature) → on cache le bouton plutôt que de renvoyer
+  // sur la liste produits avec un UUID FeedPlug qui donnait une 404.
+  const productAdminId = product.originId
+    ? product.originId.replace(/^(Product|ProductVariant)\//i, "")
+    : null;
+  const shopifyAdminUrl = shopHandle && productAdminId
+    ? `https://admin.shopify.com/store/${shopHandle}/products/${encodeURIComponent(productAdminId)}`
     : null;
   const scoreTone = product.qualityScore < 40 ? "critical" : product.qualityScore < 60 ? "critical" : "warning";
 
