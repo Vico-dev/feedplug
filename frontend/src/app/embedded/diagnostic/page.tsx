@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   InlineGrid,
   InlineStack,
@@ -134,6 +135,16 @@ export default function EmbeddedDiagnosticPage() {
   const intlLocale = LOCALE_TO_INTL[locale];
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DiagnosticOverview | null>(null);
+  // Canaux cibles pour l'optim IA en masse. GMC coché par défaut car c'est
+  // le seul canal avec push fonctionnel aujourd'hui ; les autres stockent
+  // la version optimisée mais seront propagés quand les push seront prêts.
+  const [optimPlatforms, setOptimPlatforms] = useState<Record<string, boolean>>({
+    gmc: true,
+    meta: false,
+    amazon: false,
+    tiktok: false,
+  });
+  const [optimizing, setOptimizing] = useState(false);
 
   const showToast = useCallback(
     (message: string, isError = false) => {
@@ -179,6 +190,39 @@ export default function EmbeddedDiagnosticPage() {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  const handleOptimizeAll = useCallback(async () => {
+    const platforms = Object.entries(optimPlatforms)
+      .filter(([, on]) => on)
+      .map(([key]) => key);
+    if (platforms.length === 0) {
+      showToast("Sélectionnez au moins un canal cible.", true);
+      return;
+    }
+    setOptimizing(true);
+    try {
+      const response = await fetchApi("/embedded/products/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platforms }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        showToast(body?.message || `Erreur ${response.status}`, true);
+        return;
+      }
+      const count = body?.productCount ?? 0;
+      const seconds = body?.estimatedSeconds ?? 0;
+      showToast(
+        `Optimisation IA lancée pour ${count} produit(s) sur ${platforms.length} canal(aux) — ~${seconds}s.`,
+        false
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Échec lancement optimisation", true);
+    } finally {
+      setOptimizing(false);
+    }
+  }, [fetchApi, optimPlatforms, showToast]);
 
   const summary = useMemo(() => {
     const total = data?.totalItems ?? 0;
@@ -258,6 +302,63 @@ export default function EmbeddedDiagnosticPage() {
               tone="success"
             />
           </InlineGrid>
+        </Layout.Section>
+
+        {/* Action IA centrale : optim multi-canal en masse */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center" wrap>
+                <BlockStack gap="100">
+                  <Text variant="headingMd" as="h2">
+                    Optimiser avec l&apos;IA FeedPlug
+                  </Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Réécrivez titres et descriptions de tous vos produits selon les règles de chaque canal (limite caractères, ton, mots-clés). Stocké par canal : le bon contenu part vers le bon push.
+                  </Text>
+                </BlockStack>
+              </InlineStack>
+              <InlineGrid columns={{ xs: 2, md: 4 }} gap="300">
+                <Checkbox
+                  label="Google Shopping"
+                  helpText="Titre 150 c. SEO"
+                  checked={optimPlatforms.gmc}
+                  onChange={(v) => setOptimPlatforms((p) => ({ ...p, gmc: v }))}
+                />
+                <Checkbox
+                  label="Meta (Facebook/Instagram)"
+                  helpText="200 c. accrocheur"
+                  checked={optimPlatforms.meta}
+                  onChange={(v) => setOptimPlatforms((p) => ({ ...p, meta: v }))}
+                />
+                <Checkbox
+                  label="Amazon"
+                  helpText="200 c. mots-clés A9"
+                  checked={optimPlatforms.amazon}
+                  onChange={(v) => setOptimPlatforms((p) => ({ ...p, amazon: v }))}
+                />
+                <Checkbox
+                  label="TikTok Shop"
+                  helpText="34 c. punchy"
+                  checked={optimPlatforms.tiktok}
+                  onChange={(v) => setOptimPlatforms((p) => ({ ...p, tiktok: v }))}
+                />
+              </InlineGrid>
+              <InlineStack gap="300" blockAlign="center">
+                <Button
+                  variant="primary"
+                  size="large"
+                  loading={optimizing}
+                  onClick={() => void handleOptimizeAll()}
+                >
+                  Optimiser tous les produits
+                </Button>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Le push GMC est relancé automatiquement à la fin.
+                </Text>
+              </InlineStack>
+            </BlockStack>
+          </Card>
         </Layout.Section>
 
         {/* Répartition visuelle */}

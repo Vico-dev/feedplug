@@ -16916,6 +16916,150 @@ app.get('/api/v1/embedded/diagnostic/overview', authenticateJwtOrShopifySession,
   }
 });
 
+// Cœur produit FeedPlug : optimisation IA multi-canal en masse.
+// Body : { productIds?: string[], platforms: string[] }
+//   - productIds vide / non fourni → tous les produits du feed (LIMIT 100
+//     pour éviter d'exploser quota Gemini, batchs successifs sinon).
+//   - platforms : sous-ensemble de ['gmc','meta','amazon','tiktok','pinterest']
+//     (chaque optimizer adapte limites et style au canal — cf PLATFORM_LIMITS
+//     dans title-optimizer.js).
+// Le travail est async : 202 immédiat, puis worker dépile et stocke chaque
+// version optimisée dans customfields.optimized.{platform}. Le push vers
+// chaque canal récupère la bonne version via getOptimizedContentForPlatform.
+app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service indisponible' });
+    }
+    const accountId = req.user.accountId;
+    const { productIds, platforms } = req.body || {};
+
+    const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'tiktok', 'pinterest'];
+    const requestedPlatforms = (Array.isArray(platforms) ? platforms : [])
+      .map((p) => String(p || '').toLowerCase().trim())
+      .filter((p) => SUPPORTED_PLATFORMS.includes(p));
+    if (!requestedPlatforms.length) {
+      return res.status(400).json({ message: 'Sélectionnez au moins un canal cible (gmc, meta, amazon, tiktok, pinterest).' });
+    }
+
+    const feed = await findShopifyFeedForAccount(accountId);
+    if (!feed) {
+      return res.status(404).json({ message: 'Aucun catalogue Shopify connecté.' });
+    }
+
+    let items;
+    if (Array.isArray(productIds) && productIds.length > 0) {
+      const cleanIds = productIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+        .slice(0, 200);
+      items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text AND id = ANY($2::text[])
+      `, feed.feedId, cleanIds);
+    } else {
+      items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+        LIMIT 100
+      `, feed.feedId);
+    }
+
+    if (!items?.length) {
+      return res.json({ accepted: false, message: 'Aucun produit à optimiser.', processed: 0 });
+    }
+
+    const totalOperations = items.length * requestedPlatforms.length;
+
+    res.status(202).json({
+      accepted: true,
+      productCount: items.length,
+      platforms: requestedPlatforms,
+      totalOperations,
+      estimatedSeconds: Math.ceil(totalOperations * 5),
+      message: `Optimisation lancée pour ${items.length} produit(s) sur ${requestedPlatforms.length} canal(aux).`,
+    });
+
+    // Worker async : continue après la response. Chaque échec est isolé pour
+    // ne pas casser le batch. Stockage atomique par platform via jsonb_set.
+    (async () => {
+      let succeeded = 0;
+      let failed = 0;
+      for (const item of items) {
+        const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
+        const product = {
+          id: item.id,
+          title: item.title || '',
+          description: item.descriptiontext || String(item.descriptionhtml || '').replace(/<[^>]+>/g, ' ').trim(),
+          brand: item.brand,
+          sku: item.sku,
+          gtin: item.gtin,
+          mpn: item.mpn,
+          price: item.price,
+          currency: item.currency,
+          customfields: cf,
+        };
+        for (const platform of requestedPlatforms) {
+          try {
+            const platformUpper = platform.toUpperCase();
+            const [titleRes, descRes] = await Promise.all([
+              optimizeTitleWithAI(prisma, product, { platform: platformUpper }).catch((e) => {
+                console.warn(`⚠️ Optim title ${item.id} ${platform} :`, e?.message);
+                return null;
+              }),
+              optimizeDescriptionWithAI(prisma, product, { platform: platformUpper }).catch((e) => {
+                console.warn(`⚠️ Optim desc ${item.id} ${platform} :`, e?.message);
+                return null;
+              }),
+            ]);
+            const optimizedTitle = titleRes?.optimizedTitle || product.title;
+            const optimizedDescription = descRes?.optimizedDescription || product.description;
+            const payload = {
+              title: optimizedTitle,
+              description: optimizedDescription,
+              optimizedAt: new Date().toISOString(),
+            };
+            await prisma.$executeRawUnsafe(
+              `UPDATE "FeedItem"
+               SET customfields = jsonb_set(
+                 COALESCE(customfields, '{}'::jsonb),
+                 ARRAY['optimized', $1::text],
+                 $2::jsonb,
+                 true
+               ),
+               updatedat = NOW()
+               WHERE id = $3::text`,
+              platform,
+              JSON.stringify(payload),
+              item.id
+            );
+            succeeded++;
+          } catch (itemErr) {
+            console.warn(`⚠️ Optim ${item.id}/${platform} échouée :`, itemErr?.message);
+            failed++;
+          }
+        }
+      }
+      console.log(`✨ Manual optim done : ${succeeded} ok, ${failed} ko sur ${items.length} produits × ${requestedPlatforms.length} canaux (account ${accountId})`);
+      // Si GMC est dans les plateformes optimisées, on déclenche aussi un
+      // re-push GMC pour propager immédiatement les versions fraîchement
+      // optimisées (sans attendre la prochaine ingestion).
+      if (requestedPlatforms.includes('gmc')) {
+        scheduleAutoGmcPush(accountId, feed.feedId, 'manual optim → repush', 0);
+      }
+    })().catch((workerErr) => {
+      console.error('Manual optim worker error :', workerErr);
+    });
+  } catch (err) {
+    console.error('Embedded products/optimize error :', err);
+    return res.status(500).json({ message: 'Erreur lancement optimisation', detail: err?.message });
+  }
+});
+
 // Vérification d'accès Shopify (ping Admin API)
 app.get('/api/v1/connectors/shopify/verify', authenticateToken, async (req, res) => {
   try {
