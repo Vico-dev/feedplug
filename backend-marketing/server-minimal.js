@@ -965,7 +965,7 @@ async function runShopifyPostSyncHooks(feedId, accountId) {
     console.warn('⚠️ Enrichissement non appliqué après webhook Shopify:', enrichErr.message);
   }
 
-  scheduleAutoGmcPush(accountId, feedId, 'webhook Shopify');
+  scheduleAutoOptimization(accountId, feedId, 'webhook Shopify');
   scheduleAutoLiaSync(accountId, 'webhook Shopify');
 }
 
@@ -3870,7 +3870,7 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
         WHERE id = $2::text
       `, runAt, feed.sourceid);
 
-      scheduleAutoGmcPush(req.accountId, feed.id, 'ingestion Shopify');
+      scheduleAutoOptimization(req.accountId, feed.id, 'ingestion Shopify');
       scheduleAutoLiaSync(req.accountId, 'ingestion Shopify');
       return res.status(201).json({ message: 'Ingestion Shopify effectuée', ...result });
     }
@@ -15363,6 +15363,122 @@ function scheduleAutoGmcPush(accountId, feedId, reason, delayMs = AUTO_GMC_PUSH_
   autoGmcPushTimers.set(key, timer);
 }
 
+// Auto-optim IA après ingestion : sans ce hook, les FeedItems sont pushés
+// sur GMC/Amazon/Meta avec leurs titres et descriptions Shopify bruts.
+// Aucune valeur ajoutée vs un feed direct. Ce scheduler tourne en background
+// (debounce 15s pour absorber les bursts de webhooks) et appelle
+// optimizeTitleWithAI + optimizeDescriptionWithAI sur les items sans
+// customfields.optimized.gmc. Une fois l'optim faite, déclenche
+// automatiquement scheduleAutoGmcPush pour propager les contenus optimisés.
+const autoOptimizationTimers = new Map();
+const AUTO_OPTIM_DEBOUNCE_MS = Number(process.env.AUTO_OPTIM_DEBOUNCE_MS || 15_000);
+const AUTO_OPTIM_BATCH_SIZE = Number(process.env.AUTO_OPTIM_BATCH_SIZE || 50);
+
+function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTIM_DEBOUNCE_MS) {
+  if (!accountId) return;
+  // Pas de feedId connu = fallback direct sur push GMC (le push résoudra le
+  // default feed lui-même). On ne peut pas optimiser sans target feed.
+  if (!feedId) {
+    scheduleAutoGmcPush(accountId, feedId, reason);
+    return;
+  }
+  const key = `${accountId}:${feedId}`;
+  const existing = autoOptimizationTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    autoOptimizationTimers.delete(key);
+    try {
+      const items = await prisma.$queryRawUnsafe(`
+        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
+               customfields, gtin, mpn, price, currency
+        FROM "FeedItem"
+        WHERE feedid = $1::text
+          AND (
+            customfields IS NULL
+            OR customfields->'optimized'->'gmc'->>'title' IS NULL
+            OR customfields->'optimized'->'gmc'->>'title' = ''
+          )
+        LIMIT ${AUTO_OPTIM_BATCH_SIZE}
+      `, feedId);
+
+      if (!items?.length) {
+        console.log(`✨ Auto-optim (${reason}) feed ${feedId} : aucun produit à optimiser → push direct`);
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → push direct`, 0);
+        return;
+      }
+
+      let succeeded = 0;
+      let failed = 0;
+      for (const item of items) {
+        try {
+          const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
+          const product = {
+            id: item.id,
+            title: item.title || '',
+            description: item.descriptiontext || String(item.descriptionhtml || '').replace(/<[^>]+>/g, ' ').trim(),
+            brand: item.brand,
+            sku: item.sku,
+            gtin: item.gtin,
+            mpn: item.mpn,
+            price: item.price,
+            currency: item.currency,
+            customfields: cf,
+          };
+          const [titleRes, descRes] = await Promise.all([
+            optimizeTitleWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
+              console.warn(`⚠️ Auto-optim title ${item.id} :`, e?.message);
+              return null;
+            }),
+            optimizeDescriptionWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
+              console.warn(`⚠️ Auto-optim desc ${item.id} :`, e?.message);
+              return null;
+            }),
+          ]);
+
+          const optimizedTitle = titleRes?.optimizedTitle || product.title;
+          const optimizedDescription = descRes?.optimizedDescription || product.description;
+          if (!optimizedTitle && !optimizedDescription) {
+            failed++;
+            continue;
+          }
+
+          const payload = {
+            title: optimizedTitle,
+            description: optimizedDescription,
+            optimizedAt: new Date().toISOString(),
+          };
+
+          await prisma.$executeRawUnsafe(
+            `UPDATE "FeedItem"
+             SET customfields = jsonb_set(
+               COALESCE(customfields, '{}'::jsonb),
+               '{optimized,gmc}',
+               $1::jsonb,
+               true
+             ),
+             updatedat = NOW()
+             WHERE id = $2::text`,
+            JSON.stringify(payload),
+            item.id
+          );
+          succeeded++;
+        } catch (itemErr) {
+          console.warn(`⚠️ Auto-optim item ${item.id} échoué :`, itemErr?.message || itemErr);
+          failed++;
+        }
+      }
+      console.log(`✨ Auto-optim (${reason}) feed ${feedId} : ${succeeded} optimisés, ${failed} erreurs (sur ${items.length}) → push GMC`);
+      scheduleAutoGmcPush(accountId, feedId, `${reason} → post-optim`, 0);
+    } catch (err) {
+      console.warn(`⚠️ Auto-optim (${reason}) échoué pour feed ${feedId} :`, err?.message || err);
+      // Fallback : push GMC quand même, mieux du brut que rien.
+      scheduleAutoGmcPush(accountId, feedId, `${reason} → fallback (optim KO)`, 0);
+    }
+  }, Math.max(0, delayMs));
+  if (typeof timer.unref === 'function') timer.unref();
+  autoOptimizationTimers.set(key, timer);
+}
+
 // Push produits vers Amazon SP-API (Listings Items API)
 app.post('/api/v1/platforms/amazon/push/:feedId', requireAuth, async (req, res) => {
   try {
@@ -16587,7 +16703,7 @@ app.post('/api/v1/embedded/sources/sync', authenticateJwtOrShopifySession, async
           feed.sourceId
         );
         console.log('✅ Embedded sync done for shop=' + feed.shop + ' accountid=' + accountId);
-        scheduleAutoGmcPush(accountId, feed.feedId, 'sync embedded');
+        scheduleAutoOptimization(accountId, feed.feedId, 'sync embedded');
         scheduleAutoLiaSync(accountId, 'sync embedded');
       } catch (asyncErr) {
         console.error('Embedded sync async error:', asyncErr?.message || asyncErr);
