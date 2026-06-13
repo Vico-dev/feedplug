@@ -5699,6 +5699,20 @@ function buildFluxRedirectUrl(appUrl, locale, params = {}) {
   return target.toString();
 }
 
+// Redirige une surface dashboard vers le `returnTo` stocké (ex. /fr/channels)
+// quand il est sûr, sinon retombe EXACTEMENT sur `fallbackBaseUrl` (comportement
+// historique : /flux pour GMC, /performance pour Google Ads). Sert à ramener
+// l'utilisateur sur la page d'où il a lancé la connexion.
+function buildSurfaceReturnRedirectUrl(appUrl, returnTo, fallbackBaseUrl, params = {}) {
+  const safe = normalizeDashboardReturnTo(returnTo, '');
+  const target = safe ? new URL(safe, appUrl) : new URL(fallbackBaseUrl);
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    target.searchParams.set(key, String(value));
+  }
+  return target.toString();
+}
+
 function normalizeEmbeddedReturnTo(value, fallback = '/embedded/channels') {
   const raw = String(value || '').trim();
   if (!raw || !raw.startsWith('/') || raw.startsWith('//') || !raw.startsWith('/embedded')) {
@@ -13011,7 +13025,9 @@ app.get('/api/v1/platforms/gmc/auth-url', authenticateJwtOrShopifySession, async
   ];
   const locale = normalizeAppLocale(req.query.locale);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /flux
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 
   // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
@@ -13140,7 +13156,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Compte FeedPlug manquant pour la connexion GMC.',
       }));
@@ -13205,7 +13221,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
       }));
@@ -13245,7 +13261,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         }));
       }
 
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'select',
         selection: selectionId,
       }));
@@ -13310,7 +13326,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
       gmc: 'connected',
       merchant: selectedMerchant.merchantId || '',
     }));
@@ -13473,7 +13489,9 @@ app.get('/api/v1/platforms/google-ads/auth-url', authenticateJwtOrShopifySession
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /performance
   const stateId = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
@@ -13533,7 +13551,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
           params: { google_ads: 'error', message: 'Configuration Google Ads manquante.' },
         }));
       }
-      return res.redirect(`${performanceRedirect}?error=config`);
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+        google_ads: 'error',
+        error: 'config',
+        message: 'Configuration Google Ads manquante.',
+      }));
     }
     const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
     const { tokens } = await oauth2Client.getToken(code);
@@ -13584,7 +13606,10 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(`${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+      google_ads: 'connected',
+      customer: customerId || '',
+    }));
   } catch (error) {
     console.error('Google Ads OAuth callback error:', error);
     if (stateData?.surface === 'embedded') {
@@ -13595,7 +13620,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         params: { google_ads: 'error', message: error.message || 'Connexion Google Ads impossible.' },
       }));
     }
-    res.redirect(`${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData?.returnTo, performanceRedirect, {
+      google_ads: 'error',
+      error: 'oauth_failed',
+      message: error.message || 'Connexion Google Ads impossible.',
+    }));
   }
 });
 
