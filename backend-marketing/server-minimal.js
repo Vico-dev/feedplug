@@ -6168,6 +6168,37 @@ function parseGmcMerchantOptions(accountsData) {
   return options;
 }
 
+// Enrichit chaque option Merchant Center avec son nom lisible. `accounts/authinfo`
+// ne renvoie que les IDs ; on appelle accounts.get par compte (best-effort, en
+// parallèle) pour récupérer le nom. Un client avec plusieurs GMC voit ainsi
+// "Nom (ID)" au lieu d'un ID nu et peut choisir le bon compte.
+async function enrichGmcMerchantNames(options, accessToken) {
+  if (!Array.isArray(options) || options.length === 0 || !accessToken) return options;
+  await Promise.all(
+    options.map(async (opt) => {
+      if (!opt || opt.merchantName || !opt.merchantId) return;
+      // Sous-compte d'un MCA : contexte d'appel = l'aggregator ; sinon le compte lui-même.
+      const ctx = opt.aggregatorId || opt.merchantId;
+      try {
+        const res = await fetch(
+          `https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(ctx)}/accounts/${encodeURIComponent(opt.merchantId)}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const name = String(data?.name || data?.displayName || '').trim();
+        if (name) {
+          opt.merchantName = name;
+          opt.label = `${name} (${opt.merchantId})`;
+        }
+      } catch {
+        // best-effort : on garde le fallback "Merchant Center {ID}" si l'appel échoue
+      }
+    })
+  );
+  return options;
+}
+
 async function revokeGoogleOAuthToken(token) {
   const value = String(token || '').trim();
   if (!value) return;
@@ -13568,6 +13599,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       if (accountsRes.ok) {
         const accountsData = await accountsRes.json();
         merchantOptions = parseGmcMerchantOptions(accountsData);
+        merchantOptions = await enrichGmcMerchantNames(merchantOptions, tokens.access_token);
         if (merchantOptions.length > 0) {
           merchantName = merchantOptions[0].merchantName || '';
         }
@@ -15689,7 +15721,16 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
       const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory);
       const googleProductCategory = (cf.google_product_category && String(cf.google_product_category).trim()) || DEFAULT_GMC_CATEGORY;
       const condition = normalizeConditionForGMC(item.condition || cf.condition);
-      const offerId = ((item.originid ?? item.originId) || item.id).toString().substring(0, 50);
+      // offerId GMC : doit être COURT (≤50) ET UNIQUE. Le champ originid contient
+      // parfois un libellé long (mauvais mapping source — ex. le titre 150 car.) :
+      //  - >50 car. → Google rejette "[id] Value too long" (3500+ produits perdus) ;
+      //  - tronqué à 50 → offerId dupliqués entre produits → GMC dédoublonne (écart
+      //    "X envoyés" vs "Y visibles dans GMC").
+      // On n'utilise originid que s'il est propre (≤50) ; sinon on retombe sur l'id
+      // FeedItem (UUID 36 car., unique et stable via upsert).
+      // TODO ingestion : originid devrait être un SKU / ID source, pas le titre.
+      const rawOriginId = (item.originid ?? item.originId ?? '').toString().trim();
+      const offerId = ((rawOriginId && rawOriginId.length <= 50) ? rawOriginId : item.id.toString()).substring(0, 50);
       return {
         batchId: idx,
         merchantId: merchantId,

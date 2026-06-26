@@ -89,14 +89,15 @@ Grille proposée (config-driven, surchargeable env, **à valider business**) :
 
 ---
 
-## B3 — Email : checklist OPS (pas de code) `[S]` — SPRINT 0
-`RESEND_API_KEY` est injecté en prod (Secret Manager). Risque résiduel = DNS/délivrabilité :
-- [ ] Domaine `feedplug.com` *verified* dans Resend
-- [ ] SPF présent
-- [ ] DKIM publié et validé
-- [ ] DMARC (`_dmarc`, `p=none` pour démarrer)
-- [ ] Secret `resend-api-key` peuplé dans Secret Manager
-- [ ] Test réel : reset password → inbox Gmail + Outlook (pas spam)
+## B3 — Email : checklist OPS (pas de code) `[S]` — VÉRIFIÉ le 2026-06-26
+Vérification DNS réelle (`dig`) + Secret Manager (`gcloud`) → **délivrabilité en bon état, NON bloquant** :
+- [x] Domaine `feedplug.com` *verified* dans Resend — confirmé indirectement (DKIM + Return-Path présents)
+- [x] DKIM publié & aligné — `resend._domainkey.feedplug.com` = clé RSA valide, `d=feedplug.com` (aligné From) → DMARC passe via DKIM
+- [x] Return-Path/bounce — `send.feedplug.com` : SPF `include:amazonses.com ~all` + MX `feedback-smtp.eu-west-1.amazonses.com` (Resend/SES eu-west-1) ✓
+- [x] Secret `resend-api-key` peuplé — 2 versions `enabled` dans Secret Manager (projet `feedplug-prod`)
+- [ ] **⚠️ À CORRIGER (DNS, mineur)** : le DMARC a un **espace en tête** → `" v=DMARC1; p=none;"`. Non conforme RFC 7489, certains récepteurs l'ignorent. Remplacer par `v=DMARC1; p=none; rua=mailto:dmarc@feedplug.com` (sans espace initial, + reporting). Plus tard : passer à `p=quarantine`.
+- [ ] **Reste manuel** : 1 test réel reset password → vérifier inbox Gmail + Outlook (non automatisable d'ici).
+- Note : le SPF racine est GoDaddy (`include:secureserver.net`) pour le courrier humain @feedplug.com ; sans impact sur Resend dont l'enveloppe est `send.feedplug.com`.
 
 ---
 
