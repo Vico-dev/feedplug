@@ -319,6 +319,15 @@ const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quo
 const { checkAiQuota, quotaMessage } = require('./lib/ai-caps');
 const { createNotification } = require('./lib/notifications');
 const { enqueueJob: enqueueBackgroundJob, configureJobs } = require('./lib/jobs');
+const { createJobHandlers } = require('./domains/jobs/handlers');
+
+// Instance de la factory de handlers de jobs (bloc 1 extrait dans
+// domains/jobs/handlers.js). Affectée plus bas, une fois que toutes les
+// constantes (AUTO_*_DEBOUNCE_MS, AUTO_OPTIM_BATCH_SIZE) et les fonctions
+// injectées (executeGmcPush, optimizeTitleWithAI, …) sont définies/hoistées.
+// Les wrappers locaux ci-dessous délèguent à cette instance ; ils ne sont
+// appelés qu'au runtime (post-boot), donc `jobHandlers` est déjà affectée.
+let jobHandlers = null;
 
 // ===== Jobs longs externalisés (Sprint 2, B-PROPER) =====
 // Types de jobs dispatchés via lib/jobs.js (Cloud Tasks en prod, fallback
@@ -333,22 +342,11 @@ const JOB_TYPES = {
 };
 
 // Routeur de jobs : appelé par le worker HTTP (/internal/jobs/run) ET par le
-// fallback in-process de lib/jobs.js. Les handlers `runAutoX` / `runIngestionJob`
-// sont des `async function` hoistées définies plus bas dans run().
+// fallback in-process de lib/jobs.js. Wrapper de signature inchangée délégant à
+// l'instance extraite (domains/jobs/handlers.js). `jobHandlers` est affectée
+// plus bas dans run() ; ce wrapper n'est invoqué qu'au runtime (post-boot).
 async function dispatchJob(type, payload) {
-  payload = payload || {};
-  switch (type) {
-    case JOB_TYPES.AUTO_GMC_PUSH:
-      return runAutoGmcPush(payload);
-    case JOB_TYPES.AUTO_OPTIMIZATION:
-      return runAutoOptimization(payload);
-    case JOB_TYPES.AUTO_LIA_SYNC:
-      return runAutoLiaSync(payload);
-    case JOB_TYPES.INGESTION_RUN:
-      return runIngestionJob(payload);
-    default:
-      throw new Error('[jobs] type de job inconnu: ' + type);
-  }
+  return jobHandlers.dispatchJob(type, payload);
 }
 
 // Branche le dispatch dans lib/jobs.js (utilisé par le fallback in-process).
@@ -14621,27 +14619,13 @@ async function executeLiaShopifySync(accountId) {
 // Sync LIA automatique (fire-and-forget, débouncée par compte) après les
 // ingestions Shopify. No-op si aucun emplacement n'est lié.
 const autoLiaSyncTimers = new Map();
-// Sprint 2 : signature publique inchangée. Délègue à enqueueJob.
+// Sprint 2 : signature publique inchangée. Bloc 1 extrait dans
+// domains/jobs/handlers.js ; wrappers de mêmes signatures délégant à jobHandlers.
 function scheduleAutoLiaSync(accountId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
-  if (!accountId) return;
-  enqueueBackgroundJob(
-    JOB_TYPES.AUTO_LIA_SYNC,
-    { accountId, reason },
-    { dedupKey: `${accountId}`, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_GMC_PUSH_DEBOUNCE_MS }
-  ).catch((err) => console.warn(`⚠️ enqueue auto_lia_sync échoué (${reason}):`, err?.message || err));
+  return jobHandlers.scheduleAutoLiaSync(accountId, reason, delayMs);
 }
-
-// Handler idempotent de la sync LIA. No-op si aucun emplacement lié.
-async function runAutoLiaSync({ accountId, reason }) {
-  if (!accountId) return;
-  try {
-    const result = await executeLiaShopifySync(accountId);
-    if (result.synced > 0) {
-      console.log(`🏬 Sync LIA auto (${reason}) : ${result.synced} lignes de stock sur ${result.stores} magasin(s)`);
-    }
-  } catch (err) {
-    console.warn(`⚠️ Sync LIA auto (${reason}) échouée pour account ${accountId}:`, err?.message || err);
-  }
+async function runAutoLiaSync(payload) {
+  return jobHandlers.runAutoLiaSync(payload);
 }
 
 // 10. Sync manuelle du stock POS → inventaire LIA.
@@ -15870,29 +15854,12 @@ async function resolveDefaultFeedIdForAccount(accountId) {
 // (Cloud Tasks en prod → dédup distribuée par nom de tâche ; fallback setTimeout
 // en dev). La `Map` autoGmcPushTimers reste utilisée par le fallback in-process
 // de lib/jobs.js (clé identique), donc le debounce par feed est préservé.
+// Bloc 1 extrait dans domains/jobs/handlers.js ; wrappers de signatures inchangées.
 function scheduleAutoGmcPush(accountId, feedId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
-  if (!accountId) return;
-  const dedupKey = `${accountId}:${feedId || 'default'}`;
-  enqueueBackgroundJob(
-    JOB_TYPES.AUTO_GMC_PUSH,
-    { accountId, feedId: feedId || null, reason },
-    { dedupKey, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_GMC_PUSH_DEBOUNCE_MS }
-  ).catch((err) => console.warn(`⚠️ enqueue auto_gmc_push échoué (${reason}):`, err?.message || err));
+  return jobHandlers.scheduleAutoGmcPush(accountId, feedId, reason, delayMs);
 }
-
-// Handler idempotent du push GMC auto. No-op si GMC non connecté ou pas de feed.
-async function runAutoGmcPush({ accountId, feedId, reason }) {
-  if (!accountId) return;
-  try {
-    const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
-    if (!conn || !conn.merchantid) return;
-    const targetFeedId = feedId || await resolveDefaultFeedIdForAccount(accountId);
-    if (!targetFeedId) return;
-    const result = await executeGmcPush({ accountId, userId: null, feedId: targetFeedId });
-    console.log(`🔄 Push GMC auto (${reason}) : feed ${targetFeedId} → ${result.succeeded} envoyés, ${result.failed} erreurs`);
-  } catch (err) {
-    console.warn(`⚠️ Push GMC auto (${reason}) échoué pour account ${accountId}:`, err?.message || err);
-  }
+async function runAutoGmcPush(payload) {
+  return jobHandlers.runAutoGmcPush(payload);
 }
 
 // Auto-optim IA après ingestion : sans ce hook, les FeedItems sont pushés
@@ -15906,135 +15873,38 @@ const autoOptimizationTimers = new Map();
 const AUTO_OPTIM_DEBOUNCE_MS = Number(process.env.AUTO_OPTIM_DEBOUNCE_MS || 15_000);
 const AUTO_OPTIM_BATCH_SIZE = Number(process.env.AUTO_OPTIM_BATCH_SIZE || 50);
 
-// Sprint 2 : signature publique inchangée. Délègue à enqueueJob.
+// ===== Instanciation de la factory de handlers de jobs (bloc 1) =====
+// À ce point, toutes les constantes (AUTO_*_DEBOUNCE_MS, AUTO_OPTIM_BATCH_SIZE)
+// et les fonctions injectées (hoistées) sont disponibles. `prisma` est injecté
+// via un getter pour préserver le late-binding (réassigné pendant le boot).
+jobHandlers = createJobHandlers({
+  getPrisma: () => prisma,
+  enqueueBackgroundJob,
+  JOB_TYPES,
+  AUTO_GMC_PUSH_DEBOUNCE_MS,
+  AUTO_OPTIM_DEBOUNCE_MS,
+  AUTO_OPTIM_BATCH_SIZE,
+  executeGmcPush,
+  executeLiaShopifySync,
+  getActivePlatformConnectionForPush,
+  resolveDefaultFeedIdForAccount,
+  getAccountAddonIA,
+  checkAiQuota,
+  optimizeTitleWithAI,
+  optimizeDescriptionWithAI,
+  trackAiUsage,
+  runIngestionJob,
+});
+
+// Bloc 1 extrait dans domains/jobs/handlers.js ; wrappers de signatures inchangées.
 function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTIM_DEBOUNCE_MS) {
-  if (!accountId) return;
-  // Pas de feedId connu = fallback direct sur push GMC (le push résoudra le
-  // default feed lui-même). On ne peut pas optimiser sans target feed.
-  if (!feedId) {
-    scheduleAutoGmcPush(accountId, feedId, reason);
-    return;
-  }
-  const dedupKey = `${accountId}:${feedId}`;
-  enqueueBackgroundJob(
-    JOB_TYPES.AUTO_OPTIMIZATION,
-    { accountId, feedId, reason },
-    { dedupKey, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_OPTIM_DEBOUNCE_MS }
-  ).catch((err) => console.warn(`⚠️ enqueue auto_optimization échoué (${reason}):`, err?.message || err));
+  return jobHandlers.scheduleAutoOptimization(accountId, feedId, reason, delayMs);
 }
 
-// Handler idempotent de l'auto-optimisation IA. Re-exécutable : ne ré-optimise
-// que les items sans customfields.optimized.gmc.title, puis push GMC.
-async function runAutoOptimization({ accountId, feedId, reason }) {
-  if (!accountId || !feedId) return;
-  {
-    try {
-      // B1 — pas d'auto-optimisation IA sans pack IA : on pousse le contenu brut.
-      const hasIA = await getAccountAddonIA(prisma, accountId);
-      if (!hasIA) {
-        scheduleAutoGmcPush(accountId, feedId, `${reason} → sans pack IA (push brut)`, 0);
-        return;
-      }
-      const items = await prisma.$queryRawUnsafe(`
-        SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
-               customfields, gtin, mpn, price, currency
-        FROM "FeedItem"
-        WHERE feedid = $1::text
-          AND (
-            customfields IS NULL
-            OR customfields->'optimized'->'gmc'->>'title' IS NULL
-            OR customfields->'optimized'->'gmc'->>'title' = ''
-          )
-        LIMIT ${AUTO_OPTIM_BATCH_SIZE}
-      `, feedId);
-
-      if (!items?.length) {
-        console.log(`✨ Auto-optim (${reason}) feed ${feedId} : aucun produit à optimiser → push direct`);
-        scheduleAutoGmcPush(accountId, feedId, `${reason} → push direct`, 0);
-        return;
-      }
-
-      // A3 — hard cap texte : au-delà du plafond, on n'appelle PAS Gemini pour
-      // l'auto-optimisation — on pousse le contenu brut (comme le chemin sans
-      // pack IA). 1 op = titre + description par produit (2 appels), mais on
-      // compte 1 op/produit pour rester cohérent avec trackAiUsage plus bas.
-      const autoQuota = await checkAiQuota(prisma, accountId, 'text', items.length);
-      if (!autoQuota.allowed) {
-        console.warn(`⚠️ Auto-optim (${reason}) feed ${feedId} : plafond IA texte atteint (${autoQuota.used}/${autoQuota.cap}) → push brut`);
-        scheduleAutoGmcPush(accountId, feedId, `${reason} → plafond IA atteint (push brut)`, 0);
-        return;
-      }
-
-      let succeeded = 0;
-      let failed = 0;
-      for (const item of items) {
-        try {
-          const cf = item.customfields && typeof item.customfields === 'object' ? item.customfields : {};
-          const product = {
-            id: item.id,
-            title: item.title || '',
-            description: item.descriptiontext || String(item.descriptionhtml || '').replace(/<[^>]+>/g, ' ').trim(),
-            brand: item.brand,
-            sku: item.sku,
-            gtin: item.gtin,
-            mpn: item.mpn,
-            price: item.price,
-            currency: item.currency,
-            customfields: cf,
-          };
-          const [titleRes, descRes] = await Promise.all([
-            optimizeTitleWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
-              console.warn(`⚠️ Auto-optim title ${item.id} :`, e?.message);
-              return null;
-            }),
-            optimizeDescriptionWithAI(prisma, product, { platform: 'GMC' }).catch((e) => {
-              console.warn(`⚠️ Auto-optim desc ${item.id} :`, e?.message);
-              return null;
-            }),
-          ]);
-
-          const optimizedTitle = titleRes?.optimizedTitle || product.title;
-          const optimizedDescription = descRes?.optimizedDescription || product.description;
-          if (!optimizedTitle && !optimizedDescription) {
-            failed++;
-            continue;
-          }
-
-          const payload = {
-            title: optimizedTitle,
-            description: optimizedDescription,
-            optimizedAt: new Date().toISOString(),
-          };
-
-          await prisma.$executeRawUnsafe(
-            `UPDATE "FeedItem"
-             SET customfields = jsonb_set(
-               COALESCE(customfields, '{}'::jsonb),
-               '{optimized,gmc}',
-               $1::jsonb,
-               true
-             ),
-             updatedat = NOW()
-             WHERE id = $2::text`,
-            JSON.stringify(payload),
-            item.id
-          );
-          succeeded++;
-        } catch (itemErr) {
-          console.warn(`⚠️ Auto-optim item ${item.id} échoué :`, itemErr?.message || itemErr);
-          failed++;
-        }
-      }
-      console.log(`✨ Auto-optim (${reason}) feed ${feedId} : ${succeeded} optimisés, ${failed} erreurs (sur ${items.length}) → push GMC`);
-      // B1 — comptage de la consommation IA (titre + description par produit optimisé).
-      trackAiUsage(accountId, succeeded);
-      scheduleAutoGmcPush(accountId, feedId, `${reason} → post-optim`, 0);
-    } catch (err) {
-      console.warn(`⚠️ Auto-optim (${reason}) échoué pour feed ${feedId} :`, err?.message || err);
-      // Fallback : push GMC quand même, mieux du brut que rien.
-      scheduleAutoGmcPush(accountId, feedId, `${reason} → fallback (optim KO)`, 0);
-    }
-  }
+// Handler idempotent de l'auto-optimisation IA (bloc 1 extrait dans
+// domains/jobs/handlers.js). Wrapper de signature inchangée délégant à jobHandlers.
+async function runAutoOptimization(payload) {
+  return jobHandlers.runAutoOptimization(payload);
 }
 
 // Push produits vers Amazon SP-API (Listings Items API)
