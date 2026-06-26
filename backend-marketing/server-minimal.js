@@ -316,16 +316,53 @@ const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const { createSharedAbuseProtection } = require('./lib/shared-abuse-store');
 const { assertColumnsExist, assertTableExists } = require('./lib/schema-guards');
 const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quota');
+const { checkAiQuota, quotaMessage } = require('./lib/ai-caps');
 const { createNotification } = require('./lib/notifications');
+const { enqueueJob: enqueueBackgroundJob, configureJobs } = require('./lib/jobs');
+
+// ===== Jobs longs externalisés (Sprint 2, B-PROPER) =====
+// Types de jobs dispatchés via lib/jobs.js (Cloud Tasks en prod, fallback
+// setTimeout en dev). Chaque handler `runAutoX` est IDEMPOTENT : ré-exécuter le
+// même job (retry Cloud Tasks, double-delivery) ne produit pas d'effet de bord
+// indésirable (les push GMC/optim/LIA sont des upserts/no-op si rien à faire).
+const JOB_TYPES = {
+  AUTO_GMC_PUSH: 'auto_gmc_push',
+  AUTO_OPTIMIZATION: 'auto_optimization',
+  AUTO_LIA_SYNC: 'auto_lia_sync',
+  INGESTION_RUN: 'ingestion_run',
+};
+
+// Routeur de jobs : appelé par le worker HTTP (/internal/jobs/run) ET par le
+// fallback in-process de lib/jobs.js. Les handlers `runAutoX` / `runIngestionJob`
+// sont des `async function` hoistées définies plus bas dans run().
+async function dispatchJob(type, payload) {
+  payload = payload || {};
+  switch (type) {
+    case JOB_TYPES.AUTO_GMC_PUSH:
+      return runAutoGmcPush(payload);
+    case JOB_TYPES.AUTO_OPTIMIZATION:
+      return runAutoOptimization(payload);
+    case JOB_TYPES.AUTO_LIA_SYNC:
+      return runAutoLiaSync(payload);
+    case JOB_TYPES.INGESTION_RUN:
+      return runIngestionJob(payload);
+    default:
+      throw new Error('[jobs] type de job inconnu: ' + type);
+  }
+}
+
+// Branche le dispatch dans lib/jobs.js (utilisé par le fallback in-process).
+configureJobs({ dispatch: dispatchJob });
 
 // Soft cap IA : enregistre la consommation et alerte (Sentry) à 80 % / 100 %.
 // Fire-and-forget — ne bloque jamais la réponse IA, ne lève jamais.
-function trackAiUsage(accountId, count = 1) {
+// `kind` : 'text' (défaut) ou 'image' — compteurs séparés depuis A2.
+function trackAiUsage(accountId, count = 1, kind = 'text') {
   if (!prismaReady || !prisma || !accountId) return;
-  recordAiUsage(prisma, accountId, count)
+  recordAiUsage(prisma, accountId, count, kind)
     .then((r) => {
       if (r && r.threshold) {
-        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence (${r.used}/${r.softCap}, période ${r.period}).`;
+        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence ${r.kind} (${r.used}/${r.softCap}, période ${r.period}).`;
         console.warn('⚠️  ' + msg);
         try {
           require('@sentry/node').captureMessage(msg, r.threshold >= 100 ? 'warning' : 'info');
@@ -402,6 +439,26 @@ const initPrisma = async () => {
     prismaReady = true;
     registerDeferredRoutesOnce();
     console.log('✅ Prisma connected successfully');
+    // B5 — sweeper de runs zombies : un kill de process (timeout/OOM Cloud Run)
+    // laisse des IngestionRun bloqués en RUNNING (le catch applicatif ne s'exécute
+    // pas). Au démarrage, on marque FAILED ceux trop anciens pour ne pas afficher
+    // une sync "en cours" éternelle. Fire-and-forget, tolérant aux erreurs.
+    (async () => {
+      try {
+        const staleMin = Number(process.env.STALE_RUN_TIMEOUT_MIN || 15);
+        const swept = await prismaClient.$executeRawUnsafe(`
+          UPDATE "IngestionRun"
+          SET status = 'FAILED',
+              finishedat = NOW(),
+              errormessage = COALESCE(errormessage, 'Run interrompu (timeout/redémarrage instance)')
+          WHERE status = 'RUNNING'
+            AND startedat < NOW() - ($1::int * INTERVAL '1 minute')
+        `, staleMin);
+        if (swept > 0) console.log(`🧹 ${swept} IngestionRun zombie(s) marqué(s) FAILED au démarrage`);
+      } catch (sweepErr) {
+        console.warn('⚠️  Sweeper IngestionRun:', sweepErr?.message);
+      }
+    })();
     return true;
   } catch (error) {
     console.error('⚠️  Prisma initialization error:', error.message);
@@ -1161,10 +1218,50 @@ function buildAuthUser(user, req) {
 
 function issueAuthTokens(user) {
   const payload = buildAuthPayload(user);
+  // jti distinct par token : permet la révocation explicite (logout) sans
+  // affecter les autres sessions du même utilisateur.
   return {
-    accessToken: jwt.sign(payload, EFFECTIVE_JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN }),
-    refreshToken: jwt.sign(payload, EFFECTIVE_JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN })
+    accessToken: jwt.sign({ ...payload, jti: crypto.randomUUID() }, EFFECTIVE_JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN }),
+    refreshToken: jwt.sign({ ...payload, jti: crypto.randomUUID() }, EFFECTIVE_JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN })
   };
+}
+
+/**
+ * Vérifie si un JWT déjà décodé doit être rejeté.
+ * Combine deux mécanismes :
+ *  - RevokedJti : révocation explicite (logout)
+ *  - User.passwordchangedat : tout token signé avant un changement de
+ *    mot de passe est rejeté (couvre password change / reset / accept-invitation)
+ */
+async function isTokenRevoked(decoded) {
+  if (!decoded || !prismaReady || !prisma) return false;
+  try {
+    if (decoded.jti) {
+      const revoked = await prisma.$queryRawUnsafe(
+        `SELECT 1 FROM "RevokedJti" WHERE jti = $1::text AND expiresat > NOW() LIMIT 1`,
+        decoded.jti
+      );
+      if (revoked && revoked.length > 0) return true;
+    }
+    if (decoded.id && typeof decoded.iat === 'number') {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT passwordchangedat FROM "User" WHERE id = $1::text LIMIT 1`,
+        decoded.id
+      );
+      const pca = rows?.[0]?.passwordchangedat;
+      if (pca) {
+        // iat est en secondes (RFC 7519), passwordchangedat en ms côté JS.
+        const pcaSec = Math.floor(new Date(pca).getTime() / 1000);
+        if (decoded.iat < pcaSec) return true;
+      }
+    }
+  } catch (err) {
+    // En cas d'erreur DB on est strict : on ne peut pas confirmer l'état,
+    // donc on rejette plutôt que d'autoriser un token potentiellement révoqué.
+    console.warn('isTokenRevoked error:', err?.message);
+    return true;
+  }
+  return false;
 }
 
 // Stripe webhook AVANT express.json() (nécessite body raw pour signature)
@@ -1261,10 +1358,18 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
           const planKey = accountRow?.[0]?.plan_key;
           if (accountId) {
             if (status === 'ACTIVE') {
+              // Pack IA bundlé dans les tiers (Option B) : on active/désactive
+              // l'add-on IA selon que le plan souscrit l'inclut (Business/Premium)
+              // ou non (Starter/Pro). Source de vérité : SHOPIFY_PLANS.includesAI.
+              const planForAddon = planKey
+                ? shopifyManagedPricing.getPlan(String(planKey).toLowerCase())
+                : null;
+              const addonIA = planForAddon?.includesAI === true;
               await prisma.$executeRawUnsafe(
-                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
+                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, addonia = $3::boolean, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
                 accountId,
-                planKey
+                planKey,
+                addonIA
               );
             } else if (status === 'CANCELLED' || status === 'EXPIRED' || status === 'FROZEN' || status === 'DECLINED') {
               await prisma.$executeRawUnsafe(
@@ -1398,6 +1503,9 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
+    if (await isTokenRevoked(user)) {
+      return res.status(401).json({ message: 'Token révoqué' });
+    }
     req.user = user;
     req.accountId = user.accountId;
     if (!req.accountId) {
@@ -1440,6 +1548,9 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
       // basculer sur Shopify (risque de routage cross-tenant si on tentait
       // l'auto-provisioning derrière).
       return res.status(403).json({ message: 'Compte non associé au token' });
+    }
+    if (await isTokenRevoked(user)) {
+      return res.status(401).json({ message: 'Token révoqué' });
     }
     req.user = user;
     req.accountId = user.accountId;
@@ -3680,6 +3791,30 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
     
     if (!feeds || feeds.length === 0) return res.status(404).json({ message: 'Feed non trouvé' });
     const feed = feeds[0];
+
+    // Sprint 2 (B-PROPER) — ingestion en background derrière un flag (défaut OFF
+    // pour ne rien changer au comportement existant). Si activé, on crée un
+    // IngestionRun PENDING, on enfile un job, et on répond 202 { ingestionRunId }.
+    // Le frontend doit alors poller GET /api/v1/ingestion/feeds/:id/runs (statut
+    // PENDING→RUNNING→SUCCESS/FAILED). Voir contrat dans ARCHITECTURE/rapport.
+    if (String(process.env.INGESTION_BACKGROUND || '').trim() === '1') {
+      const ingestionRunId = require('crypto').randomUUID();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "IngestionRun" (id, feedid, status, scheduledat) VALUES ($1::text, $2::text, 'PENDING', NOW())`,
+        ingestionRunId, feed.id
+      );
+      await enqueueBackgroundJob(
+        JOB_TYPES.INGESTION_RUN,
+        { feedId: feed.id, accountId: req.accountId, ingestionRunId },
+        { dedupKey: `ingest:${feed.id}`, dedupWindowMs: 5000 }
+      );
+      return res.status(202).json({
+        message: 'Ingestion programmée en arrière-plan',
+        ingestionRunId,
+        status: 'PENDING',
+        poll: `/api/v1/ingestion/feeds/${feed.id}/runs`,
+      });
+    }
     
     // Debug: afficher le mapping récupéré
     console.log('🔍 Feed récupéré pour ingestion:', {
@@ -3958,6 +4093,11 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
       }
     }
 
+    // B5 — catalogue au-delà du plafond d'ingestion synchrone : 413 explicite.
+    if (e?.statusCode === 413 || e?.code === 'INGEST_TOO_LARGE') {
+      return res.status(413).json({ code: 'INGEST_TOO_LARGE', message: errMsg });
+    }
+
     // Retourner le message d'erreur réel pour faciliter le debug (sans exposer de secrets)
     const safeDetail = errMsg
       .replace(/[a-zA-Z0-9._-]+@[^\s]+/g, '[email]') // masquer les emails
@@ -3966,6 +4106,34 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
       message: 'Erreur lors de la synchronisation',
       detail: safeDetail
     });
+  }
+});
+
+// Sprint 2 (B-PROPER) — polling du statut d'ingestion (background mode). Le
+// frontend appelle cet endpoint après un 202 pour suivre PENDING→RUNNING→
+// SUCCESS/FAILED. Filtré par compte (sécurité multi-tenant via verifyFeedAccess).
+app.get('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    const { id } = req.params;
+    if (!await verifyFeedAccess(id, req.accountId)) {
+      return res.status(403).json({ message: 'Accès refusé à ce flux' });
+    }
+    const limit = Math.min(parseInt(req.query.limit) || 5, 50);
+    const runs = await prisma.$queryRawUnsafe(
+      `SELECT id, status, scheduledat AS "scheduledAt", startedat AS "startedAt",
+              finishedat AS "finishedAt", totalfetched AS "totalFetched",
+              totalinserted AS "totalInserted", totalupdated AS "totalUpdated",
+              totalskipped AS "totalSkipped", errormessage AS "errorMessage"
+       FROM "IngestionRun" WHERE feedid = $1::text
+       ORDER BY COALESCE(startedat, scheduledat) DESC NULLS LAST
+       LIMIT $2::int`,
+      id, limit
+    );
+    return res.json({ runs: runs || [], latest: (runs && runs[0]) || null });
+  } catch (e) {
+    console.error('Get runs error:', e?.message || e);
+    return res.status(500).json({ message: 'Erreur lecture des runs' });
   }
 });
 
@@ -4764,6 +4932,192 @@ app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
   } catch (e) {
     console.error('Scheduled runs error:', e);
     res.status(500).json({ message: 'Erreur exécution programmée', error: e.message });
+  }
+});
+
+// ===== Worker de jobs internes (Sprint 2, B-PROPER) =====
+// Endpoint cible des Cloud Tasks. Authentifié par secret partagé (SCHEDULER_SECRET)
+// comparé en timing-safe, ou par token OIDC vérifié en amont par l'IAM Cloud Run
+// (ingress interne). Dispatche vers les handlers idempotents via dispatchJob().
+function timingSafeSecretEqual(a, b) {
+  const ba = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  if (ba.length !== bb.length) {
+    // Comparaison factice de longueur égale pour ne pas court-circuiter le timing.
+    try { crypto.timingSafeEqual(ba, Buffer.alloc(ba.length)); } catch (_) {}
+    return false;
+  }
+  try { return crypto.timingSafeEqual(ba, bb); } catch (_) { return false; }
+}
+
+// Construit l'objet feed (avec source) attendu par les modules d'ingestion,
+// à partir du seul feedId. Partagé par runIngestionJob.
+async function loadFeedForIngestion(feedId) {
+  const feeds = await prisma.$queryRawUnsafe(`
+    SELECT
+      f.id, f.name, f.sourceid,
+      COALESCE(f.mappingjson, '{}'::jsonb) as "mappingJson",
+      COALESCE(f.mappingjson, '{}'::jsonb) as "mappingjson",
+      json_build_object(
+        'id', s.id, 'name', s.name, 'connector', s.connector,
+        'configJson', s.configjson, 'configjson', s.configjson,
+        'credentialId', s.credentialid
+      ) as source
+    FROM "Feed" f JOIN "FeedSource" s ON f.sourceid = s.id
+    WHERE f.id = $1::text
+  `, feedId);
+  return feeds && feeds.length > 0 ? feeds[0] : null;
+}
+
+// Handler idempotent d'ingestion en background. Met à jour l'IngestionRun fourni
+// (créé en PENDING par le routeur). Réutilise les mêmes modules d'ingestion que
+// le chemin synchrone — pas de logique métier dupliquée côté écriture FeedItem.
+// Idempotence : le run est piloté par `ingestionRunId` ; ré-exécuter ré-importe
+// (upserts par (feedid, originid)), sans doublon produit.
+async function runIngestionJob({ feedId, accountId, ingestionRunId }) {
+  if (!prismaReady || !prisma) throw new Error('Prisma non disponible (runIngestionJob)');
+  if (!feedId) throw new Error('feedId requis (runIngestionJob)');
+  const nowIso = new Date().toISOString();
+  if (ingestionRunId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "IngestionRun" SET status = 'RUNNING', startedat = $1::timestamptz WHERE id = $2::text`,
+      nowIso, ingestionRunId
+    ).catch(() => {});
+  }
+  try {
+    const feed = await loadFeedForIngestion(feedId);
+    if (!feed) throw new Error('Feed introuvable: ' + feedId);
+    const sourceConfig = feed.source.configJson || feed.source.configjson || {};
+    const connector = feed.source.connector;
+    const feedObj = {
+      id: feed.id,
+      name: feed.name,
+      sourceId: feed.sourceid,
+      mappingJson: feed.mappingJson || feed.mappingjson || {},
+      mappingjson: feed.mappingJson || feed.mappingjson || {},
+    };
+    let result;
+
+    if (connector === 'SHOPIFY') {
+      const shop = sourceConfig.shop || sourceConfig.Shop;
+      const credentialId = feed.source.credentialId;
+      if (!credentialId || !shop) throw new Error('Source Shopify mal configurée');
+      const creds = await prisma.$queryRawUnsafe(`SELECT secretjson FROM "Credential" WHERE id = $1::text`, credentialId);
+      if (!creds || creds.length === 0) throw new Error('Credential Shopify introuvable');
+      const secretData = decryptObjectSecrets(typeof creds[0].secretjson === 'string' ? JSON.parse(creds[0].secretjson) : creds[0].secretjson);
+      const accessToken = secretData.accessToken || secretData.access_token;
+      if (!accessToken) throw new Error('Token Shopify manquant');
+      const normalizedShop = normalizeShopifyShop(shop);
+      if (!normalizedShop) throw new Error('Boutique Shopify invalide');
+      result = await ingestShopifyFromApi({ prisma, feed: feedObj, shop: normalizedShop, accessToken });
+    } else if (connector === 'PRESTASHOP') {
+      const shopUrl = sourceConfig.shopUrl || sourceConfig.shopurl || sourceConfig.baseUrl || sourceConfig.baseurl;
+      const apiKey = sourceConfig.apiKey || sourceConfig.apikey;
+      if (!shopUrl || !apiKey) throw new Error('Source PrestaShop mal configurée');
+      result = await ingestPrestashopFromApi({
+        prisma, feed: feedObj,
+        shopUrl: String(shopUrl).trim().replace(/\/+$/, ''),
+        apiKey: String(apiKey).trim(),
+      });
+    } else if (connector === 'CSV') {
+      let csvUrl = sourceConfig.csvUrl || sourceConfig.csvurl;
+      const gcsPath = sourceConfig.gcsPath || sourceConfig.gcspath;
+      let csvText = null;
+      if (gcsPath && gcsPath.startsWith('gs://')) {
+        const gcsMatch = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/);
+        if (gcsMatch) {
+          const [, gcsBucket, gcsFileName] = gcsMatch;
+          const [content] = await storage.bucket(gcsBucket).file(gcsFileName).download();
+          csvText = content.toString('utf-8');
+        }
+      }
+      if (!csvUrl && !csvText) throw new Error('csvUrl/gcsPath manquant');
+      result = await ingestCsvFromUrl({ prisma, feed: feedObj, csvUrl: csvText ? undefined : csvUrl, csvText });
+    } else {
+      throw new Error('Connecteur non supporté en background: ' + connector);
+    }
+
+    // Hooks post-ingestion (mêmes que le chemin synchrone, best-effort).
+    try {
+      const { applyRulesOnIngestion } = require('./rules/engine');
+      await applyRulesOnIngestion(prisma, feed.id, accountId, createRevision);
+    } catch (rulesErr) { console.warn('⚠️ Règles non appliquées (job):', rulesErr.message); }
+    try {
+      await applyEnrichmentSources(prisma, feed.id, accountId, storage);
+    } catch (enrichErr) { console.warn('⚠️ Enrichissement non appliqué (job):', enrichErr.message); }
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE "FeedSource" SET lastrunat = $1::timestamptz, updatedat = $1::timestamptz WHERE id = $2::text`,
+      nowIso, feed.sourceid
+    ).catch(() => {});
+
+    if (ingestionRunId) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "IngestionRun" SET status = 'SUCCESS', finishedat = $1::timestamptz,
+           totalfetched = $2::int, totalinserted = $3::int, totalupdated = $4::int
+         WHERE id = $5::text`,
+        new Date().toISOString(),
+        result?.totalFetched ?? 0, result?.totalInserted ?? 0, result?.totalUpdated ?? 0,
+        ingestionRunId
+      ).catch(() => {});
+    }
+
+    // Déclenchement des jobs aval (auto-optim/push/LIA) comme le chemin synchrone.
+    if (connector === 'SHOPIFY') {
+      scheduleAutoOptimization(accountId, feed.id, 'ingestion Shopify (job)');
+      scheduleAutoLiaSync(accountId, 'ingestion Shopify (job)');
+    } else {
+      scheduleAutoGmcPush(accountId, feed.id, `ingestion ${connector} (job)`);
+    }
+
+    // Email best-effort.
+    try {
+      const accountEmails = await getAccountEmails(accountId);
+      const stats = { totalFetched: result?.totalFetched ?? 0, totalInserted: result?.totalInserted ?? 0, totalUpdated: result?.totalUpdated ?? 0 };
+      for (const email of accountEmails.slice(0, 3)) {
+        sendSyncCompleteEmail(email, feed.name || `Flux ${String(feed.id).substring(0, 8)}`, stats).catch(() => {});
+      }
+    } catch (_) {}
+
+    return { ok: true, ...(result || {}) };
+  } catch (err) {
+    if (ingestionRunId) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "IngestionRun" SET status = 'FAILED', finishedat = $1::timestamptz, errormessage = $2::text WHERE id = $3::text`,
+        new Date().toISOString(), String(err?.message || err).substring(0, 500), ingestionRunId
+      ).catch(() => {});
+    }
+    throw err;
+  }
+}
+
+// Endpoint worker interne : reçoit { type, payload } depuis Cloud Tasks.
+app.post('/internal/jobs/run', express.json({ limit: '256kb' }), async (req, res) => {
+  const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string' ? process.env.SCHEDULER_SECRET.trim() : '';
+  // Auth : si un secret est configuré, on l'exige (timing-safe). Si OIDC est la
+  // seule auth (pas de secret), on accepte (l'IAM Cloud Run a déjà vérifié le token).
+  if (schedulerSecret) {
+    const hdr = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+    const raw = Array.isArray(hdr) ? hdr[0] : hdr;
+    const provided = typeof raw === 'string' ? raw.replace('Bearer ', '').trim() : '';
+    const oidcPresent = !!(req.headers['authorization'] && /^Bearer /i.test(String(req.headers['authorization'])) && !req.headers['x-scheduler-secret']);
+    if (!oidcPresent && !timingSafeSecretEqual(provided, schedulerSecret)) {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+  }
+  const { type, payload } = req.body || {};
+  if (!type || typeof type !== 'string') {
+    return res.status(400).json({ message: 'type requis' });
+  }
+  try {
+    const result = await dispatchJob(type, payload || {});
+    // 200 = succès, pas de retry Cloud Tasks. Les handlers no-op renvoient aussi 200.
+    return res.json({ ok: true, type, result: result || null });
+  } catch (err) {
+    console.error(`❌ [jobs] worker ${type} échoué:`, err?.message || err);
+    // 500 → Cloud Tasks retentera (backoff). Les handlers étant idempotents, le
+    // retry est sûr.
+    return res.status(500).json({ ok: false, type, error: err?.message || String(err) });
   }
 });
 
@@ -5624,6 +5978,13 @@ function parseJsonObject(value) {
   return typeof value === 'object' ? value : {};
 }
 
+// Parse le champ `customfields` d'un FeedItem (string JSON ou objet) en objet.
+// Alias historique attendu par le code destinations/activations (était appelé
+// sans être défini → ReferenceError → 500 sur GET .../destinations).
+function parseProductCustomFields(value) {
+  return parseJsonObject(value);
+}
+
 function decryptPlatformConnection(row) {
   if (!row || typeof row !== 'object') return row;
   return {
@@ -5692,6 +6053,20 @@ function buildLocalizedAppUrl(appUrl, locale, pathname) {
 
 function buildFluxRedirectUrl(appUrl, locale, params = {}) {
   const target = new URL(buildLocalizedAppUrl(appUrl, locale, '/flux'));
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    target.searchParams.set(key, String(value));
+  }
+  return target.toString();
+}
+
+// Redirige une surface dashboard vers le `returnTo` stocké (ex. /fr/channels)
+// quand il est sûr, sinon retombe EXACTEMENT sur `fallbackBaseUrl` (comportement
+// historique : /flux pour GMC, /performance pour Google Ads). Sert à ramener
+// l'utilisateur sur la page d'où il a lancé la connexion.
+function buildSurfaceReturnRedirectUrl(appUrl, returnTo, fallbackBaseUrl, params = {}) {
+  const safe = normalizeDashboardReturnTo(returnTo, '');
+  const target = safe ? new URL(safe, appUrl) : new URL(fallbackBaseUrl);
   for (const [key, value] of Object.entries(params || {})) {
     if (value === undefined || value === null || value === '') continue;
     target.searchParams.set(key, String(value));
@@ -5790,6 +6165,37 @@ function parseGmcMerchantOptions(accountsData) {
     });
   }
 
+  return options;
+}
+
+// Enrichit chaque option Merchant Center avec son nom lisible. `accounts/authinfo`
+// ne renvoie que les IDs ; on appelle accounts.get par compte (best-effort, en
+// parallèle) pour récupérer le nom. Un client avec plusieurs GMC voit ainsi
+// "Nom (ID)" au lieu d'un ID nu et peut choisir le bon compte.
+async function enrichGmcMerchantNames(options, accessToken) {
+  if (!Array.isArray(options) || options.length === 0 || !accessToken) return options;
+  await Promise.all(
+    options.map(async (opt) => {
+      if (!opt || opt.merchantName || !opt.merchantId) return;
+      // Sous-compte d'un MCA : contexte d'appel = l'aggregator ; sinon le compte lui-même.
+      const ctx = opt.aggregatorId || opt.merchantId;
+      try {
+        const res = await fetch(
+          `https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(ctx)}/accounts/${encodeURIComponent(opt.merchantId)}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const name = String(data?.name || data?.displayName || '').trim();
+        if (name) {
+          opt.merchantName = name;
+          opt.label = `${name} (${opt.merchantId})`;
+        }
+      } catch {
+        // best-effort : on garde le fallback "Merchant Center {ID}" si l'appel échoue
+      }
+    })
+  );
   return options;
 }
 
@@ -6352,8 +6758,12 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
 // Export feed as CSV (Google Merchant Center style)
 function escapeCsvCell(val) {
   if (val === null || val === undefined) return '""';
-  const s = String(val).replace(/"/g, '""');
-  if (/[",\n\r]/.test(s)) return `"${s}"`;
+  let s = String(val).replace(/"/g, '""');
+  // Neutralise l'injection de formule (Excel/Calc) : préfixe ' si la cellule
+  // commence par un caractère interprété comme formule.
+  if (s.length > 0 && '=+-@\t\r'.includes(s[0])) {
+    s = `'${s}`;
+  }
   return `"${s}"`;
 }
 
@@ -6945,10 +7355,13 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         prisma,
         items,
         destinationContext,
+        { prisma, accountId: req.accountId },
       );
       items = translatedItems;
       translationStats = stats;
-      if (!stats.skipped) {
+      if (stats.quotaExceeded) {
+        console.warn(`[market-translation] export ${platform} : plafond IA texte atteint → contenu source (pas de traduction)`);
+      } else if (!stats.skipped) {
         console.log(`[market-translation] export ${platform} → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
       }
     } catch (translationErr) {
@@ -10059,6 +10472,7 @@ registerAuthRoutes(app, {
   verifyTurnstileToken,
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  isTokenRevoked,
   jwtRefreshSecret: EFFECTIVE_JWT_REFRESH_SECRET,
   jwtVerifyOptions: JWT_VERIFY_OPTIONS,
 });
@@ -12617,8 +13031,14 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
     }
+    // A3 — hard cap texte avant les appels Gemini (1 op = 1 titre / produit).
+    const quota = await checkAiQuota(prisma, accountId, 'text', itemIds.length);
+    if (!quota.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quota), used: quota.used, cap: quota.cap, remaining: quota.remaining, requested: itemIds.length });
+    }
     const plat = platform ? String(platform).toUpperCase().replace(/GOOGLE/, 'GMC') : 'GMC';
     const result = {};
+    let aiCalls = 0;
     for (const itemId of itemIds) {
       const itemIdStr = String(itemId);
       const resolvedId = await resolveItemId(prisma, itemIdStr, accountId) || itemIdStr;
@@ -12643,6 +13063,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
       }
       const product = { ...item, customFields };
       try {
+        aiCalls++;
         const opt = await optimizeTitleWithAI(prisma, product, { platform: plat, forceRefresh: false });
         result[itemIdStr] = opt.optimizedTitle || item.title || '';
       } catch (err) {
@@ -12650,6 +13071,8 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
         result[itemIdStr] = item.title || '';
       }
     }
+    // B1 — comptage de la consommation IA (1 op = 1 titre généré).
+    if (aiCalls > 0) trackAiUsage(accountId, aiCalls);
     const hasAny = Object.values(result).some((v) => v && String(v).trim());
     if (!hasAny && itemIds.length > 0) {
       result._error = 'Aucun titre optimisé généré. Vérifiez que l\'IA est configurée (clé Gemini) ou réessayez.';
@@ -13011,7 +13434,9 @@ app.get('/api/v1/platforms/gmc/auth-url', authenticateJwtOrShopifySession, async
   ];
   const locale = normalizeAppLocale(req.query.locale);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /flux
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 
   // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
@@ -13140,7 +13565,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Compte FeedPlug manquant pour la connexion GMC.',
       }));
@@ -13174,6 +13599,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       if (accountsRes.ok) {
         const accountsData = await accountsRes.json();
         merchantOptions = parseGmcMerchantOptions(accountsData);
+        merchantOptions = await enrichGmcMerchantNames(merchantOptions, tokens.access_token);
         if (merchantOptions.length > 0) {
           merchantName = merchantOptions[0].merchantName || '';
         }
@@ -13205,7 +13631,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
       }));
@@ -13245,7 +13671,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         }));
       }
 
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'select',
         selection: selectionId,
       }));
@@ -13310,7 +13736,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
       gmc: 'connected',
       merchant: selectedMerchant.merchantId || '',
     }));
@@ -13473,7 +13899,9 @@ app.get('/api/v1/platforms/google-ads/auth-url', authenticateJwtOrShopifySession
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /performance
   const stateId = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
@@ -13533,7 +13961,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
           params: { google_ads: 'error', message: 'Configuration Google Ads manquante.' },
         }));
       }
-      return res.redirect(`${performanceRedirect}?error=config`);
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+        google_ads: 'error',
+        error: 'config',
+        message: 'Configuration Google Ads manquante.',
+      }));
     }
     const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
     const { tokens } = await oauth2Client.getToken(code);
@@ -13584,7 +14016,10 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(`${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+      google_ads: 'connected',
+      customer: customerId || '',
+    }));
   } catch (error) {
     console.error('Google Ads OAuth callback error:', error);
     if (stateData?.surface === 'embedded') {
@@ -13595,7 +14030,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         params: { google_ads: 'error', message: error.message || 'Connexion Google Ads impossible.' },
       }));
     }
-    res.redirect(`${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData?.returnTo, performanceRedirect, {
+      google_ads: 'error',
+      error: 'oauth_failed',
+      message: error.message || 'Connexion Google Ads impossible.',
+    }));
   }
 });
 
@@ -14182,23 +14621,27 @@ async function executeLiaShopifySync(accountId) {
 // Sync LIA automatique (fire-and-forget, débouncée par compte) après les
 // ingestions Shopify. No-op si aucun emplacement n'est lié.
 const autoLiaSyncTimers = new Map();
+// Sprint 2 : signature publique inchangée. Délègue à enqueueJob.
 function scheduleAutoLiaSync(accountId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
   if (!accountId) return;
-  const existing = autoLiaSyncTimers.get(accountId);
-  if (existing) clearTimeout(existing);
-  const timer = setTimeout(async () => {
-    autoLiaSyncTimers.delete(accountId);
-    try {
-      const result = await executeLiaShopifySync(accountId);
-      if (result.synced > 0) {
-        console.log(`🏬 Sync LIA auto (${reason}) : ${result.synced} lignes de stock sur ${result.stores} magasin(s)`);
-      }
-    } catch (err) {
-      console.warn(`⚠️ Sync LIA auto (${reason}) échouée pour account ${accountId}:`, err?.message || err);
+  enqueueBackgroundJob(
+    JOB_TYPES.AUTO_LIA_SYNC,
+    { accountId, reason },
+    { dedupKey: `${accountId}`, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_GMC_PUSH_DEBOUNCE_MS }
+  ).catch((err) => console.warn(`⚠️ enqueue auto_lia_sync échoué (${reason}):`, err?.message || err));
+}
+
+// Handler idempotent de la sync LIA. No-op si aucun emplacement lié.
+async function runAutoLiaSync({ accountId, reason }) {
+  if (!accountId) return;
+  try {
+    const result = await executeLiaShopifySync(accountId);
+    if (result.synced > 0) {
+      console.log(`🏬 Sync LIA auto (${reason}) : ${result.synced} lignes de stock sur ${result.stores} magasin(s)`);
     }
-  }, Math.max(0, delayMs));
-  if (typeof timer.unref === 'function') timer.unref();
-  autoLiaSyncTimers.set(accountId, timer);
+  } catch (err) {
+    console.warn(`⚠️ Sync LIA auto (${reason}) échouée pour account ${accountId}:`, err?.message || err);
+  }
 }
 
 // 10. Sync manuelle du stock POS → inventaire LIA.
@@ -14374,7 +14817,7 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
       const meta = stringifyEncryptedJson({ sellerId });
       if (existing && existing.length > 0) {
         await prisma.$executeRawUnsafe(`
-          UPDATE "PlatformConnection" SET merchantid = $1::text, accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
+          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
           tokenexpiry = $4::timestamptz, status = 'active', metadata = $5::jsonb, updatedat = NOW()
           WHERE accountid = $6::text AND platform = 'amazon'
         `, sellerId || null, encryptSecret(tokens.access_token), encryptSecret(tokens.refresh_token), expiry, meta, accountId);
@@ -14532,7 +14975,7 @@ app.post('/api/v1/platforms/amazon/connect', authenticateJwtOrShopifySession, as
       const meta = stringifyEncryptedJson({ sellerId: seller_id });
       if (existing && existing.length > 0) {
         await prisma.$executeRawUnsafe(`
-          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = $3::text,
+          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
           tokenexpiry = $4::timestamptz, status = 'active', metadata = $5::jsonb, updatedat = NOW()
           WHERE accountid = $6::text AND platform = 'amazon'
         `, seller_id || null, encryptSecret(tokens.access_token), encryptSecret(refresh_token), expiry, meta, req.accountId);
@@ -15035,9 +15478,11 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
   // Traduction par marché (v2) — best-effort.
   try {
     const { translateItemsForDestination } = require('./optimization/market-translation');
-    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext, { prisma, accountId });
     items = translated;
-    if (!stats.skipped) {
+    if (stats.quotaExceeded) {
+      console.warn('[market-translation] amazon push : plafond IA texte atteint → contenu source (pas de traduction)');
+    } else if (!stats.skipped) {
       console.log(`[market-translation] amazon push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
     }
   } catch (translationErr) {
@@ -15232,9 +15677,11 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
   // Traduction par marché (v2) — best-effort.
   try {
     const { translateItemsForDestination } = require('./optimization/market-translation');
-    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext, { prisma, accountId });
     items = translated;
-    if (!stats.skipped) {
+    if (stats.quotaExceeded) {
+      console.warn('[market-translation] gmc push : plafond IA texte atteint → contenu source (pas de traduction)');
+    } else if (!stats.skipped) {
       console.log(`[market-translation] gmc push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
     }
   } catch (translationErr) {
@@ -15274,7 +15721,16 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
       const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory);
       const googleProductCategory = (cf.google_product_category && String(cf.google_product_category).trim()) || DEFAULT_GMC_CATEGORY;
       const condition = normalizeConditionForGMC(item.condition || cf.condition);
-      const offerId = ((item.originid ?? item.originId) || item.id).toString().substring(0, 50);
+      // offerId GMC : doit être COURT (≤50) ET UNIQUE. Le champ originid contient
+      // parfois un libellé long (mauvais mapping source — ex. le titre 150 car.) :
+      //  - >50 car. → Google rejette "[id] Value too long" (3500+ produits perdus) ;
+      //  - tronqué à 50 → offerId dupliqués entre produits → GMC dédoublonne (écart
+      //    "X envoyés" vs "Y visibles dans GMC").
+      // On n'utilise originid que s'il est propre (≤50) ; sinon on retombe sur l'id
+      // FeedItem (UUID 36 car., unique et stable via upsert).
+      // TODO ingestion : originid devrait être un SKU / ID source, pas le titre.
+      const rawOriginId = (item.originid ?? item.originId ?? '').toString().trim();
+      const offerId = ((rawOriginId && rawOriginId.length <= 50) ? rawOriginId : item.id.toString()).substring(0, 50);
       return {
         batchId: idx,
         merchantId: merchantId,
@@ -15410,26 +15866,33 @@ async function resolveDefaultFeedIdForAccount(accountId) {
   return rows?.[0]?.id || null;
 }
 
+// Sprint 2 : signature publique inchangée (≈10 appelants). Délègue à enqueueJob
+// (Cloud Tasks en prod → dédup distribuée par nom de tâche ; fallback setTimeout
+// en dev). La `Map` autoGmcPushTimers reste utilisée par le fallback in-process
+// de lib/jobs.js (clé identique), donc le debounce par feed est préservé.
 function scheduleAutoGmcPush(accountId, feedId, reason, delayMs = AUTO_GMC_PUSH_DEBOUNCE_MS) {
   if (!accountId) return;
-  const key = `${accountId}:${feedId || 'default'}`;
-  const existing = autoGmcPushTimers.get(key);
-  if (existing) clearTimeout(existing);
-  const timer = setTimeout(async () => {
-    autoGmcPushTimers.delete(key);
-    try {
-      const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
-      if (!conn || !conn.merchantid) return;
-      const targetFeedId = feedId || await resolveDefaultFeedIdForAccount(accountId);
-      if (!targetFeedId) return;
-      const result = await executeGmcPush({ accountId, userId: null, feedId: targetFeedId });
-      console.log(`🔄 Push GMC auto (${reason}) : feed ${targetFeedId} → ${result.succeeded} envoyés, ${result.failed} erreurs`);
-    } catch (err) {
-      console.warn(`⚠️ Push GMC auto (${reason}) échoué pour account ${accountId}:`, err?.message || err);
-    }
-  }, Math.max(0, delayMs));
-  if (typeof timer.unref === 'function') timer.unref();
-  autoGmcPushTimers.set(key, timer);
+  const dedupKey = `${accountId}:${feedId || 'default'}`;
+  enqueueBackgroundJob(
+    JOB_TYPES.AUTO_GMC_PUSH,
+    { accountId, feedId: feedId || null, reason },
+    { dedupKey, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_GMC_PUSH_DEBOUNCE_MS }
+  ).catch((err) => console.warn(`⚠️ enqueue auto_gmc_push échoué (${reason}):`, err?.message || err));
+}
+
+// Handler idempotent du push GMC auto. No-op si GMC non connecté ou pas de feed.
+async function runAutoGmcPush({ accountId, feedId, reason }) {
+  if (!accountId) return;
+  try {
+    const conn = await getActivePlatformConnectionForPush(accountId, 'gmc');
+    if (!conn || !conn.merchantid) return;
+    const targetFeedId = feedId || await resolveDefaultFeedIdForAccount(accountId);
+    if (!targetFeedId) return;
+    const result = await executeGmcPush({ accountId, userId: null, feedId: targetFeedId });
+    console.log(`🔄 Push GMC auto (${reason}) : feed ${targetFeedId} → ${result.succeeded} envoyés, ${result.failed} erreurs`);
+  } catch (err) {
+    console.warn(`⚠️ Push GMC auto (${reason}) échoué pour account ${accountId}:`, err?.message || err);
+  }
 }
 
 // Auto-optim IA après ingestion : sans ce hook, les FeedItems sont pushés
@@ -15443,6 +15906,7 @@ const autoOptimizationTimers = new Map();
 const AUTO_OPTIM_DEBOUNCE_MS = Number(process.env.AUTO_OPTIM_DEBOUNCE_MS || 15_000);
 const AUTO_OPTIM_BATCH_SIZE = Number(process.env.AUTO_OPTIM_BATCH_SIZE || 50);
 
+// Sprint 2 : signature publique inchangée. Délègue à enqueueJob.
 function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTIM_DEBOUNCE_MS) {
   if (!accountId) return;
   // Pas de feedId connu = fallback direct sur push GMC (le push résoudra le
@@ -15451,12 +15915,26 @@ function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTI
     scheduleAutoGmcPush(accountId, feedId, reason);
     return;
   }
-  const key = `${accountId}:${feedId}`;
-  const existing = autoOptimizationTimers.get(key);
-  if (existing) clearTimeout(existing);
-  const timer = setTimeout(async () => {
-    autoOptimizationTimers.delete(key);
+  const dedupKey = `${accountId}:${feedId}`;
+  enqueueBackgroundJob(
+    JOB_TYPES.AUTO_OPTIMIZATION,
+    { accountId, feedId, reason },
+    { dedupKey, scheduleDelayMs: Math.max(0, delayMs), dedupWindowMs: AUTO_OPTIM_DEBOUNCE_MS }
+  ).catch((err) => console.warn(`⚠️ enqueue auto_optimization échoué (${reason}):`, err?.message || err));
+}
+
+// Handler idempotent de l'auto-optimisation IA. Re-exécutable : ne ré-optimise
+// que les items sans customfields.optimized.gmc.title, puis push GMC.
+async function runAutoOptimization({ accountId, feedId, reason }) {
+  if (!accountId || !feedId) return;
+  {
     try {
+      // B1 — pas d'auto-optimisation IA sans pack IA : on pousse le contenu brut.
+      const hasIA = await getAccountAddonIA(prisma, accountId);
+      if (!hasIA) {
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → sans pack IA (push brut)`, 0);
+        return;
+      }
       const items = await prisma.$queryRawUnsafe(`
         SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
                customfields, gtin, mpn, price, currency
@@ -15473,6 +15951,17 @@ function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTI
       if (!items?.length) {
         console.log(`✨ Auto-optim (${reason}) feed ${feedId} : aucun produit à optimiser → push direct`);
         scheduleAutoGmcPush(accountId, feedId, `${reason} → push direct`, 0);
+        return;
+      }
+
+      // A3 — hard cap texte : au-delà du plafond, on n'appelle PAS Gemini pour
+      // l'auto-optimisation — on pousse le contenu brut (comme le chemin sans
+      // pack IA). 1 op = titre + description par produit (2 appels), mais on
+      // compte 1 op/produit pour rester cohérent avec trackAiUsage plus bas.
+      const autoQuota = await checkAiQuota(prisma, accountId, 'text', items.length);
+      if (!autoQuota.allowed) {
+        console.warn(`⚠️ Auto-optim (${reason}) feed ${feedId} : plafond IA texte atteint (${autoQuota.used}/${autoQuota.cap}) → push brut`);
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → plafond IA atteint (push brut)`, 0);
         return;
       }
 
@@ -15537,15 +16026,15 @@ function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTI
         }
       }
       console.log(`✨ Auto-optim (${reason}) feed ${feedId} : ${succeeded} optimisés, ${failed} erreurs (sur ${items.length}) → push GMC`);
+      // B1 — comptage de la consommation IA (titre + description par produit optimisé).
+      trackAiUsage(accountId, succeeded);
       scheduleAutoGmcPush(accountId, feedId, `${reason} → post-optim`, 0);
     } catch (err) {
       console.warn(`⚠️ Auto-optim (${reason}) échoué pour feed ${feedId} :`, err?.message || err);
       // Fallback : push GMC quand même, mieux du brut que rien.
       scheduleAutoGmcPush(accountId, feedId, `${reason} → fallback (optim KO)`, 0);
     }
-  }, Math.max(0, delayMs));
-  if (typeof timer.unref === 'function') timer.unref();
-  autoOptimizationTimers.set(key, timer);
+  }
 }
 
 // Push produits vers Amazon SP-API (Listings Items API)
@@ -16403,9 +16892,14 @@ app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, a
       return res.status(503).json({ message: 'Service indisponible' });
     }
     const accountId = req.user.accountId;
-    const planHandle = String(req.body?.plan || '').trim().toLowerCase();
-    const plan = shopifyManagedPricing.getPlan(planHandle);
-    if (!plan) {
+    // `plan` est OPTIONNEL : Managed Pricing redirige de toute façon vers la
+    // page de sélection Shopify (pas de deep-link plan possible). On accepte
+    //  - sans plan : on ouvre juste la page de sélection (choix + approbation
+    //    en une seule fois côté Shopify) — pas de trace PENDING.
+    //  - avec plan : on valide le handle et on trace l'intention en DB.
+    const planHandleRaw = String(req.body?.plan || '').trim().toLowerCase();
+    const plan = planHandleRaw ? shopifyManagedPricing.getPlan(planHandleRaw) : null;
+    if (planHandleRaw && !plan) {
       return res.status(400).json({
         message: 'Plan inconnu. Valeurs valides : starter, pro, business, premium.',
       });
@@ -16420,34 +16914,36 @@ app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, a
 
     const confirmationUrl = shopifyManagedPricing.buildManagedPricingUrl({
       shop: credential.shop,
-      planHandle: plan.handle,
+      planHandle: plan ? plan.handle : undefined,
     });
 
-    // Trace la tentative en DB (status PENDING). Le subscription_id réel est
-    // attribué par Shopify lors de l'approbation et nous arrive via webhook
-    // app_subscriptions/update. Ici on stocke un id provisoire.
-    await shopifyBilling.upsertShopifySubscription({
-      prisma,
-      row: {
-        accountId,
-        shopDomain: credential.shop,
-        shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
-        planKey: plan.handle.toUpperCase(),
-        priceAmount: plan.priceEur,
-        currency: 'EUR',
-        interval: 'EVERY_30_DAYS',
-        status: 'PENDING',
-        trialDays: plan.trialDays || 0,
-        confirmationUrl,
-        returnUrl: null,
-        testMode: process.env.NODE_ENV !== 'production',
-      },
-    });
+    // Trace la tentative en DB (status PENDING) uniquement si un plan précis a
+    // été cliqué. Le subscription_id réel est attribué par Shopify lors de
+    // l'approbation et nous arrive via webhook app_subscriptions/update.
+    if (plan) {
+      await shopifyBilling.upsertShopifySubscription({
+        prisma,
+        row: {
+          accountId,
+          shopDomain: credential.shop,
+          shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
+          planKey: plan.handle.toUpperCase(),
+          priceAmount: plan.priceEur,
+          currency: 'EUR',
+          interval: 'EVERY_30_DAYS',
+          status: 'PENDING',
+          trialDays: plan.trialDays || 0,
+          confirmationUrl,
+          returnUrl: null,
+          testMode: process.env.NODE_ENV !== 'production',
+        },
+      });
+    }
 
     return res.json({
       confirmationUrl,
-      plan: plan.handle,
-      priceEur: plan.priceEur,
+      plan: plan ? plan.handle : null,
+      priceEur: plan ? plan.priceEur : null,
     });
   } catch (err) {
     console.error('Shopify managed pricing subscribe error:', err);
@@ -16932,6 +17428,13 @@ app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, 
       return res.status(503).json({ message: 'Service indisponible' });
     }
     const accountId = req.user.accountId;
+
+    // B1 — Gate add-on IA : aucune génération Gemini sans le pack IA souscrit.
+    const iaAccess = await canUseFeature(prisma, accountId, 'addonIA');
+    if (!iaAccess.allowed) {
+      return res.status(403).json({ code: 'PLAN_FEATURE', message: iaAccess.message });
+    }
+
     const { productIds, platforms } = req.body || {};
 
     const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'tiktok', 'pinterest'];
@@ -16974,6 +17477,15 @@ app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, 
     }
 
     const totalOperations = items.length * requestedPlatforms.length;
+
+    // A3 — hard cap texte AVANT de lancer le worker async (1 op = titre + description / produit / canal).
+    const quota = await checkAiQuota(prisma, accountId, 'text', totalOperations);
+    if (!quota.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quota), used: quota.used, cap: quota.cap, remaining: quota.remaining, requested: totalOperations });
+    }
+
+    // B1 — comptage de la consommation IA (1 op = titre + description / produit / canal).
+    trackAiUsage(accountId, totalOperations);
 
     res.status(202).json({
       accepted: true,

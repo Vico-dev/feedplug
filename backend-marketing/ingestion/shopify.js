@@ -514,6 +514,15 @@ async function ingestShopifyFromApi({ prisma, feed, shop, accessToken }) {
     const shopifyProducts = await fetchAllShopifyProducts({ shop, accessToken });
     console.log(`📦 ${shopifyProducts.length} produits/variants récupérés de Shopify`);
 
+    // B5 — plafond d'ingestion synchrone (cf. PLAN_REMEDIATION_BLOQUANTS.md).
+    const MAX_INGEST_PRODUCTS = Number(process.env.MAX_INGEST_PRODUCTS || 5000);
+    if (shopifyProducts.length > MAX_INGEST_PRODUCTS) {
+      const err = new Error(`Catalogue Shopify trop volumineux pour l'import synchrone : ${shopifyProducts.length} produits/variants (max ${MAX_INGEST_PRODUCTS}). Contactez-nous pour activer l'import par lots.`);
+      err.statusCode = 413;
+      err.code = 'INGEST_TOO_LARGE';
+      throw err;
+    }
+
     const items = shopifyProducts.map((product) => shopifyProductToFeedItem(product, shop));
     const existingRows = await prisma.feedItem.findMany({
       where: { feedId: feed.id },

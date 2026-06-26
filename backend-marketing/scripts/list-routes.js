@@ -44,5 +44,18 @@ function collectRoutes(stack, prefix) {
 }
 
 const routes = [...new Set(collectRoutes(app._router.stack, ''))].sort();
-process.stdout.write(JSON.stringify(routes, null, 2) + '\n');
+// Écriture synchrone obligatoire : process.exit() tue le process avant que le
+// pipe stdout ne soit flushé au-delà de 8 Ko (sortie tronquée côté test).
+// Sur un pipe non-bloquant, writeSync peut écrire partiellement (8192 octets)
+// ou lever EAGAIN : on boucle jusqu'à avoir tout écrit.
+const fsSync = require('node:fs');
+const outBuf = Buffer.from(JSON.stringify(routes, null, 2) + '\n');
+let written = 0;
+while (written < outBuf.length) {
+  try {
+    written += fsSync.writeSync(process.stdout.fd, outBuf, written, outBuf.length - written);
+  } catch (err) {
+    if (err.code !== 'EAGAIN') throw err;
+  }
+}
 process.exit(0);

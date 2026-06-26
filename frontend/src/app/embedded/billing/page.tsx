@@ -28,7 +28,7 @@ const CancelSubscriptionModal = dynamic(
     ),
   { ssr: false }
 );
-import { SHOPIFY_PLANS, type ShopifyPlanHandle } from "./_shopify-plans";
+import { SHOPIFY_PLANS } from "./_shopify-plans";
 import { useEmbeddedFetch } from "../_components/use-embedded-fetch";
 import { useEmbeddedLocale, useEmbeddedT } from "../_locale";
 
@@ -105,7 +105,7 @@ export default function EmbeddedBillingPage() {
 
   const [loading, setLoading] = useState(true);
   const [currentSub, setCurrentSub] = useState<CurrentSub | null>(null);
-  const [submitting, setSubmitting] = useState<ShopifyPlanHandle | null>(null);
+  const [openingPricing, setOpeningPricing] = useState(false);
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -150,12 +150,16 @@ export default function EmbeddedBillingPage() {
     void refetchCurrent();
   }, [refetchCurrent]);
 
-  const handleSubscribe = async (planHandle: ShopifyPlanHandle) => {
-    setSubmitting(planHandle);
+  // Managed Pricing ne supporte pas le deep-link vers un plan précis : on
+  // ouvre la page de sélection Shopify où le merchant choisit ET approuve en
+  // une seule fois. Les cartes affichées ici servent uniquement à comparer —
+  // pas de double choix.
+  const handleOpenPricing = async () => {
+    setOpeningPricing(true);
     try {
       const response = await fetchApi("/billing/shopify/subscribe", {
         method: "POST",
-        body: JSON.stringify({ plan: planHandle }),
+        body: JSON.stringify({}),
       });
       if (response.status === 409) {
         const body = await response.json().catch(() => null);
@@ -186,7 +190,7 @@ export default function EmbeddedBillingPage() {
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Erreur réseau", true);
     } finally {
-      setSubmitting(null);
+      setOpeningPricing(false);
     }
   };
 
@@ -314,7 +318,10 @@ export default function EmbeddedBillingPage() {
     );
   }
 
-  // === Grille de 4 plans (pas de sub) ===
+  // === Pas de sub : comparaison des plans + UN seul CTA vers Shopify ===
+  // Managed Pricing impose que le choix + l'approbation se fassent sur la page
+  // Shopify. Les cartes ci-dessous ne sont donc PAS cliquables (pas de double
+  // choix) : elles servent à comparer, puis un unique CTA ouvre Shopify.
   return (
     <Page
       backAction={{ content: t("billing.backToHome"), url: "/embedded" }}
@@ -323,9 +330,23 @@ export default function EmbeddedBillingPage() {
       <TitleBar title={t("billing.titleBar")} />
       <Layout>
         <Layout.Section>
-          <Text variant="bodyMd" as="p" tone="subdued">
-            {t("billing.intro")}
-          </Text>
+          <Card>
+            <BlockStack gap="300">
+              <Text variant="bodyMd" as="p" tone="subdued">
+                {t("billing.compareHint")}
+              </Text>
+              <InlineStack align="start">
+                <Button
+                  variant="primary"
+                  size="large"
+                  loading={openingPricing}
+                  onClick={() => handleOpenPricing()}
+                >
+                  {t("billing.compareCta")}
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Card>
         </Layout.Section>
 
         {SHOPIFY_PLANS.map((plan) => (
@@ -365,20 +386,7 @@ export default function EmbeddedBillingPage() {
                   ))}
                 </List>
 
-                <Box paddingBlockStart="200">
-                  <Button
-                    variant={plan.recommended ? "primary" : "secondary"}
-                    size="large"
-                    fullWidth
-                    loading={submitting === plan.handle}
-                    disabled={submitting !== null && submitting !== plan.handle}
-                    onClick={() => handleSubscribe(plan.handle)}
-                  >
-                    {t("billing.choose", { plan: plan.name })}
-                  </Button>
-                </Box>
-
-                <Text variant="bodySm" as="p" tone="subdued" alignment="center">
+                <Text variant="bodySm" as="p" tone="subdued">
                   {t("billing.trialFooter", { trialDays: plan.trialDays })}
                 </Text>
               </BlockStack>

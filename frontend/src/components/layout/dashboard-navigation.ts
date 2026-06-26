@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   Package,
+  Radio,
   Settings,
   Sliders,
   Sparkles,
@@ -30,27 +31,38 @@ export type DashboardNavigationItem = {
   icon: ComponentType<{ className?: string; style?: CSSProperties }>;
   badge?: string;
   adminOnly?: boolean;
-  section: "workspace" | "admin";
+  group: "overview" | "data" | "preparation" | "diffusion" | "analysis" | "account" | "admin";
   description: string;
 };
 
+// Ordre = parcours réel : je connecte → je prépare → je diffuse → je mesure.
+// Phase 1 (regroupement) : toutes les entrées restent joignables, organisées en
+// sections. Phase 2 (fusions) : Flux→Catalogue, Rapports/Scoring→Analyse,
+// Canaux dissous (activation→Marchés, connexion→Compte). Voir mémoire feedplug-sidebar-ia.
 export const dashboardNavigation: DashboardNavigationItem[] = [
-  { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, section: "workspace", description: "Vue d'ensemble de l'activite du compte." },
-  { nameKey: "sources", href: "/sources", icon: Database, section: "workspace", description: "Connexions, imports et qualite des donnees source." },
-  { nameKey: "catalogue", href: "/catalogue", icon: Package, section: "workspace", description: "Pilotage du catalogue produit et actions en masse." },
-  { nameKey: "markets", href: "/markets", icon: Globe2, section: "workspace", description: "Ouverture de nouveaux marches, langues et canaux depuis une configuration unique." },
-  { nameKey: "flux", href: "/flux", icon: FileText, badge: "3", section: "workspace", description: "Parametrage et suivi des flux de diffusion." },
-  { nameKey: "optimiser", href: "/optimiser", icon: Filter, section: "workspace", description: "Priorisation des correctifs et opportunites de gain." },
-  { nameKey: "rapports", href: "/rapports", icon: TrendingUp, section: "workspace", description: "Lecture des performances et des tendances." },
-  { nameKey: "performance", href: "/performance", icon: BarChart3, section: "workspace", description: "Mesures detaillees par canal et par flux." },
-  { nameKey: "scoringChannels", href: "/scoring-canaux", icon: Sliders, section: "workspace", description: "Comparaison des scores de diffusion par canal." },
-  { nameKey: "notifications", href: "/notifications", icon: Bell, badge: "3", section: "workspace", description: "Alertes produit, diffusion et systeme." },
-  { nameKey: "billing", href: "/facturation", icon: CreditCard, section: "workspace", description: "Abonnement, factures et statut de paiement." },
-  { nameKey: "accounts", href: "/admin/accounts", icon: Building2, adminOnly: true, section: "admin", description: "Administration des comptes clients." },
-  { nameKey: "leads", href: "/admin/leads", icon: Users, adminOnly: true, section: "admin", description: "Suivi commercial et qualification des leads." },
-  { nameKey: "featureIdeas", href: "/admin/feature-ideas", icon: Lightbulb, adminOnly: true, section: "admin", description: "Backlog des idees et demandes produit." },
-  { nameKey: "aiKeys", href: "/admin/ai-keys", icon: Key, adminOnly: true, section: "admin", description: "Gestion des cles et fournisseurs IA." },
-  { nameKey: "settings", href: "/parametres", icon: Settings, section: "workspace", description: "Preferences du compte et configuration generale." },
+  { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, group: "overview", description: "Vue d'ensemble de l'activite du compte." },
+
+  { nameKey: "sources", href: "/sources", icon: Database, group: "data", description: "Connexions, imports et qualite des donnees source." },
+  { nameKey: "catalogue", href: "/catalogue", icon: Package, group: "data", description: "Pilotage du catalogue produit et actions en masse." },
+  { nameKey: "flux", href: "/flux", icon: FileText, badge: "3", group: "data", description: "Parametrage et suivi des flux de diffusion." },
+
+  { nameKey: "optimiser", href: "/optimiser", icon: Filter, group: "preparation", description: "Priorisation des correctifs et opportunites de gain." },
+
+  { nameKey: "markets", href: "/markets", icon: Globe2, group: "diffusion", description: "Marches, langues et activation des canaux (traduction FeedPlug par marche)." },
+  { nameKey: "channels", href: "/channels", icon: Radio, group: "diffusion", description: "Connexion des destinations marketing (Google Merchant Center, Amazon, Google Ads, Bing)." },
+
+  { nameKey: "performance", href: "/performance", icon: BarChart3, group: "analysis", description: "Mesures detaillees par canal et par flux." },
+  { nameKey: "rapports", href: "/rapports", icon: TrendingUp, group: "analysis", description: "Lecture des performances et des tendances." },
+  { nameKey: "scoringChannels", href: "/scoring-canaux", icon: Sliders, group: "analysis", description: "Comparaison des scores de diffusion par canal." },
+
+  { nameKey: "billing", href: "/facturation", icon: CreditCard, group: "account", description: "Abonnement, factures et statut de paiement." },
+  { nameKey: "notifications", href: "/notifications", icon: Bell, badge: "3", group: "account", description: "Alertes produit, diffusion et systeme." },
+  { nameKey: "settings", href: "/parametres", icon: Settings, group: "account", description: "Preferences du compte et configuration generale." },
+
+  { nameKey: "accounts", href: "/admin/accounts", icon: Building2, adminOnly: true, group: "admin", description: "Administration des comptes clients." },
+  { nameKey: "leads", href: "/admin/leads", icon: Users, adminOnly: true, group: "admin", description: "Suivi commercial et qualification des leads." },
+  { nameKey: "featureIdeas", href: "/admin/feature-ideas", icon: Lightbulb, adminOnly: true, group: "admin", description: "Backlog des idees et demandes produit." },
+  { nameKey: "aiKeys", href: "/admin/ai-keys", icon: Key, adminOnly: true, group: "admin", description: "Gestion des cles et fournisseurs IA." },
 ];
 
 export function getDashboardNavigation(isStaff: boolean | undefined, t: Translate) {

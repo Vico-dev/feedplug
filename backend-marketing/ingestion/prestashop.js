@@ -484,10 +484,36 @@ async function ingestPrestashopFromApi({ prisma, feed, shopUrl, apiKey }) {
     const prestashopContext = await buildPrestashopContext({ baseUrl: shopUrl, apiKey, products });
     console.log(`📦 ${products.length} produit(s) récupéré(s) depuis Prestashop`);
 
+    // B5 — plafond d'ingestion synchrone (cf. PLAN_REMEDIATION_BLOQUANTS.md).
+    const MAX_INGEST_PRODUCTS = Number(process.env.MAX_INGEST_PRODUCTS || 5000);
+    if (products.length > MAX_INGEST_PRODUCTS) {
+      const err = new Error(`Catalogue PrestaShop trop volumineux pour l'import synchrone : ${products.length} produits (max ${MAX_INGEST_PRODUCTS}). Contactez-nous pour activer l'import par lots.`);
+      err.statusCode = 413;
+      err.code = 'INGEST_TOO_LARGE';
+      throw err;
+    }
+
     let totalInserted = 0;
     let totalUpdated = 0;
     let totalSkipped = 0;
     let totalDeleted = 0;
+
+    // Sprint 2 (B-PROPER) — fix N+1 : préchargement en UNE requête des lignes
+    // existantes de ce feed (indexées par originid), au lieu d'un SELECT par
+    // produit dans la boucle. Lookup O(1) en mémoire ensuite.
+    const existingByOriginId = new Map();
+    try {
+      const preRows = await prisma.$queryRawUnsafe(
+        `SELECT id, contenthash, customfields, originid FROM "FeedItem" WHERE feedid = $1::text`,
+        feed.id
+      );
+      for (const row of preRows || []) {
+        if (row && row.originid != null) existingByOriginId.set(String(row.originid), row);
+      }
+      console.log(`📦 Préchargement Prestashop: ${existingByOriginId.size} produit(s) existant(s) (1 requête, N+1 supprimé)`);
+    } catch (preErr) {
+      console.warn('⚠️ Préchargement existants Prestashop échoué, fallback SELECT par produit:', preErr.message);
+    }
 
     for (const rawProduct of products) {
       try {
@@ -506,13 +532,18 @@ async function ingestPrestashopFromApi({ prisma, feed, shopUrl, apiKey }) {
           console.warn('⚠️ Enrichissement auto Prestashop ignoré:', enrichmentError.message);
         }
 
-        const existingRows = await prisma.$queryRawUnsafe(`
-          SELECT id, contenthash, customfields
-          FROM "FeedItem"
-          WHERE feedid = $1::text AND originid = $2::text
-          LIMIT 1
-        `, feed.id, item.originId);
-        const existing = existingRows?.[0] || null;
+        // Sprint 2 : lookup O(1) sur le préchargement ; fallback SELECT unitaire
+        // seulement si le préchargement a échoué (Map vide).
+        let existing = existingByOriginId.get(String(item.originId)) || null;
+        if (!existing && existingByOriginId.size === 0) {
+          const existingRows = await prisma.$queryRawUnsafe(`
+            SELECT id, contenthash, customfields
+            FROM "FeedItem"
+            WHERE feedid = $1::text AND originid = $2::text
+            LIMIT 1
+          `, feed.id, item.originId);
+          existing = existingRows?.[0] || null;
+        }
         const itemNow = new Date().toISOString();
         const priceValue = item.price != null ? Number(item.price) : null;
         const customFieldsJson = JSON.stringify(finalCustomFields || {});

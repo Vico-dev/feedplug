@@ -50,6 +50,16 @@ type FeedUrlPayload = {
   stores: number;
 };
 
+type ShopifyLocation = {
+  id: string;
+  name: string;
+  address: string;
+  fulfillsOnlineOrders: boolean;
+  storeCode: string | null;
+};
+
+type ShopifyLocationsState = "loading" | "ready" | "scope-missing" | "unavailable";
+
 const CSV_TEMPLATE = `storeCode,offerId,quantity,availability,price,salePrice,pickupMethod,pickupSla
 STORE_PARIS_01,SKU-001,12,in stock,49.90,,buy,same day
 STORE_PARIS_01,SKU-002,0,out of stock,,,reserve,next day
@@ -192,6 +202,11 @@ export default function EmbeddedLiaPage() {
   const [uploading, setUploading] = useState(false);
   const [storeForm, setStoreForm] = useState({ storeCode: "", name: "", address: "" });
   const [savingStore, setSavingStore] = useState(false);
+  const [shopifyLocations, setShopifyLocations] = useState<ShopifyLocation[]>([]);
+  const [locationsState, setLocationsState] = useState<ShopifyLocationsState>("loading");
+  const [locationCodes, setLocationCodes] = useState<Record<string, string>>({});
+  const [linkingLocationId, setLinkingLocationId] = useState<string | null>(null);
+  const [posSyncing, setPosSyncing] = useState(false);
 
   const knownStoreCodes = useMemo(() => new Set(stores.map((s) => s.storeCode)), [stores]);
 
@@ -237,6 +252,102 @@ export default function EmbeddedLiaPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  const loadShopifyLocations = useCallback(async () => {
+    setLocationsState("loading");
+    try {
+      const res = await fetchApi("/platforms/lia/shopify/locations");
+      if (res.ok) {
+        const body = (await res.json()) as { locations: ShopifyLocation[] };
+        setShopifyLocations(body.locations || []);
+        setLocationCodes(
+          Object.fromEntries((body.locations || []).filter((l) => l.storeCode).map((l) => [l.id, l.storeCode as string]))
+        );
+        setLocationsState("ready");
+        return;
+      }
+      const body = await res.json().catch(() => null);
+      if (res.status === 403 && body?.code === "SCOPE_MISSING") {
+        setLocationsState("scope-missing");
+      } else {
+        setLocationsState("unavailable");
+      }
+    } catch {
+      setLocationsState("unavailable");
+    }
+  }, [fetchApi]);
+
+  useEffect(() => {
+    void loadShopifyLocations();
+  }, [loadShopifyLocations]);
+
+  const handleRequestScopes = async () => {
+    try {
+      const scopesApi = (shopify as unknown as { scopes?: { request: (s: string[]) => Promise<{ result: string }> } }).scopes;
+      if (!scopesApi) {
+        toast("Mise à jour des autorisations indisponible. Réinstallez l'application si le problème persiste.", true);
+        return;
+      }
+      const response = await scopesApi.request(["read_locations", "read_inventory"]);
+      if (response?.result === "declined-all") {
+        toast("Autorisations refusées. Le stock POS ne peut pas être synchronisé sans ces accès.", true);
+        return;
+      }
+      toast("Autorisations accordées.");
+      await loadShopifyLocations();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Impossible de demander les autorisations.", true);
+    }
+  };
+
+  const handleLinkLocation = async (location: ShopifyLocation) => {
+    const storeCode = (locationCodes[location.id] ?? location.storeCode ?? "").trim();
+    if (!storeCode) return;
+    setLinkingLocationId(location.id);
+    try {
+      const res = await fetchApi("/platforms/lia/shopify/locations/link", {
+        method: "POST",
+        body: JSON.stringify({
+          locationId: location.id,
+          storeCode,
+          name: location.name,
+          address: location.address,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast(body?.message || `Erreur ${res.status}`, true);
+        return;
+      }
+      toast(`Emplacement « ${location.name} » lié au magasin ${storeCode}.`);
+      await Promise.all([loadShopifyLocations(), loadAll()]);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+    } finally {
+      setLinkingLocationId(null);
+    }
+  };
+
+  const handlePosSync = async () => {
+    setPosSyncing(true);
+    try {
+      const res = await fetchApi("/platforms/lia/shopify/sync", { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 403 && body?.code === "SCOPE_MISSING") {
+          setLocationsState("scope-missing");
+        }
+        toast(body?.message || `Erreur ${res.status}`, true);
+        return;
+      }
+      toast(body?.message || "Stock POS synchronisé.");
+      await loadAll();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erreur réseau", true);
+    } finally {
+      setPosSyncing(false);
+    }
+  };
 
   const handleCreateStore = async () => {
     if (!storeForm.storeCode.trim()) return;
@@ -432,6 +543,115 @@ export default function EmbeddedLiaPage() {
                   ))}
                 </BlockStack>
               )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* === Stock POS Shopify === */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center" wrap>
+                <BlockStack gap="100">
+                  <Text variant="headingMd" as="h2">
+                    Stock par emplacement Shopify (POS)
+                  </Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Liez vos emplacements Shopify à vos codes magasins Google Business Profile : le stock par magasin
+                    sera ensuite synchronisé automatiquement après chaque synchronisation produit.
+                  </Text>
+                </BlockStack>
+                {locationsState === "ready" ? (
+                  <Button
+                    variant="primary"
+                    loading={posSyncing}
+                    disabled={!shopifyLocations.some((l) => l.storeCode)}
+                    onClick={() => void handlePosSync()}
+                  >
+                    Synchroniser le stock POS
+                  </Button>
+                ) : null}
+              </InlineStack>
+
+              {locationsState === "loading" ? (
+                <InlineStack align="center">
+                  <Spinner accessibilityLabel="Chargement des emplacements" size="small" />
+                </InlineStack>
+              ) : null}
+
+              {locationsState === "scope-missing" ? (
+                <Banner tone="warning" title="Autorisation Shopify requise">
+                  <BlockStack gap="200">
+                    <p>
+                      FeedPlug a besoin de lire vos emplacements et votre inventaire Shopify pour synchroniser le stock
+                      par magasin (autorisations read_locations et read_inventory).
+                    </p>
+                    <InlineStack>
+                      <Button onClick={() => void handleRequestScopes()}>Autoriser l&apos;accès au stock</Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Banner>
+              ) : null}
+
+              {locationsState === "unavailable" ? (
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Aucune boutique Shopify connectée à ce compte. Vous pouvez tout de même importer votre stock par
+                  fichier ci-dessous.
+                </Text>
+              ) : null}
+
+              {locationsState === "ready" ? (
+                shopifyLocations.length === 0 ? (
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Aucun emplacement actif trouvé sur votre boutique Shopify.
+                  </Text>
+                ) : (
+                  <BlockStack gap="0">
+                    {shopifyLocations.map((loc) => (
+                      <Box key={loc.id} padding="300" borderBlockStartWidth="025" borderColor="border">
+                        <InlineStack align="space-between" blockAlign="center" wrap gap="300">
+                          <BlockStack gap="100">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text variant="bodyMd" as="span" fontWeight="semibold">
+                                {loc.name}
+                              </Text>
+                              {loc.storeCode ? (
+                                <Badge tone="success">{`Lié à ${loc.storeCode}`}</Badge>
+                              ) : (
+                                <Badge>Non lié</Badge>
+                              )}
+                            </InlineStack>
+                            {loc.address ? (
+                              <Text variant="bodySm" as="span" tone="subdued">
+                                {loc.address}
+                              </Text>
+                            ) : null}
+                          </BlockStack>
+                          <InlineStack gap="200" blockAlign="center" wrap>
+                            <Box minWidth="240px">
+                              <TextField
+                                label="Code magasin Google"
+                                labelHidden
+                                placeholder="Code magasin Google (ex. STORE_PARIS_01)"
+                                value={locationCodes[loc.id] ?? loc.storeCode ?? ""}
+                                onChange={(v) => setLocationCodes((curr) => ({ ...curr, [loc.id]: v }))}
+                                autoComplete="off"
+                              />
+                            </Box>
+                            <Button
+                              loading={linkingLocationId === loc.id}
+                              disabled={!(locationCodes[loc.id] ?? loc.storeCode ?? "").trim()}
+                              onClick={() => void handleLinkLocation(loc)}
+                            >
+                              {loc.storeCode ? "Mettre à jour" : "Lier"}
+                            </Button>
+                          </InlineStack>
+                        </InlineStack>
+                      </Box>
+                    ))}
+                  </BlockStack>
+                )
+              ) : null}
             </BlockStack>
           </Card>
         </Layout.Section>

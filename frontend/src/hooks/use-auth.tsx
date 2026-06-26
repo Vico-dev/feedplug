@@ -203,8 +203,11 @@ export function useRequireAuth() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      // Redirect to login page
-      window.location.href = '/login';
+      // Redirect to login page — sauf dans l'app embarquée Shopify (auth par
+      // session token, ne pas sortir de l'iframe vers le login SaaS).
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/embedded')) {
+        window.location.href = '/login';
+      }
     }
   }, [isAuthenticated, isLoading]);
 

@@ -525,37 +525,53 @@ export default function OptimiserPage() {
     catch (e) { console.error('Stop error:', e); }
   };
 
+  // Seuil statistique : ≥100 produits par bras (cf. backend MIN_PRODUCTS_PER_ARM).
+  const AB_MIN_PRODUCTS_TOTAL = 200;
+
   const handleCreateAbTest = async () => {
-    if (!abConfig.name || abConfig.modifications.length === 0) {
-      alert('Veuillez remplir le nom et ajouter au moins une modification');
+    // B6 — on ne crée plus de variantes factices : on envoie les transformations
+    // réelles, le backend calcule la variante depuis le contenu réel des produits.
+    const validTransforms = abConfig.customTransformations.filter(t =>
+      t.type === 'replace' ? !!t.searchValue : !!(t.searchValue || t.replaceValue)
+    );
+    if (!abConfig.name.trim()) {
+      alert('Veuillez renseigner le nom du test.');
       return;
     }
+    if (validTransforms.length === 0) {
+      alert('Ajoutez au moins une transformation (titre ou description) avec une valeur.');
+      return;
+    }
+    if (abConfig.products.selectedIds.length === 0) {
+      alert('Sélectionnez au moins un produit (saisissez les IDs des produits à tester).');
+      return;
+    }
+    if (abConfig.products.selectedIds.length < AB_MIN_PRODUCTS_TOTAL) {
+      const ok = confirm(
+        `Un test A/B fiable nécessite au moins 100 produits par groupe (≈${AB_MIN_PRODUCTS_TOTAL} sélectionnés). ` +
+        `Vous en avez ${abConfig.products.selectedIds.length}. Le test sera créé mais ne pourra pas démarrer tant que ce seuil n'est pas atteint. Continuer ?`
+      );
+      if (!ok) return;
+    }
+    const fieldUnderTest = validTransforms.some(t => t.field === 'title') ? 'title' : 'description';
     setCreatingAbTest(true);
     try {
-      const variantTitles: Record<string, string> = {};
-      abConfig.modifications.forEach(mod => {
-        if (mod.field === 'title') {
-          abConfig.products.selectedIds.forEach(id => {
-            variantTitles[id] = `[Test] Titre modifié pour ${id}`;
-          });
-        }
-      });
       const res = await authFetch(`${API_BASE_URL}/ab-tests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: abConfig.name,
           platform: abConfig.platform,
-          fieldUnderTest: abConfig.modifications[0]?.field || 'title',
+          fieldUnderTest,
           controlPercent: abConfig.trafficSplit,
           variantPercent: 100 - abConfig.trafficSplit,
           minDurationDays: abConfig.durationDays,
-          itemIds: abConfig.products.selectedIds.length > 0 ? abConfig.products.selectedIds : ['sample-1', 'sample-2'],
-          variantTitles,
+          itemIds: abConfig.products.selectedIds,
+          customTransformations: validTransforms,
         }),
       });
       if (res.ok) { await fetchAbTests(); setShowAbModal(false); setAbConfig({ step: 1, name: '', platform: 'GMC', products: { filter: {}, selectedIds: [] }, modifications: [], customTransformations: [], durationDays: 14, trafficSplit: 50 }); }
-      else { const err = await res.json(); alert(err.message || 'Erreur'); }
+      else { const err = await res.json().catch(() => ({})); alert(err.message || 'Erreur lors de la création'); }
     } catch (e) { alert('Erreur lors de la création'); }
     finally { setCreatingAbTest(false); }
   };
@@ -950,6 +966,9 @@ export default function OptimiserPage() {
                       </Button>
                       <span className="text-xs text-slate-500">{abConfig.products.selectedIds.length || 0} produits</span>
                     </div>
+                    <p className={`text-xs mt-2 ${abConfig.products.selectedIds.length >= AB_MIN_PRODUCTS_TOTAL ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      Un test fiable nécessite ≥100 produits par groupe (≈{AB_MIN_PRODUCTS_TOTAL} sélectionnés au total).
+                    </p>
                   </div>
 
                   <div>
@@ -963,24 +982,24 @@ export default function OptimiserPage() {
                         <span className="font-medium text-sm">Titre</span>
                       </div>
                       <div className="space-y-2">
-                        {abConfig.customTransformations.filter(t => t.field === 'title').map((t, i) => (
-                          <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                            <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
+                        {abConfig.customTransformations.map((t, realIndex) => ({ t, realIndex })).filter(({ t }) => t.field === 'title').map(({ t, realIndex }) => (
+                          <div key={realIndex} className="flex items-center gap-2 bg-white p-2 rounded-lg">
+                            <select value={t.type} onChange={e => updateCustomTransformation(realIndex, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                               <option value="replace">Remplacer</option>
                               <option value="prepend">Ajouter au début</option>
                               <option value="append">Ajouter à la fin</option>
                               <option value="remove">Supprimer</option>
                             </select>
                             {t.type !== 'remove' && (
-                              <input type="text" value={t.searchValue || ''} onChange={e => updateCustomTransformation(i, { searchValue: e.target.value })} placeholder={t.type === 'replace' ? 'Texte à chercher' : 'Texte à ajouter'} className="flex-1 px-2 py-1 border rounded text-sm" />
+                              <input type="text" value={t.searchValue || ''} onChange={e => updateCustomTransformation(realIndex, { searchValue: e.target.value })} placeholder={t.type === 'replace' ? 'Texte à chercher' : 'Texte à ajouter'} className="flex-1 px-2 py-1 border rounded text-sm" />
                             )}
                             {t.type === 'replace' && (
                               <>
                                 <span className="text-slate-400">par</span>
-                                <input type="text" value={t.replaceValue || ''} onChange={e => updateCustomTransformation(i, { replaceValue: e.target.value })} placeholder="Nouveau texte" className="flex-1 px-2 py-1 border rounded text-sm" />
+                                <input type="text" value={t.replaceValue || ''} onChange={e => updateCustomTransformation(realIndex, { replaceValue: e.target.value })} placeholder="Nouveau texte" className="flex-1 px-2 py-1 border rounded text-sm" />
                               </>
                             )}
-                            <button onClick={() => removeCustomTransformation(i)} className="p-1 hover:bg-red-50 rounded"><X size={14} className="text-red-500" /></button>
+                            <button onClick={() => removeCustomTransformation(realIndex)} className="p-1 hover:bg-red-50 rounded"><X size={14} className="text-red-500" /></button>
                           </div>
                         ))}
                         <Button variant="outline" size="sm" onClick={() => addCustomTransformation('title', 'replace')}>
@@ -996,26 +1015,25 @@ export default function OptimiserPage() {
                         <span className="font-medium text-sm">Description</span>
                       </div>
                       <div className="space-y-2">
-                        {abConfig.customTransformations.filter(t => t.field === 'description').map((t, i) => {
-                          const realIndex = abConfig.customTransformations.findIndex((x, idx) => x.field === 'description' && idx === i);
+                        {abConfig.customTransformations.map((t, realIndex) => ({ t, realIndex })).filter(({ t }) => t.field === 'description').map(({ t, realIndex }) => {
                           return (
-                            <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg">
-                              <select value={t.type} onChange={e => updateCustomTransformation(i, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
+                            <div key={realIndex} className="flex items-center gap-2 bg-white p-2 rounded-lg">
+                              <select value={t.type} onChange={e => updateCustomTransformation(realIndex, { type: e.target.value as CustomTransformation['type'] })} className="px-2 py-1 border rounded text-sm">
                                 <option value="replace">Remplacer</option>
                                 <option value="prepend">Ajouter au début</option>
                                 <option value="append">Ajouter à la fin</option>
                                 <option value="remove">Supprimer</option>
                               </select>
                               {t.type !== 'remove' && (
-                                <input type="text" value={t.searchValue || ''} onChange={e => updateCustomTransformation(i, { searchValue: e.target.value })} placeholder={t.type === 'replace' ? 'Texte à chercher' : 'Texte à ajouter'} className="flex-1 px-2 py-1 border rounded text-sm" />
+                                <input type="text" value={t.searchValue || ''} onChange={e => updateCustomTransformation(realIndex, { searchValue: e.target.value })} placeholder={t.type === 'replace' ? 'Texte à chercher' : 'Texte à ajouter'} className="flex-1 px-2 py-1 border rounded text-sm" />
                               )}
                               {t.type === 'replace' && (
                                 <>
                                   <span className="text-slate-400">par</span>
-                                  <input type="text" value={t.replaceValue || ''} onChange={e => updateCustomTransformation(i, { replaceValue: e.target.value })} placeholder="Nouveau texte" className="flex-1 px-2 py-1 border rounded text-sm" />
+                                  <input type="text" value={t.replaceValue || ''} onChange={e => updateCustomTransformation(realIndex, { replaceValue: e.target.value })} placeholder="Nouveau texte" className="flex-1 px-2 py-1 border rounded text-sm" />
                                 </>
                               )}
-                              <button onClick={() => removeCustomTransformation(i)} className="p-1 hover:bg-red-50 rounded"><X size={14} className="text-red-500" /></button>
+                              <button onClick={() => removeCustomTransformation(realIndex)} className="p-1 hover:bg-red-50 rounded"><X size={14} className="text-red-500" /></button>
                             </div>
                           );
                         })}

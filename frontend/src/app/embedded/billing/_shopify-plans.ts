@@ -83,7 +83,7 @@ export const SHOPIFY_PLANS: readonly ShopifyPlan[] = [
     handle: "premium",
     name: "Premium",
     tagline: "Catalogues massifs, marketplaces multiples",
-    priceEur: 449,
+    priceEur: 499,
     trialDays: 14,
     productsLimit: 50000,
     channelsLimit: 5,
