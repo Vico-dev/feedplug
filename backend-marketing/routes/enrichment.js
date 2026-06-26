@@ -15,6 +15,8 @@ const { generateHighlightsWithAI } = require('../optimization/highlights-generat
 const { optimizeImage, optimizeImagesBatch } = require('../optimization/image-optimizer');
 const { generateLifestyleImage, downloadImageAsBase64, PRESET_SCENES } = require('../optimization/lifestyle-image-generator');
 const { getAiUsage, AI_SOFT_CAP_MONTHLY } = require('../lib/ai-quota');
+const { checkAiQuota, quotaMessage, getCap } = require('../lib/ai-caps');
+const { getAccountPlan } = require('../lib/plan-limits');
 
 function registerEnrichmentRoutes(app, {
   getPrisma,
@@ -34,10 +36,29 @@ app.get('/api/v1/enrichment/ai-usage', async (req, res) => {
   try {
     const accountId = req.accountId;
     if (!getPrismaReady?.() || !getPrisma()) {
-      return res.json({ used: 0, softCap: AI_SOFT_CAP_MONTHLY, percent: 0, period: null });
+      return res.json({
+        text: { used: 0, cap: AI_SOFT_CAP_MONTHLY },
+        image: { used: 0, cap: AI_SOFT_CAP_MONTHLY },
+        used: 0, softCap: AI_SOFT_CAP_MONTHLY, percent: 0,
+        period: null,
+      });
     }
+    // Compteurs séparés texte/images (A2) + caps DURS par plan (A3).
     const usage = await getAiUsage(getPrisma(), accountId);
-    res.json(usage);
+    const plan = await getAccountPlan(getPrisma(), accountId);
+    const textCap = getCap(plan, 'text');
+    const imageCap = getCap(plan, 'image');
+    usage.text.cap = textCap;
+    usage.image.cap = imageCap;
+    // Rétro-compat front (forme historique { used, softCap, percent } = total agrégé).
+    const totalUsed = (usage.text.used || 0) + (usage.image.used || 0);
+    res.json({
+      ...usage,
+      plan,
+      used: totalUsed,
+      softCap: AI_SOFT_CAP_MONTHLY,
+      percent: Math.round((totalUsed / AI_SOFT_CAP_MONTHLY) * 100),
+    });
   } catch (error) {
     console.error('Erreur ai-usage:', error);
     res.status(500).json({ message: 'Erreur' });
@@ -61,6 +82,11 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
     }
+    // A3 — hard cap texte : on bloque AVANT l'appel Gemini si le quota est dépassé.
+    const quota = await checkAiQuota(getPrisma(), accountId, 'text', 1);
+    if (!quota.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quota), used: quota.used, cap: quota.cap });
+    }
     const resolvedId = await resolveItemId(getPrisma(), String(itemId), accountId);
     if (!resolvedId) {
       return res.status(404).json({ message: 'Produit non trouvé' });
@@ -68,13 +94,13 @@ app.post('/api/v1/enrichment/optimize-title', async (req, res) => {
     if (!(await verifyItemAccess(resolvedId, accountId))) {
       return res.status(403).json({ message: 'Accès refusé à ce produit' });
     }
-    
+
     const items = await getPrisma().$queryRawUnsafe(`SELECT * FROM "FeedItem" WHERE id = $1::text`, resolvedId);
-    
+
     if (!items || items.length === 0) {
       return res.status(404).json({ message: 'Produit non trouvé' });
     }
-    
+
     const plat = platform || 'GMC';
     const targetDestinationContext = saveDestinationId
       ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
@@ -127,6 +153,11 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
     }
     
     const accountId = req.accountId;
+    // A3 — hard cap texte avant l'appel Gemini.
+    const quotaDesc = await checkAiQuota(getPrisma(), accountId, 'text', 1);
+    if (!quotaDesc.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quotaDesc), used: quotaDesc.used, cap: quotaDesc.cap });
+    }
     const resolvedId = await resolveItemId(getPrisma(), String(itemId), accountId);
     if (!resolvedId) {
       return res.status(404).json({ message: 'Produit non trouvé' });
@@ -134,13 +165,13 @@ app.post('/api/v1/enrichment/optimize-description', async (req, res) => {
     if (!(await verifyItemAccess(resolvedId, accountId))) {
       return res.status(403).json({ message: 'Accès refusé à ce produit' });
     }
-    
+
     const items = await getPrisma().$queryRawUnsafe(`SELECT * FROM "FeedItem" WHERE id = $1::text`, resolvedId);
-    
+
     if (!items || items.length === 0) {
       return res.status(404).json({ message: 'Produit non trouvé' });
     }
-    
+
     const plat = platform || 'GMC';
     const targetDestinationContext = saveDestinationId
       ? await getDestinationPushContext(accountId, String(saveDestinationId), plat)
@@ -198,6 +229,12 @@ app.post('/api/v1/enrichment/generate-highlights', async (req, res) => {
 
     if (!getPrismaReady?.() || !getPrisma()) {
       return res.status(503).json({ message: 'Prisma non disponible' });
+    }
+
+    // A3 — hard cap texte avant l'appel Gemini.
+    const quotaHl = await checkAiQuota(getPrisma(), accountId, 'text', 1);
+    if (!quotaHl.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quotaHl), used: quotaHl.used, cap: quotaHl.cap });
     }
 
     const resolvedId = await resolveItemId(getPrisma(), String(itemId), accountId);
@@ -314,6 +351,11 @@ app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
       if (!addonIA.allowed) {
         return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
       }
+      // A3 — hard cap IMAGES avant la génération (Vertex/Imagen/Fal payants).
+      const quotaImg = await checkAiQuota(getPrisma(), accountId, 'image', 1);
+      if (!quotaImg.allowed) {
+        return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quotaImg), used: quotaImg.used, cap: quotaImg.cap });
+      }
     }
     const baseSceneDescription = sceneDescription || (scenePreset && PRESET_SCENES[scenePreset]) || PRESET_SCENES.living_room;
     const customSceneText = typeof customScene === 'string' ? customScene.trim() : '';
@@ -349,6 +391,11 @@ app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
     if (productDescShort) options.productDescription = productDescShort;
     if (bodyProvider && ['vertex', 'fal'].includes(String(bodyProvider).toLowerCase())) options.provider = String(bodyProvider).toLowerCase();
     if (bodyModel && typeof bodyModel === 'string' && bodyModel.trim()) options.model = bodyModel.trim();
+    // A4 — cache de génération d'images : on passe prisma + composants de clé.
+    if (getPrismaReady?.() && getPrisma()) options.prisma = getPrisma();
+    options.accountId = accountId;
+    options.mannequin = mannequinValue;
+    if (req.body.ratio && typeof req.body.ratio === 'string') options.ratio = req.body.ratio.trim();
 
     let effectiveItemId = null;
     if (feedItemId && getPrismaReady?.() && getPrisma()) {
@@ -463,7 +510,9 @@ app.post('/api/v1/enrichment/generate-lifestyle-image', async (req, res) => {
         return res.status(500).json({ message: 'Image générée mais impossible de créer l\'URL de prévisualisation. Vérifiez la config GCS (compte de service, permissions).' });
       }
     }
-    trackAiUsage(accountId, 1);
+    // A4 — on ne compte la consommation IA que si l'image a réellement été
+    // générée (un hit cache renvoie result.cached === true, aucun appel payant).
+    if (!result.cached) trackAiUsage(accountId, 1, 'image');
     res.json({ url: urlToReturn, contentType: result.contentType });
   } catch (error) {
     console.error('Erreur generate-lifestyle-image:', error);
@@ -588,8 +637,21 @@ app.post('/api/v1/enrichment/batch', async (req, res) => {
     );
     
     const accountId = req.accountId;
+
+    // A3 — hard cap texte AVANT les appels Gemini du batch. On ne tronque pas
+    // silencieusement : si la demande dépasse le quota restant, on refuse tout
+    // le batch avec un message explicite indiquant le restant.
+    const textPerProduct = (optimizations?.titles ? 1 : 0) + (optimizations?.descriptions ? 1 : 0);
+    const requestedTextOps = products.length * Math.max(1, normalizedPlatforms.length) * Math.max(0, textPerProduct);
+    if (requestedTextOps > 0) {
+      const quotaBatch = await checkAiQuota(getPrisma(), accountId, 'text', requestedTextOps);
+      if (!quotaBatch.allowed) {
+        return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quotaBatch), used: quotaBatch.used, cap: quotaBatch.cap, remaining: quotaBatch.remaining, requested: requestedTextOps });
+      }
+    }
+
     const results = { total: itemIds.length, found: products.length, titles: null, descriptions: null, images: null, totalCost: 0 };
-    
+
     const platformResults = {};
     for (const plat of normalizedPlatforms) {
       platformResults[plat] = { titles: null, descriptions: null };

@@ -19,6 +19,8 @@
  */
 
 const { callAIWithCache } = require('../ai/ai-wrapper');
+const { checkAiQuota } = require('../lib/ai-caps');
+const { recordAiUsage } = require('../lib/ai-quota');
 
 /**
  * Détecte la langue de la source en regardant le contenu.
@@ -255,6 +257,29 @@ async function translateItemsForDestination(prisma, items, destinationContext, o
     return { items, stats: { ...baseStats, skipped: true, targetLanguage } };
   }
 
+  // A3 — hard cap texte : la traduction par marché consomme du Gemium (sauf
+  // hits cache). Si on a un accountId, on vérifie le plafond AVANT de traduire.
+  // Au-delà du cap on n'appelle PAS Gemini — on renvoie le contenu source
+  // (best-effort, cohérent avec le fallback "feed à 95%" de cette fonction).
+  // On cape sur items.length (pire cas : tout est à traduire). Les hits cache
+  // ne consomment rien et seront déduits du comptage en fin de fonction.
+  const accountId = options.accountId || null;
+  if (prisma && accountId) {
+    try {
+      const quota = await checkAiQuota(prisma, accountId, 'text', items.length);
+      if (!quota.allowed) {
+        return {
+          items,
+          stats: { ...baseStats, skipped: true, targetLanguage, quotaExceeded: true, quota },
+        };
+      }
+    } catch (quotaErr) {
+      // En cas d'erreur de lecture quota, on laisse passer (best-effort) plutôt
+      // que de bloquer un export à cause d'un hoquet DB.
+      console.warn('[market-translation] checkAiQuota ignoré:', quotaErr?.message);
+    }
+  }
+
   const locale = {
     localeCode: destinationContext.localeCode,
     languageCode: destinationContext.languageCode,
@@ -333,6 +358,18 @@ async function translateItemsForDestination(prisma, items, destinationContext, o
   }
 
   await Promise.all(Array.from({ length: poolSize }, () => worker()));
+
+  // A3 — comptage de la consommation IA : seules les traductions réellement
+  // calculées via Gemini comptent (les hits cache sont gratuits). Best-effort,
+  // ne bloque jamais l'export.
+  if (prisma && accountId && stats.translated > 0) {
+    try {
+      await recordAiUsage(prisma, accountId, stats.translated, 'text');
+    } catch (recErr) {
+      console.warn('[market-translation] recordAiUsage ignoré:', recErr?.message);
+    }
+  }
+
   return { items: out, stats };
 }
 

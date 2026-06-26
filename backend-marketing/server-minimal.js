@@ -316,6 +316,7 @@ const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const { createSharedAbuseProtection } = require('./lib/shared-abuse-store');
 const { assertColumnsExist, assertTableExists } = require('./lib/schema-guards');
 const { recordAiUsage, getAiUsage, AI_SOFT_CAP_MONTHLY } = require('./lib/ai-quota');
+const { checkAiQuota, quotaMessage } = require('./lib/ai-caps');
 const { createNotification } = require('./lib/notifications');
 const { enqueueJob: enqueueBackgroundJob, configureJobs } = require('./lib/jobs');
 
@@ -355,12 +356,13 @@ configureJobs({ dispatch: dispatchJob });
 
 // Soft cap IA : enregistre la consommation et alerte (Sentry) à 80 % / 100 %.
 // Fire-and-forget — ne bloque jamais la réponse IA, ne lève jamais.
-function trackAiUsage(accountId, count = 1) {
+// `kind` : 'text' (défaut) ou 'image' — compteurs séparés depuis A2.
+function trackAiUsage(accountId, count = 1, kind = 'text') {
   if (!prismaReady || !prisma || !accountId) return;
-  recordAiUsage(prisma, accountId, count)
+  recordAiUsage(prisma, accountId, count, kind)
     .then((r) => {
       if (r && r.threshold) {
-        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence (${r.used}/${r.softCap}, période ${r.period}).`;
+        const msg = `IA soft cap: le compte ${accountId} a atteint ${r.threshold}% du plafond mensuel de référence ${r.kind} (${r.used}/${r.softCap}, période ${r.period}).`;
         console.warn('⚠️  ' + msg);
         try {
           require('@sentry/node').captureMessage(msg, r.threshold >= 100 ? 'warning' : 'info');
@@ -7322,10 +7324,13 @@ app.get('/api/v1/ingestion/feeds/:id/export', async (req, res) => {
         prisma,
         items,
         destinationContext,
+        { prisma, accountId: req.accountId },
       );
       items = translatedItems;
       translationStats = stats;
-      if (!stats.skipped) {
+      if (stats.quotaExceeded) {
+        console.warn(`[market-translation] export ${platform} : plafond IA texte atteint → contenu source (pas de traduction)`);
+      } else if (!stats.skipped) {
         console.log(`[market-translation] export ${platform} → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
       }
     } catch (translationErr) {
@@ -12995,6 +13000,11 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
     if (!addonIA.allowed) {
       return res.status(403).json({ code: 'PLAN_FEATURE', message: addonIA.message });
     }
+    // A3 — hard cap texte avant les appels Gemini (1 op = 1 titre / produit).
+    const quota = await checkAiQuota(prisma, accountId, 'text', itemIds.length);
+    if (!quota.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quota), used: quota.used, cap: quota.cap, remaining: quota.remaining, requested: itemIds.length });
+    }
     const plat = platform ? String(platform).toUpperCase().replace(/GOOGLE/, 'GMC') : 'GMC';
     const result = {};
     let aiCalls = 0;
@@ -15436,9 +15446,11 @@ async function executeAmazonPush({ accountId, feedId, destinationContext = null,
   // Traduction par marché (v2) — best-effort.
   try {
     const { translateItemsForDestination } = require('./optimization/market-translation');
-    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext, { prisma, accountId });
     items = translated;
-    if (!stats.skipped) {
+    if (stats.quotaExceeded) {
+      console.warn('[market-translation] amazon push : plafond IA texte atteint → contenu source (pas de traduction)');
+    } else if (!stats.skipped) {
       console.log(`[market-translation] amazon push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
     }
   } catch (translationErr) {
@@ -15633,9 +15645,11 @@ async function executeGmcPush({ accountId, userId, feedId, destinationContext = 
   // Traduction par marché (v2) — best-effort.
   try {
     const { translateItemsForDestination } = require('./optimization/market-translation');
-    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext);
+    const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext, { prisma, accountId });
     items = translated;
-    if (!stats.skipped) {
+    if (stats.quotaExceeded) {
+      console.warn('[market-translation] gmc push : plafond IA texte atteint → contenu source (pas de traduction)');
+    } else if (!stats.skipped) {
       console.log(`[market-translation] gmc push → ${destinationContext?.localeCode || stats.targetLanguage} : translated=${stats.translated} cached=${stats.cached} failed=${stats.failed}`);
     }
   } catch (translationErr) {
@@ -15896,6 +15910,17 @@ async function runAutoOptimization({ accountId, feedId, reason }) {
       if (!items?.length) {
         console.log(`✨ Auto-optim (${reason}) feed ${feedId} : aucun produit à optimiser → push direct`);
         scheduleAutoGmcPush(accountId, feedId, `${reason} → push direct`, 0);
+        return;
+      }
+
+      // A3 — hard cap texte : au-delà du plafond, on n'appelle PAS Gemini pour
+      // l'auto-optimisation — on pousse le contenu brut (comme le chemin sans
+      // pack IA). 1 op = titre + description par produit (2 appels), mais on
+      // compte 1 op/produit pour rester cohérent avec trackAiUsage plus bas.
+      const autoQuota = await checkAiQuota(prisma, accountId, 'text', items.length);
+      if (!autoQuota.allowed) {
+        console.warn(`⚠️ Auto-optim (${reason}) feed ${feedId} : plafond IA texte atteint (${autoQuota.used}/${autoQuota.cap}) → push brut`);
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → plafond IA atteint (push brut)`, 0);
         return;
       }
 
@@ -17411,6 +17436,12 @@ app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, 
     }
 
     const totalOperations = items.length * requestedPlatforms.length;
+
+    // A3 — hard cap texte AVANT de lancer le worker async (1 op = titre + description / produit / canal).
+    const quota = await checkAiQuota(prisma, accountId, 'text', totalOperations);
+    if (!quota.allowed) {
+      return res.status(429).json({ code: 'AI_QUOTA', message: quotaMessage(quota), used: quota.used, cap: quota.cap, remaining: quota.remaining, requested: totalOperations });
+    }
 
     // B1 — comptage de la consommation IA (1 op = titre + description / produit / canal).
     trackAiUsage(accountId, totalOperations);

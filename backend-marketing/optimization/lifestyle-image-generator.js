@@ -19,6 +19,80 @@ const IMAGEN_EDIT_MODEL = 'imagen-3.0-capability-001';
 const storage = new Storage();
 const bucketName = process.env.GOOGLE_CLOUD_STORAGE_BUCKET || 'feedplug-uploads';
 
+// A4 — Cache de génération d'images. TTL long : une même source + scène +
+// modèle + mannequin + ratio donne le même rendu, inutile de repayer Vertex.
+const IMAGE_CACHE_TTL_DAYS = Number(process.env.IMAGE_CACHE_TTL_DAYS) || 90;
+
+/**
+ * Clé de cache déterministe d'une génération d'image.
+ * sha256(imageSourceHash + scene + model + mannequin + ratio).
+ * @param {{ imageSourceHash:string, sceneDescription:string, model?:string, mannequin?:string, ratio?:string }} parts
+ * @returns {string} hex sha256
+ */
+function buildImageCacheKey({ imageSourceHash, sceneDescription, model, mannequin, ratio }) {
+  const payload = [
+    String(imageSourceHash || ''),
+    String(sceneDescription || ''),
+    String(model || ''),
+    String(mannequin || 'none'),
+    String(ratio || 'default'),
+  ].join('|');
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
+/** Hash sha256 d'un buffer/base64 d'image source (composant de la clé de cache). */
+function hashImageSource(base64) {
+  return crypto.createHash('sha256').update(String(base64 || '')).digest('hex');
+}
+
+/**
+ * Lookup cache image : renvoie { url, contentType } si une entrée non expirée
+ * existe pour la clé, sinon null. Tolérant : toute erreur DB → null (on
+ * régénère plutôt que de planter).
+ */
+async function getCachedImage(prisma, cacheKey) {
+  if (!prisma || !cacheKey) return null;
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT url, mimetype, expiresat FROM "ImageCache" WHERE cachekey = $1::text LIMIT 1`,
+      cacheKey
+    );
+    const row = rows?.[0];
+    if (!row) return null;
+    if (row.expiresat && new Date(row.expiresat) <= new Date()) {
+      // Entrée expirée : on la supprime et on régénère.
+      try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "ImageCache" WHERE cachekey = $1::text`, cacheKey);
+      } catch (_) {}
+      return null;
+    }
+    return { url: row.url, contentType: row.mimetype || 'image/png' };
+  } catch (e) {
+    console.warn('getCachedImage error:', e?.message);
+    return null;
+  }
+}
+
+/** Écrit (upsert) une entrée de cache image. Best-effort. */
+async function setCachedImage(prisma, cacheKey, url, mimeType, accountId = null) {
+  if (!prisma || !cacheKey || !url) return;
+  try {
+    const expires = new Date();
+    expires.setDate(expires.getDate() + IMAGE_CACHE_TTL_DAYS);
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ImageCache" (cachekey, accountid, url, mimetype, expiresat, createdat)
+       VALUES ($1::text, $2::text, $3::text, $4::text, $5::timestamptz, NOW())
+       ON CONFLICT (cachekey) DO UPDATE SET
+         url = EXCLUDED.url,
+         mimetype = EXCLUDED.mimetype,
+         expiresat = EXCLUDED.expiresat`,
+      cacheKey, accountId, url, mimeType || 'image/png', expires.toISOString()
+    );
+  } catch (e) {
+    console.warn('setCachedImage error:', e?.message);
+  }
+}
+
 /** Scènes prédéfinies (prompts en anglais) */
 const PRESET_SCENES = {
   living_room: 'a real modern living room with daylight from a window, believable scale, subtle styling, editorial ecommerce photography',
@@ -379,7 +453,7 @@ async function generateLifestyleImage(productImageUrl, sceneDescription, options
   if (!sceneDescription) {
     throw new Error('sceneDescription est requis');
   }
-  const imageData = options.imageBase64
+  let imageData = options.imageBase64
     ? { base64: options.imageBase64, mimeType: options.imageMimeType || 'image/jpeg' }
     : null;
   if (!productImageUrl && !imageData?.base64) {
@@ -396,19 +470,63 @@ async function generateLifestyleImage(productImageUrl, sceneDescription, options
   const modelId = (options.model || process.env.LIFESTYLE_VERTEX_MODEL || 'gemini-2.5-flash-image').toLowerCase();
   // Imagen 3 edit (capability) ou tout id "imagen-*-capability*" → flux Imagen (remplacement de fond)
   const useImagen = modelId === IMAGEN_EDIT_MODEL || (modelId.startsWith('imagen-') && modelId.includes('capability'));
+
+  // A4 — Cache de génération d'images. On résout l'image source en base64
+  // d'abord (pour pouvoir la hasher), on tente un hit cache, et on ne régénère
+  // qu'en cas de miss. La clé inclut source + scène + modèle + mannequin + ratio.
+  const prisma = options.prisma || null;
+  let cacheKey = null;
+  if (prisma) {
+    try {
+      if (!imageData?.base64) {
+        imageData = await resolveProductImage(productImageUrl, null, fetchOptions);
+        productImageUrl = null; // on a maintenant le base64, on évite un 2e download
+      }
+      const imageSourceHash = hashImageSource(imageData.base64);
+      cacheKey = buildImageCacheKey({
+        imageSourceHash,
+        sceneDescription,
+        model: modelId,
+        mannequin: options.mannequin || 'none',
+        ratio: options.ratio || 'default',
+      });
+      const cached = await getCachedImage(prisma, cacheKey);
+      if (cached?.url) {
+        return { url: cached.url, contentType: cached.contentType, cached: true };
+      }
+    } catch (cacheErr) {
+      // Échec de résolution/lookup : on continue sans cache (best-effort).
+      console.warn('Image cache lookup ignoré:', cacheErr?.message);
+      cacheKey = null;
+    }
+  }
+
+  // Si on a résolu l'image pour le cache, on passe ce base64 aux providers.
+  if (imageData?.base64) {
+    options = { ...options, imageBase64: imageData.base64, imageMimeType: imageData.mimeType };
+  }
+
+  let result;
   if (provider === 'vertex') {
     if (useImagen) {
-      return generateLifestyleImageImagen(productImageUrl, sceneDescription, imageData, fetchOptions, vertexOptions);
+      result = await generateLifestyleImageImagen(productImageUrl, sceneDescription, imageData, fetchOptions, vertexOptions);
+    } else {
+      result = await generateLifestyleImageVertex(productImageUrl, sceneDescription, imageData, fetchOptions, vertexOptions);
     }
-    return generateLifestyleImageVertex(productImageUrl, sceneDescription, imageData, fetchOptions, vertexOptions);
-  }
-  // Fal (désactivé si on utilise uniquement la suite Google)
-  if (imageData?.base64) {
+  } else if (imageData?.base64) {
+    // Fal (désactivé si on utilise uniquement la suite Google)
     const buffer = Buffer.from(imageData.base64, 'base64');
     const tempUrl = await uploadGeneratedImageToGCS(buffer, imageData.mimeType);
-    return generateLifestyleImageFal(tempUrl, sceneDescription, options);
+    result = await generateLifestyleImageFal(tempUrl, sceneDescription, options);
+  } else {
+    result = await generateLifestyleImageFal(productImageUrl, sceneDescription, options);
   }
-  return generateLifestyleImageFal(productImageUrl, sceneDescription, options);
+
+  // Écriture du cache après génération+upload réussis.
+  if (prisma && cacheKey && result?.url) {
+    await setCachedImage(prisma, cacheKey, result.url, result.contentType, options.accountId || null);
+  }
+  return result;
 }
 
 module.exports = {
@@ -417,6 +535,11 @@ module.exports = {
   generateLifestyleImageVertex,
   generateLifestyleImageImagen,
   downloadImageAsBase64,
+  buildImageCacheKey,
+  hashImageSource,
+  getCachedImage,
+  setCachedImage,
+  IMAGE_CACHE_TTL_DAYS,
   PRESET_SCENES,
   IMAGEN_EDIT_MODEL,
 };
