@@ -134,7 +134,26 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 			console.log('🔍 Premières clés du premier row:', Object.keys(records[0]).slice(0, 10).join(', '));
 			console.log('🔍 Premier row (échantillon):', JSON.stringify(Object.fromEntries(Object.entries(records[0]).slice(0, 5))));
 		}
-		
+
+		// Sprint 2 (B-PROPER) — fix N+1 : on précharge en UNE requête toutes les
+		// lignes existantes de ce feed, indexées par originid. Avant, chaque
+		// produit déclenchait un SELECT ... WHERE feedid AND originid LIMIT 1
+		// (N requêtes). On remplace ces N SELECT par un lookup O(1) en mémoire.
+		// Même approche que l'ingestion Shopify (existingRows préchargés).
+		const existingByOriginId = new Map();
+		try {
+			const existingRows = await prisma.$queryRawUnsafe(
+				`SELECT * FROM \"FeedItem\" WHERE feedid = $1::text`,
+				feed.id
+			);
+			for (const row of existingRows || []) {
+				if (row && row.originid != null) existingByOriginId.set(String(row.originid), row);
+			}
+			console.log(`📦 Préchargement: ${existingByOriginId.size} produit(s) existant(s) (1 requête, N+1 supprimé)`);
+		} catch (preErr) {
+			console.warn('⚠️ Préchargement existants échoué, fallback SELECT par produit:', preErr.message);
+		}
+
 		for (let i = 0; i < records.length; i++) {
 			const row = records[i];
 			// Row normalisé : toutes les clés en minuscules, sans BOM ni espaces, pour matcher mapping et replis
@@ -266,11 +285,16 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 
 			const contentHash = computeHash(item);
 
-			// upsert par (feedId, originId) - utiliser une requête raw
-			const existingResult = await prisma.$queryRawUnsafe(`
-				SELECT * FROM "FeedItem" WHERE feedid = $1::text AND originid = $2::text LIMIT 1
-			`, feed.id, originId).catch(() => []);
-			const existing = existingResult && existingResult.length > 0 ? existingResult[0] : null;
+			// upsert par (feedId, originId) — lookup O(1) sur le préchargement
+			// (Sprint 2 : remplace le SELECT par produit). Fallback SELECT unitaire
+			// uniquement si le préchargement a échoué (Map vide alors qu'il y a des items).
+			let existing = existingByOriginId.get(String(originId)) || null;
+			if (!existing && existingByOriginId.size === 0) {
+				const existingResult = await prisma.$queryRawUnsafe(`
+					SELECT * FROM "FeedItem" WHERE feedid = $1::text AND originid = $2::text LIMIT 1
+				`, feed.id, originId).catch(() => []);
+				existing = existingResult && existingResult.length > 0 ? existingResult[0] : null;
+			}
 
 			if (!existing) {
 				const itemId = require('crypto').randomUUID();

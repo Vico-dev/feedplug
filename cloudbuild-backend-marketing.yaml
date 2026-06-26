@@ -37,11 +37,23 @@ steps:
       - '10'
       - '--timeout'
       - '300'
-      # B4 — min-instances 1 : indispensable tant que les jobs auto (push GMC,
-      # auto-optim, sync LIA) sont planifiés via setTimeout en mémoire process.
-      # Avec scale-to-zero, l'instance était tuée au repos et les timers .unref()
-      # débouncés étaient perdus silencieusement. À repasser à 0 une fois les jobs
-      # externalisés en Cloud Tasks (cf. PLAN_REMEDIATION_BLOQUANTS.md, B-PROPER).
+      # B4/B-PROPER — min-instances 1 : à GARDER tant que le mode "in-process"
+      # (fallback setTimeout de lib/jobs.js) est le chemin par défaut. Sprint 2 a
+      # externalisé les jobs auto (push GMC, auto-optim, sync LIA) et l'ingestion
+      # vers Cloud Tasks, MAIS le fallback in-process reste actif tant que les
+      # variables CLOUD_TASKS_QUEUE / CLOUD_TASKS_WORKER_BASE_URL ne sont pas
+      # peuplées ET que le SDK @google-cloud/tasks n'est pas installé.
+      #
+      # Pour passer à --min-instances 0 (économie de coûts au repos), PROVISIONNER
+      # d'abord (cf. rapport Sprint 2) :
+      #   1. gcloud tasks queues create feedplug-jobs --location=europe-west1
+      #   2. IAM : donner au SA Cloud Run le rôle roles/cloudtasks.enqueuer ; et si
+      #      auth OIDC, autoriser le SA à s'invoquer (roles/run.invoker) + activer
+      #      l'ingress. Sinon, auth par SCHEDULER_SECRET (déjà en secret).
+      #   3. npm i @google-cloud/tasks (ajouter aux dependencies).
+      #   4. Définir les env vars Cloud Tasks ci-dessous, vérifier le log
+      #      "[jobs] mode=cloud-tasks" au boot, PUIS basculer min-instances à 0.
+      # Tant que ces 4 étapes ne sont pas faites, laisser 1 (sinon jobs perdus).
       - '--min-instances'
       - '1'
       - '--set-env-vars'
@@ -49,6 +61,15 @@ steps:
       # cassent la syntaxe gcloud --set-env-vars. Le défaut hardcodé dans
       # server-minimal.js (aligné sur shopify.app.toml) est utilisé.
       - 'NODE_ENV=production,CORS_ORIGIN=https://app.feedplug.com,APP_URL=https://app.feedplug.com,API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,API_PUBLIC_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,EMAIL_FROM=FeedPlug <noreply@feedplug.com>,MARKETING_REPLY_TO=hello@feedplug.com,RESEND_AUDIENCE_ID=18689648-4319-4fa5-a78b-2b332d4e7429,SHOPIFY_CALLBACK_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/connectors/shopify/callback,SHOPIFY_ADMIN_API_VERSION=2026-04,SHOPIFY_BILLING_TRIAL_DAYS=14,SHOPIFY_BILLING_EUR_USD_RATE=1.08,SHOPIFY_PROVISION_TRIAL_DAYS=14,GOOGLE_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback,AMAZON_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/amazon/callback,STRIPE_PRICE_STARTER=,STRIPE_PRICE_PROFESSIONAL=price_1T161cQ8WO9CgnnOY6LOv3Va,STRIPE_PRICE_ENTERPRISE=,LIFESTYLE_IMAGE_PROVIDER=vertex,GOOGLE_CLOUD_PROJECT=feedplug-prod,GOOGLE_CLOUD_LOCATION=europe-west1,GOOGLE_CLOUD_LOCATION_IMAGE=global,GOOGLE_GENAI_USE_VERTEXAI=true'
+      # ── Jobs background Cloud Tasks (Sprint 2, B-PROPER) — OPTIONNEL ──────
+      # Décommenter et compléter pour activer le mode cloud-tasks (sinon fallback
+      # in-process). À ajouter à la fin de la ligne --set-env-vars ci-dessus :
+      #   ,CLOUD_TASKS_QUEUE=projects/feedplug-prod/locations/europe-west1/queues/feedplug-jobs
+      #   ,CLOUD_TASKS_WORKER_BASE_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app
+      #   ,JOBS_DEDUP_WINDOW_MS=30000
+      # Auth OIDC (recommandé) : ,CLOUD_TASKS_OIDC_SA_EMAIL=<runtime-sa>@feedplug-prod.iam.gserviceaccount.com
+      # Ingestion en background (202 + polling IngestionRun) — OFF par défaut :
+      #   ,INGESTION_BACKGROUND=1
       # ── Activation Amazon SP-API ──────────────────────────────────────────
       # Pour activer la connexion Amazon Seller Central : créer d'abord les 3
       # secrets ci-dessous dans Secret Manager (voir docs/AMAZON_SP_API_ACTIVATION.md),
