@@ -8,6 +8,35 @@ const { ABTestStatus, ABTestArm } = require('@prisma/client');
 const MIN_PRODUCTS_PER_ARM = 100;
 const DEFAULT_MIN_DURATION_DAYS = 14;
 
+/**
+ * Applique les transformations utilisateur à un texte (titre ou description).
+ * Miroir backend de applyTransformations du frontend (optimiser/page.tsx) :
+ * permet de calculer la vraie variante côté serveur depuis le contenu réel,
+ * sans dépendre d'un placeholder envoyé par le client (cf. B6).
+ */
+function applyAbTransformations(text, transformations) {
+  let result = String(text || '');
+  for (const t of (Array.isArray(transformations) ? transformations : [])) {
+    switch (t?.type) {
+      case 'replace':
+        if (t.searchValue) result = result.split(t.searchValue).join(t.replaceValue || '');
+        break;
+      case 'prepend':
+        if (t.replaceValue) result = t.replaceValue + result;
+        break;
+      case 'append':
+        if (t.replaceValue) result = result + ' ' + t.replaceValue;
+        break;
+      case 'remove':
+        if (t.searchValue) result = result.split(t.searchValue).join('');
+        break;
+      default:
+        break;
+    }
+  }
+  return result;
+}
+
 function registerAbTestRoutes(app, deps) {
   const { prisma, authenticateToken, getAccountId } = deps;
   const accountId = (req) => getAccountId ? getAccountId(req) : req.accountId;
@@ -83,6 +112,7 @@ function registerAbTestRoutes(app, deps) {
         variantPercent = 50,
         itemIds: bodyItemIds,
         variantTitles,
+        customTransformations,
         ruleId
       } = req.body;
 
@@ -140,6 +170,32 @@ function registerAbTestRoutes(app, deps) {
       const controlIds = shuffled.slice(0, controlCount);
       const variantIds = shuffled.slice(controlCount, total);
 
+      // B6 — calcul des vraies variantes côté serveur depuis le contenu réel des
+      // produits (titre/description), via les transformations utilisateur. Évite
+      // le placeholder envoyé par le client. Fallback sur variantTitles (legacy).
+      const transforms = Array.isArray(customTransformations)
+        ? customTransformations.filter((t) => (t?.field || 'title') === fieldUnderTest)
+        : [];
+      const variantValueByItem = {};
+      if (transforms.length > 0 && variantIds.length > 0) {
+        const sourceCol = fieldUnderTest === 'description' ? 'descriptiontext' : 'title';
+        const titleRows = await prisma.$queryRawUnsafe(
+          `SELECT i.id, i.${sourceCol} AS src
+           FROM "FeedItem" i
+           JOIN "Feed" f ON i.feedid = f.id
+           WHERE f.accountid = $1::text AND i.id = ANY($2::text[])`,
+          acct, variantIds
+        );
+        for (const r of (titleRows || [])) {
+          variantValueByItem[r.id] = applyAbTransformations(r.src, transforms);
+        }
+      }
+      const resolveVariantValue = (itemId) => {
+        if (variantValueByItem[itemId] != null) return String(variantValueByItem[itemId]);
+        if (variantTitles && variantTitles[itemId]) return String(variantTitles[itemId]);
+        return null;
+      };
+
       const test = await prisma.aBTest.create({
         data: {
           accountId: acct,
@@ -162,7 +218,7 @@ function registerAbTestRoutes(app, deps) {
           testId: test.id,
           itemId,
           arm: ABTestArm.VARIANT,
-          variantValue: (variantTitles && variantTitles[itemId]) ? String(variantTitles[itemId]) : null
+          variantValue: resolveVariantValue(itemId)
         }))
       ];
       await prisma.aBTestAssignment.createMany({ data: assignments });
@@ -332,4 +388,4 @@ function registerAbTestRoutes(app, deps) {
   });
 }
 
-module.exports = { registerAbTestRoutes };
+module.exports = { registerAbTestRoutes, applyAbTransformations };

@@ -402,6 +402,26 @@ const initPrisma = async () => {
     prismaReady = true;
     registerDeferredRoutesOnce();
     console.log('✅ Prisma connected successfully');
+    // B5 — sweeper de runs zombies : un kill de process (timeout/OOM Cloud Run)
+    // laisse des IngestionRun bloqués en RUNNING (le catch applicatif ne s'exécute
+    // pas). Au démarrage, on marque FAILED ceux trop anciens pour ne pas afficher
+    // une sync "en cours" éternelle. Fire-and-forget, tolérant aux erreurs.
+    (async () => {
+      try {
+        const staleMin = Number(process.env.STALE_RUN_TIMEOUT_MIN || 15);
+        const swept = await prismaClient.$executeRawUnsafe(`
+          UPDATE "IngestionRun"
+          SET status = 'FAILED',
+              finishedat = NOW(),
+              errormessage = COALESCE(errormessage, 'Run interrompu (timeout/redémarrage instance)')
+          WHERE status = 'RUNNING'
+            AND startedat < NOW() - ($1::int * INTERVAL '1 minute')
+        `, staleMin);
+        if (swept > 0) console.log(`🧹 ${swept} IngestionRun zombie(s) marqué(s) FAILED au démarrage`);
+      } catch (sweepErr) {
+        console.warn('⚠️  Sweeper IngestionRun:', sweepErr?.message);
+      }
+    })();
     return true;
   } catch (error) {
     console.error('⚠️  Prisma initialization error:', error.message);
@@ -4010,6 +4030,11 @@ app.post('/api/v1/ingestion/feeds/:id/runs', async (req, res) => {
       for (const email of accountEmails.slice(0, 3)) {
         sendErrorEmail(email, context, errMsg.substring(0, 500)).catch(err => console.warn('Email erreur sync non envoyé:', err.message));
       }
+    }
+
+    // B5 — catalogue au-delà du plafond d'ingestion synchrone : 413 explicite.
+    if (e?.statusCode === 413 || e?.code === 'INGEST_TOO_LARGE') {
+      return res.status(413).json({ code: 'INGEST_TOO_LARGE', message: errMsg });
     }
 
     // Retourner le message d'erreur réel pour faciliter le debug (sans exposer de secrets)
@@ -12699,6 +12724,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
     }
     const plat = platform ? String(platform).toUpperCase().replace(/GOOGLE/, 'GMC') : 'GMC';
     const result = {};
+    let aiCalls = 0;
     for (const itemId of itemIds) {
       const itemIdStr = String(itemId);
       const resolvedId = await resolveItemId(prisma, itemIdStr, accountId) || itemIdStr;
@@ -12723,6 +12749,7 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
       }
       const product = { ...item, customFields };
       try {
+        aiCalls++;
         const opt = await optimizeTitleWithAI(prisma, product, { platform: plat, forceRefresh: false });
         result[itemIdStr] = opt.optimizedTitle || item.title || '';
       } catch (err) {
@@ -12730,6 +12757,8 @@ app.post('/api/v1/optimization/titles/generate', authenticateToken, async (req, 
         result[itemIdStr] = item.title || '';
       }
     }
+    // B1 — comptage de la consommation IA (1 op = 1 titre généré).
+    if (aiCalls > 0) trackAiUsage(accountId, aiCalls);
     const hasAny = Object.values(result).some((v) => v && String(v).trim());
     if (!hasAny && itemIds.length > 0) {
       result._error = 'Aucun titre optimisé généré. Vérifiez que l\'IA est configurée (clé Gemini) ou réessayez.';
@@ -15552,6 +15581,12 @@ function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTI
   const timer = setTimeout(async () => {
     autoOptimizationTimers.delete(key);
     try {
+      // B1 — pas d'auto-optimisation IA sans pack IA : on pousse le contenu brut.
+      const hasIA = await getAccountAddonIA(prisma, accountId);
+      if (!hasIA) {
+        scheduleAutoGmcPush(accountId, feedId, `${reason} → sans pack IA (push brut)`, 0);
+        return;
+      }
       const items = await prisma.$queryRawUnsafe(`
         SELECT id, title, descriptiontext, descriptionhtml, brand, sku,
                customfields, gtin, mpn, price, currency
@@ -15632,6 +15667,8 @@ function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTI
         }
       }
       console.log(`✨ Auto-optim (${reason}) feed ${feedId} : ${succeeded} optimisés, ${failed} erreurs (sur ${items.length}) → push GMC`);
+      // B1 — comptage de la consommation IA (titre + description par produit optimisé).
+      trackAiUsage(accountId, succeeded);
       scheduleAutoGmcPush(accountId, feedId, `${reason} → post-optim`, 0);
     } catch (err) {
       console.warn(`⚠️ Auto-optim (${reason}) échoué pour feed ${feedId} :`, err?.message || err);
@@ -17034,6 +17071,13 @@ app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, 
       return res.status(503).json({ message: 'Service indisponible' });
     }
     const accountId = req.user.accountId;
+
+    // B1 — Gate add-on IA : aucune génération Gemini sans le pack IA souscrit.
+    const iaAccess = await canUseFeature(prisma, accountId, 'addonIA');
+    if (!iaAccess.allowed) {
+      return res.status(403).json({ code: 'PLAN_FEATURE', message: iaAccess.message });
+    }
+
     const { productIds, platforms } = req.body || {};
 
     const SUPPORTED_PLATFORMS = ['gmc', 'meta', 'amazon', 'tiktok', 'pinterest'];
@@ -17076,6 +17120,9 @@ app.post('/api/v1/embedded/products/optimize', authenticateJwtOrShopifySession, 
     }
 
     const totalOperations = items.length * requestedPlatforms.length;
+
+    // B1 — comptage de la consommation IA (1 op = titre + description / produit / canal).
+    trackAiUsage(accountId, totalOperations);
 
     res.status(202).json({
       accepted: true,

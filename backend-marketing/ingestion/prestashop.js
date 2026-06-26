@@ -484,6 +484,15 @@ async function ingestPrestashopFromApi({ prisma, feed, shopUrl, apiKey }) {
     const prestashopContext = await buildPrestashopContext({ baseUrl: shopUrl, apiKey, products });
     console.log(`📦 ${products.length} produit(s) récupéré(s) depuis Prestashop`);
 
+    // B5 — plafond d'ingestion synchrone (cf. PLAN_REMEDIATION_BLOQUANTS.md).
+    const MAX_INGEST_PRODUCTS = Number(process.env.MAX_INGEST_PRODUCTS || 5000);
+    if (products.length > MAX_INGEST_PRODUCTS) {
+      const err = new Error(`Catalogue PrestaShop trop volumineux pour l'import synchrone : ${products.length} produits (max ${MAX_INGEST_PRODUCTS}). Contactez-nous pour activer l'import par lots.`);
+      err.statusCode = 413;
+      err.code = 'INGEST_TOO_LARGE';
+      throw err;
+    }
+
     let totalInserted = 0;
     let totalUpdated = 0;
     let totalSkipped = 0;

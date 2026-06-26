@@ -37,9 +37,13 @@ steps:
       - '10'
       - '--timeout'
       - '300'
-      # Scale à zéro quand pas de trafic (réduit les coûts). Premier appel après inactivité = cold start ~5-15 s.
+      # B4 — min-instances 1 : indispensable tant que les jobs auto (push GMC,
+      # auto-optim, sync LIA) sont planifiés via setTimeout en mémoire process.
+      # Avec scale-to-zero, l'instance était tuée au repos et les timers .unref()
+      # débouncés étaient perdus silencieusement. À repasser à 0 une fois les jobs
+      # externalisés en Cloud Tasks (cf. PLAN_REMEDIATION_BLOQUANTS.md, B-PROPER).
       - '--min-instances'
-      - '0'
+      - '1'
       - '--set-env-vars'
       # SHOPIFY_SCOPES n'est pas listé ici : la valeur a des virgules qui
       # cassent la syntaxe gcloud --set-env-vars. Le défaut hardcodé dans

@@ -93,6 +93,17 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 		diagnostic.sampleColumns = records.length > 0 ? Object.keys(records[0]) : [];
 		console.log(`📊 ${totalFetched} lignes parsées`);
 
+		// B5 — plafond d'ingestion synchrone : au-delà, l'import dépasserait le
+		// timeout Cloud Run (300 s) ou la mémoire (2 Gi). Plafond levé une fois
+		// l'ingestion externalisée en background (cf. PLAN_REMEDIATION_BLOQUANTS.md).
+		const MAX_INGEST_PRODUCTS = Number(process.env.MAX_INGEST_PRODUCTS || 5000);
+		if (records.length > MAX_INGEST_PRODUCTS) {
+			const err = new Error(`Catalogue trop volumineux pour l'import synchrone : ${records.length} produits (max ${MAX_INGEST_PRODUCTS}). Contactez-nous pour activer l'import par lots.`);
+			err.statusCode = 413;
+			err.code = 'INGEST_TOO_LARGE';
+			throw err;
+		}
+
 		// Récupérer le mapping (peut être dans mappingJson ou mappingjson)
 		// PostgreSQL peut retourner mappingjson comme string JSON ou comme objet
 		let rawMapping = feed.mappingJson || feed.mappingjson || null;
