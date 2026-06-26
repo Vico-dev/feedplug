@@ -247,15 +247,23 @@ export function middleware(request: NextRequest) {
     url.hostname = 'app.feedplug.com';
     url.port = ''; // port par défaut HTTPS (443)
     url.pathname = pathnameWithoutLocale;
-    return NextResponse.redirect(url, 301);
+    // 302 (temporaire) et non 301 : ces redirections dépendent de la
+    // classification app/marketing (APP_ROUTES / MARKETING_ROUTES_PATTERNS).
+    // Un 301 serait mis en cache de façon permanente par les navigateurs ; si
+    // une route est mal classée (bug), la mauvaise redirection « colle » dans
+    // les caches même après correctif. Le 302 évite ce piège.
+    return NextResponse.redirect(url, 302);
   }
-  
+
   if (!isLocalHost && isAppDomain && isMarketingRoute) {
     const url = new URL(request.url);
     url.protocol = 'https:';
     url.hostname = 'feedplug.com';
     url.port = '';
-    return NextResponse.redirect(url, 301);
+    // 302 (temporaire) : voir explication ci-dessus — redirection dépendante de
+    // la classification de route, ne doit pas être mise en cache de façon
+    // permanente.
+    return NextResponse.redirect(url, 302);
   }
   
   // Docs
