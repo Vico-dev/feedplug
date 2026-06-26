@@ -165,6 +165,7 @@ export function middleware(request: NextRequest) {
   if (hostname === 'www.feedplug.com') {
     const url = new URL(request.url);
     url.hostname = 'feedplug.com';
+    url.port = ''; // sinon le :3000 interne Cloud Run fuit dans le Location → URL morte
     return NextResponse.redirect(url, 301);
   }
 
