@@ -42,8 +42,17 @@ export function Sidebar() {
   const filteredNavigation = getDashboardNavigation(user?.isStaff, t);
   const showExpanded = isMobile || !isCollapsed;
   const closeMobile = () => setMobileOpen(false);
-  const workspaceItems = filteredNavigation.filter((item) => item.section === "workspace");
-  const adminItems = filteredNavigation.filter((item) => item.section === "admin");
+  const navGroups = [
+    { key: "overview", label: "Vue d'ensemble" },
+    { key: "data", label: "Données" },
+    { key: "preparation", label: "Préparation" },
+    { key: "diffusion", label: "Diffusion" },
+    { key: "analysis", label: "Analyse" },
+    { key: "account", label: "Compte" },
+    { key: "admin", label: "Administration" },
+  ]
+    .map((group) => ({ ...group, items: filteredNavigation.filter((item) => item.group === group.key) }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     if (mobileOpen) {
@@ -139,32 +148,6 @@ export function Sidebar() {
           </button>
         )}
 
-        <button
-          type="button"
-          className="dashboard-sidebar-toggle-btn feedplug-focus-ring"
-          onClick={toggle}
-          aria-label={isCollapsed ? "Etendre la navigation" : "Reduire la navigation"}
-          style={{
-            position: "absolute",
-            right: -14,
-            top: 28,
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            border: "1px solid var(--line)",
-            backgroundColor: "var(--surface)",
-            boxShadow: "var(--sh-md)",
-            color: "var(--ink)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            zIndex: 5,
-          }}
-        >
-          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-
         <div
           style={{
             display: "flex",
@@ -217,10 +200,7 @@ export function Sidebar() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {[
-              { key: "workspace", label: "Workspace", items: workspaceItems },
-              ...(adminItems.length ? [{ key: "admin", label: "Administration", items: adminItems }] : []),
-            ].map((group) => (
+            {navGroups.map((group) => (
               <div key={group.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {showExpanded && (
                   <p
@@ -399,6 +379,36 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
+
+      {/* Toggle de rétraction — HORS de l'aside (qui a overflow:hidden, ce qui
+          rognait le bouton en deux). En position fixed, calé sur le bord droit
+          de la sidebar selon sa largeur. Masqué en mobile via la classe. */}
+      <button
+        type="button"
+        className="dashboard-sidebar-toggle-btn feedplug-focus-ring"
+        onClick={toggle}
+        aria-label={isCollapsed ? "Etendre la navigation" : "Reduire la navigation"}
+        style={{
+          position: "fixed",
+          top: 28,
+          left: (showExpanded ? 272 : 88) - 14,
+          width: 28,
+          height: 28,
+          borderRadius: 999,
+          border: "1px solid var(--line)",
+          backgroundColor: "var(--surface)",
+          boxShadow: "var(--sh-md)",
+          color: "var(--ink)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 71,
+          transition: "left var(--d-base) var(--ease)",
+        }}
+      >
+        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
     </>
   );
 }

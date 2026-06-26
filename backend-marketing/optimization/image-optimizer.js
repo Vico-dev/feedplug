@@ -15,6 +15,7 @@
 const sharp = require('sharp');
 const { Storage } = require('@google-cloud/storage');
 const crypto = require('crypto');
+const { safeFetch } = require('../lib/safe-url');
 
 const storage = new Storage();
 const bucketName = process.env.GOOGLE_CLOUD_STORAGE_BUCKET || 'feedplug-uploads';
@@ -55,7 +56,7 @@ const THUMBNAIL_SIZES = [100, 300, 800, 1200];
  */
 async function downloadImage(url) {
   try {
-    const response = await fetch(url);
+    const response = await safeFetch(url);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }

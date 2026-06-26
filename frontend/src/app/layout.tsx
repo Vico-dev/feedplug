@@ -70,10 +70,13 @@ export default async function RootLayout({
   //
   // Solution : un <script> inline (jamais async) qui injecte synchroniquement
   // le <script src="...app-bridge.js"> via document.write pendant le parsing
-  // HTML. C'est l'approche officielle recommandée par Shopify pour les apps
-  // embedded utilisant des frameworks SPA.
-  // Chargé sur toutes les routes (50 KB cacheable) ; App Bridge ne s'init que
-  // lorsque ?shop=...&host=... sont présents dans l'URL.
+  // HTML, MAIS uniquement sur les routes /embedded/*. App Bridge embarque
+  // son CSS Shopify Admin qui override --ink/--paper s'il est chargé sur les
+  // pages publiques (audit lead magnet, marketing, docs, login) — d'où le
+  // bug "texte noir sur fond noir" historique sur /audit-flux.
+  //
+  // Le check pathname.indexOf('/embedded')===0 tourne pendant le parsing du
+  // head donc document.write reste safe (pas d'effacement du body).
 
   return (
     <html lang={locale} suppressHydrationWarning className="light">
@@ -83,7 +86,7 @@ export default async function RootLayout({
             <meta name="shopify-api-key" content={SHOPIFY_API_KEY} />
             <script
               dangerouslySetInnerHTML={{
-                __html: `document.write('<script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"><\\/script>');`,
+                __html: `if(location.pathname.indexOf('/embedded')===0){document.write('<script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"><\\/script>');}`,
               }}
             />
           </>

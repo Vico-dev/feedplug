@@ -20,6 +20,7 @@ const APP_ROUTES = [
   '/catalogue',
   '/flux',
   '/markets',
+  '/channels',
   '/optimiser',
   '/ia',
   '/rapports',
@@ -127,6 +128,19 @@ export function middleware(request: NextRequest) {
   // la page elle-même depuis le query param `locale` (envoyé par Shopify Admin).
   if (embedded) {
     return applyFrameHeaders(NextResponse.next(), true);
+  }
+
+  // Variante préfixée par la locale (ex: /fr/embedded/channels) : certaines
+  // navigations client ajoutent le préfixe locale, ce qui échappe à
+  // isEmbeddedRoute et fait tomber la requête dans le gate cookie plus bas →
+  // redirect /login DANS l'iframe Shopify (le cookie app.feedplug.com étant
+  // tiers, donc non envoyé). On réécrit vers le path embedded canonique
+  // (/embedded/..., qui ne vit pas sous [locale]) en préservant les query params.
+  const embeddedWithoutLocale = stripLocalePrefix(pathname);
+  if (embeddedWithoutLocale !== pathname && isEmbeddedRoute(embeddedWithoutLocale)) {
+    const url = request.nextUrl.clone();
+    url.pathname = embeddedWithoutLocale;
+    return applyFrameHeaders(NextResponse.redirect(url, 307), true);
   }
 
   // Shopify Admin charge parfois l'app sur un path autre que /embedded en

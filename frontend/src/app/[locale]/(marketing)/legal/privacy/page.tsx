@@ -111,8 +111,74 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
           : "domaine myshopify, nom de la boutique, email de facturation (utilisé uniquement pour identifier le compte), code devise."}
       </p>
 
-      {/* === 3. Purposes === */}
-      <h2>{isEn ? "3. Processing purposes" : "3. Finalités du traitement"}</h2>
+      {/* === 3. Google user data (OAuth) === */}
+      <h2>{isEn ? "3. Google user data (OAuth connections)" : "3. Données Google (connexions OAuth)"}</h2>
+      <p>
+        {isEn
+          ? "When you connect a Google account to FeedPlug (Google Merchant Center or Google Ads), we access the following data through Google APIs, with your explicit consent on the Google authorization screen:"
+          : "Lorsque vous connectez un compte Google à FeedPlug (Google Merchant Center ou Google Ads), nous accédons aux données suivantes via les API Google, avec votre consentement explicite sur l'écran d'autorisation Google :"}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>{isEn ? "Google data" : "Donnée Google"}</th>
+            <th>{isEn ? "Purpose" : "Finalité"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{isEn ? "Email address of the connected Google account" : "Adresse email du compte Google connecté"}</td>
+            <td>{isEn ? "Display which Google account is linked to your FeedPlug workspace." : "Afficher quel compte Google est lié à votre espace FeedPlug."}</td>
+          </tr>
+          <tr>
+            <td>{isEn ? "Merchant Center accounts list and identifiers (Content API for Shopping)" : "Liste et identifiants de vos comptes Merchant Center (Content API for Shopping)"}</td>
+            <td>{isEn ? "Let you pick the destination account, then create and update your product offers in Google Merchant Center." : "Vous laisser choisir le compte de destination, puis créer et mettre à jour vos fiches produits dans Google Merchant Center."}</td>
+          </tr>
+          <tr>
+            <td>{isEn ? "Google Ads shopping performance metrics (read-only)" : "Métriques de performance Shopping de Google Ads (lecture seule)"}</td>
+            <td>{isEn ? "Display impressions, clicks, cost and revenue per product inside your FeedPlug performance dashboard." : "Afficher impressions, clics, coût et revenus par produit dans votre tableau de bord performance FeedPlug."}</td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          {isEn
+            ? "OAuth refresh tokens are encrypted at the application level (AES-256-GCM) before storage and are never exposed to third parties."
+            : "Les refresh tokens OAuth sont chiffrés au niveau applicatif (AES-256-GCM) avant stockage et ne sont jamais exposés à des tiers."}
+        </li>
+        <li>
+          {isEn
+            ? "Google user data is never sold, never used for advertising, never used to train AI models, and never read by humans except with your explicit permission for support purposes."
+            : "Les données Google ne sont jamais vendues, jamais utilisées à des fins publicitaires, jamais utilisées pour entraîner des modèles d'IA, et jamais consultées par un humain sauf autorisation explicite de votre part dans le cadre du support."}
+        </li>
+        <li>
+          {isEn
+            ? "Disconnecting Google from FeedPlug (or deleting your account) immediately revokes and deletes the stored tokens."
+            : "Déconnecter Google de FeedPlug (ou supprimer votre compte) révoque et supprime immédiatement les tokens stockés."}
+        </li>
+      </ul>
+      <p>
+        {isEn ? (
+          <>
+            FeedPlug&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </>
+        ) : (
+          <>
+            L&apos;utilisation et le transfert par FeedPlug des informations reçues des API Google respectent la{" "}
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">
+              Google API Services User Data Policy
+            </a>
+            , y compris les exigences de Limited Use (usage limité).
+          </>
+        )}
+      </p>
+
+      {/* === 4. Purposes === */}
+      <h2>{isEn ? "4. Processing purposes" : "4. Finalités du traitement"}</h2>
       <ul>
         <li>{isEn ? "Build, validate and continuously sync product feeds with Google Merchant Center, Microsoft Bing Shopping and Amazon Seller catalogs." : "Construire, valider et synchroniser en continu les flux produits avec Google Merchant Center, Microsoft Bing Shopping et les catalogues Amazon Seller."}</li>
         <li>{isEn ? "Optimise product titles and generate ad-friendly images (Pack IA add-on, opt-in)." : "Optimiser les titres produits et générer des images optimisées pub (Pack IA, opt-in)."}</li>
@@ -122,7 +188,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </ul>
 
       {/* === 4. Legal basis === */}
-      <h2>{isEn ? "4. Legal basis" : "4. Bases légales"}</h2>
+      <h2>{isEn ? "5. Legal basis" : "5. Bases légales"}</h2>
       <ul>
         <li>{isEn ? "Performance of the contract (provision of the FeedPlug service)." : "Exécution du contrat (fourniture du service FeedPlug)."}</li>
         <li>{isEn ? "Legitimate interest (security monitoring, fraud prevention, abuse rate-limits)." : "Intérêt légitime (sécurité, prévention de la fraude, rate-limits anti-abus)."}</li>
@@ -130,7 +196,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </ul>
 
       {/* === 5. Hosting & security === */}
-      <h2>{isEn ? "5. Hosting & security" : "5. Hébergement et sécurité"}</h2>
+      <h2>{isEn ? "6. Hosting & security" : "6. Hébergement et sécurité"}</h2>
       <p>
         {isEn
           ? "All data is hosted on Google Cloud Platform in the europe-west1 region (Saint-Ghislain, Belgium). PostgreSQL data is encrypted at rest, all traffic uses TLS 1.2+ in transit."
@@ -144,7 +210,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </ul>
 
       {/* === 6. Shopify GDPR webhooks === */}
-      <h2>{isEn ? "6. Shopify GDPR webhooks" : "6. Webhooks GDPR Shopify"}</h2>
+      <h2>{isEn ? "7. Shopify GDPR webhooks" : "7. Webhooks GDPR Shopify"}</h2>
       <p>
         {isEn
           ? "FeedPlug implements all three mandatory Shopify GDPR webhooks. Because we never collect customer data from Shopify stores, the customers-related webhooks are mostly acknowledgments:"
@@ -178,7 +244,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </table>
 
       {/* === 7. Subprocessors === */}
-      <h2>{isEn ? "7. Subprocessors" : "7. Sous-traitants"}</h2>
+      <h2>{isEn ? "8. Subprocessors" : "8. Sous-traitants"}</h2>
       <p>{isEn ? "FeedPlug relies on the following subprocessors:" : "FeedPlug s'appuie sur les sous-traitants suivants :"}</p>
       <table>
         <thead>
@@ -200,7 +266,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       <p>{isEn ? "Data Processing Agreements signed with each subprocessor (SCC where applicable)." : "Data Processing Agreements signés avec chaque sous-traitant (clauses contractuelles types le cas échéant)."}</p>
 
       {/* === 8. Retention === */}
-      <h2>{isEn ? "8. Retention" : "8. Conservation"}</h2>
+      <h2>{isEn ? "9. Retention" : "9. Conservation"}</h2>
       <ul>
         <li>{isEn ? "Active subscription: data retained as long as the subscription is active." : "Abonnement actif : données conservées tant que l'abonnement est actif."}</li>
         <li>{isEn ? "App uninstall: a 48-hour grace window before the shop/redact webhook triggers a full cascade deletion." : "Désinstallation de l'app : fenêtre de grâce 48h avant que le webhook shop/redact ne déclenche la suppression en cascade complète."}</li>
@@ -209,7 +275,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </ul>
 
       {/* === 9. Rights === */}
-      <h2>{isEn ? "9. Your rights" : "9. Vos droits"}</h2>
+      <h2>{isEn ? "10. Your rights" : "10. Vos droits"}</h2>
       <p>
         {isEn
           ? "Under GDPR you can request access, rectification, erasure, portability, restriction, or object to specific processing. You can also lodge a complaint with your supervisory authority (CNIL in France)."
@@ -222,7 +288,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </p>
 
       {/* === 10. Cookies === */}
-      <h2>{isEn ? "10. Cookies" : "10. Cookies"}</h2>
+      <h2>{isEn ? "11. Cookies" : "11. Cookies"}</h2>
       <p>
         {isEn
           ? "FeedPlug uses strictly necessary cookies (session, CSRF) and a minimal analytics cookie aggregated and anonymised. No third-party advertising cookies are set."
@@ -232,7 +298,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </p>
 
       {/* === 11. Updates === */}
-      <h2>{isEn ? "11. Changes to this policy" : "11. Modifications de cette politique"}</h2>
+      <h2>{isEn ? "12. Changes to this policy" : "12. Modifications de cette politique"}</h2>
       <p>
         {isEn
           ? "We may update this policy to reflect changes in our service, subprocessors or legal obligations. Material changes are notified by email to active merchants at least 30 days before they take effect."
@@ -240,7 +306,7 @@ function PrivacyContent({ isEn }: { isEn: boolean }) {
       </p>
 
       {/* === 12. Contact === */}
-      <h2>{isEn ? "12. Contact" : "12. Contact"}</h2>
+      <h2>{isEn ? "13. Contact" : "13. Contact"}</h2>
       <p>
         <a href="mailto:support@feedplug.com">support@feedplug.com</a> —{" "}
         {isEn ? "general support: " : "support général : "}

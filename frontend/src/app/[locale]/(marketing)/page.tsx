@@ -87,7 +87,14 @@ export default function MarketingLandingPage() {
     setIsSubmitting(false);
   };
 
-  const channels = ['Google Shopping', 'Amazon', 'Meta Ads', 'Cdiscount', 'Rakuten', 'Fnac', 'Mirakl', 'ChatGPT'];
+  const channels: Array<{ name: string; mode: string | null }> = [
+    { name: 'Google Shopping', mode: 'sync auto' },
+    { name: 'Meta', mode: 'sync auto' },
+    { name: 'Amazon', mode: 'export' },
+    { name: 'Cdiscount', mode: null },
+    { name: 'Rakuten', mode: null },
+    { name: 'ChatGPT', mode: null },
+  ];
   const heroAlternativeActions =
     locale === "es"
       ? {
@@ -545,7 +552,7 @@ export default function MarketingLandingPage() {
                       },
                       {
                         title: '3. Diffuser sans friction',
-                        text: 'Publiez vers Google Shopping, Amazon, marketplaces et assistants IA.',
+                        text: 'Sync automatique vers Google Shopping et Meta via URL de flux. Export pour Amazon, marketplaces et assistants IA.',
                         badge: 'Distribution',
                       },
                     ].map((step, index) => (
@@ -593,7 +600,7 @@ export default function MarketingLandingPage() {
                   >
                     {channels.map((channel) => (
                       <span
-                        key={channel}
+                        key={channel.name}
                         style={{
                           padding: '8px 12px',
                           borderRadius: '999px',
@@ -604,7 +611,8 @@ export default function MarketingLandingPage() {
                           color: 'var(--ink-3)',
                         }}
                       >
-                        {channel}
+                        {channel.name}
+                        {channel.mode && <span style={{ opacity: 0.6 }}> · {channel.mode}</span>}
                       </span>
                     ))}
                   </div>

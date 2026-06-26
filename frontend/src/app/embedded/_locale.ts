@@ -103,6 +103,9 @@ const translations: Translations = {
     "billing.loading": "Loading subscription…",
     "billing.intro":
       "14-day free trial on every plan. No commitment, change or cancel anytime from this screen.",
+    "billing.compareCta": "Choose my plan on Shopify",
+    "billing.compareHint":
+      "Compare the plans below, then pick and confirm your subscription on Shopify's secure page — in a single step.",
     "billing.trialFooter": tpl`${"trialDays" as keyof Vars} days free trial · cancel anytime`,
     "billing.recommended": "Recommended",
     "billing.pricePerMonth": "/ month",
@@ -322,6 +325,9 @@ const translations: Translations = {
     "billing.loading": "Chargement de l'abonnement…",
     "billing.intro":
       "14 jours d'essai gratuit sur tous les plans. Aucun engagement, changement ou annulation à tout moment.",
+    "billing.compareCta": "Choisir mon plan sur Shopify",
+    "billing.compareHint":
+      "Comparez les plans ci-dessous, puis choisissez et confirmez votre abonnement sur la page sécurisée Shopify — en une seule étape.",
     "billing.trialFooter": tpl`${"trialDays" as keyof Vars} jours d'essai · annulation à tout moment`,
     "billing.recommended": "Recommandé",
     "billing.pricePerMonth": "/ mois",
