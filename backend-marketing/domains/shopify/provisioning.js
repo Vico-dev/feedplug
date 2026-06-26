@@ -178,7 +178,7 @@ async function provisionAccountFromShopify({
       )
       VALUES (
         $1::text, $2::text, $3::text, $4::text,
-        $5::timestamptz, 'pending'::text, 'SHOPIFY'::text,
+        $5::timestamptz, NULL::text, 'SHOPIFY'::text,
         $6::timestamptz, $6::timestamptz
       )
       ON CONFLICT (id) DO NOTHING

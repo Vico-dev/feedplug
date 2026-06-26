@@ -532,6 +532,7 @@ model User {
   resetTokenExpiry  DateTime? @map("resettokenexpiry")
   status            String    @default("ACTIVE")
   lastLoginAt       DateTime? @map("lastloginat")
+  passwordChangedAt DateTime  @default(now()) @map("passwordchangedat")
   createdAt         DateTime  @default(now()) @map("createdat")
   updatedAt         DateTime  @updatedAt @map("updatedat")
 
@@ -539,6 +540,15 @@ model User {
 
   @@index([email])
   @@index([accountId])
+}
+
+model RevokedJti {
+  jti        String   @id
+  userId     String?  @map("userid")
+  expiresAt  DateTime @map("expiresat")
+  createdAt  DateTime @default(now()) @map("createdat")
+
+  @@index([expiresAt])
 }
 
 model PlatformConnection {
@@ -592,17 +602,19 @@ model SharedRateLimit {
 // ===== GOOGLE LOCAL INVENTORY ADS (LIA) =====
 
 model StoreLocation {
-  id        String   @id
-  accountId String   @map("accountid")
-  storeCode String   @map("storecode")
-  name      String?
-  address   String?
-  isActive  Boolean  @default(true) @map("isactive")
-  createdAt DateTime @default(now()) @map("createdat")
-  updatedAt DateTime @updatedAt @map("updatedat")
+  id                String   @id
+  accountId         String   @map("accountid")
+  storeCode         String   @map("storecode")
+  name              String?
+  address           String?
+  shopifyLocationId String?  @map("shopifylocationid")
+  isActive          Boolean  @default(true) @map("isactive")
+  createdAt         DateTime @default(now()) @map("createdat")
+  updatedAt         DateTime @updatedAt @map("updatedat")
 
   @@unique([accountId, storeCode])
   @@index([accountId])
+  @@index([accountId, shopifyLocationId])
 }
 
 model LocalInventory {

@@ -37,6 +37,7 @@ function registerAuthRoutes(app, {
   verifyTurnstileToken,
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  isTokenRevoked,
   jwtRefreshSecret,
   jwtVerifyOptions,
 }) {
@@ -249,6 +250,10 @@ function registerAuthRoutes(app, {
         return res.status(401).json({ message: 'Refresh token invalide ou expiré' });
       }
 
+      if (isTokenRevoked && (await isTokenRevoked(decoded))) {
+        return res.status(401).json({ message: 'Refresh token révoqué' });
+      }
+
       const user = await findUserById(decoded.id);
       if (!user) {
         return res.status(401).json({ message: 'Utilisateur non trouvé' });
@@ -263,6 +268,47 @@ function registerAuthRoutes(app, {
   });
 
   app.post('/api/v1/auth/logout', async (req, res) => {
+    // Révocation explicite du token courant (et du refresh fourni en body).
+    // Idempotent : même si la DB est down ou si le token est invalide, on
+    // répond 204 pour ne pas révéler l'état d'authentification au client.
+    try {
+      const prisma = getPrisma?.();
+      if (!getPrismaReady?.() || !prisma) {
+        return res.status(204).send();
+      }
+
+      const collect = [];
+      const authHeader = req.headers['authorization'];
+      const access = authHeader && authHeader.split(' ')[1];
+      if (access) {
+        const decoded = jwt.decode(access);
+        if (decoded?.jti && typeof decoded.exp === 'number') {
+          collect.push({ jti: decoded.jti, userId: decoded.id || null, exp: decoded.exp });
+        }
+      }
+      const refresh = req.body?.refreshToken;
+      if (refresh) {
+        const decoded = jwt.decode(refresh);
+        if (decoded?.jti && typeof decoded.exp === 'number') {
+          collect.push({ jti: decoded.jti, userId: decoded.id || null, exp: decoded.exp });
+        }
+      }
+
+      for (const { jti, userId, exp } of collect) {
+        try {
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "RevokedJti" (jti, userid, expiresat, createdat)
+             VALUES ($1::text, $2::text, to_timestamp($3), NOW())
+             ON CONFLICT (jti) DO NOTHING`,
+            jti, userId, exp
+          );
+        } catch (e) {
+          console.warn('logout: insert RevokedJti failed', e?.message);
+        }
+      }
+    } catch (e) {
+      console.warn('logout: error', e?.message);
+    }
     res.status(204).send();
   });
 
@@ -296,9 +342,14 @@ function registerAuthRoutes(app, {
       }
       const hashed = await bcrypt.hash(newPassword, 12);
       await prisma.$executeRawUnsafe(`
-        UPDATE "User" SET password = $1::text, updatedat = NOW() WHERE id = $2::text
+        UPDATE "User" SET password = $1::text, passwordchangedat = NOW(), updatedat = NOW() WHERE id = $2::text
       `, hashed, userId);
-      res.json({ message: 'Mot de passe modifié avec succès' });
+      // Réémet des tokens : ceux que l'utilisateur tient actuellement viennent
+      // d'être invalidés via passwordchangedat. Sans ça, la session courante
+      // tombe immédiatement (mauvaise UX).
+      const freshUser = await findUserById(userId);
+      const tokens = freshUser ? issueAuthTokens(freshUser) : null;
+      res.json({ message: 'Mot de passe modifié avec succès', ...(tokens || {}) });
     } catch (error) {
       console.error('PUT /auth/me/password error:', error);
       res.status(500).json({ message: 'Erreur lors du changement de mot de passe' });
@@ -421,7 +472,6 @@ function registerAuthRoutes(app, {
 
         // Envoyer l'email de reset
         sendPasswordResetEmail(normalizedEmail, resetToken).catch(e => console.warn('Email reset non envoyé:', e.message));
-        console.log(`Password reset requested for ${normalizedEmail}`);
       }
 
       res.json({ message: 'Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.' });
@@ -469,6 +519,7 @@ function registerAuthRoutes(app, {
           password = $1::text,
           resettoken = NULL,
           resettokenexpiry = NULL,
+          passwordchangedat = NOW(),
           updatedat = NOW()
         WHERE id = $2::text
       `, hashedPassword, users[0].id);
@@ -522,6 +573,7 @@ function registerAuthRoutes(app, {
             resettoken = NULL,
             resettokenexpiry = NULL,
             status = 'ACTIVE',
+            passwordchangedat = NOW(),
             updatedat = NOW()
           WHERE id = $2::text
         `, hashedPassword, userId);
@@ -532,6 +584,7 @@ function registerAuthRoutes(app, {
               password = $1::text,
               resettoken = NULL,
               resettokenexpiry = NULL,
+              passwordchangedat = NOW(),
               updatedat = NOW()
             WHERE id = $2::text
           `, hashedPassword, userId);

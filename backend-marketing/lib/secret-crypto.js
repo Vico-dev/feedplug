@@ -1,7 +1,24 @@
 const crypto = require('crypto');
 
-const ENCRYPTED_PREFIX = 'enc:v1:';
-let cachedKey = null;
+// Formats de payload :
+//  - enc:v1: <iv(12) | tag(16) | ct>  — KDF historique : sha256(material).
+//    Conservé en lecture seule pour les secrets déjà stockés en base.
+//  - enc:v2: <iv(12) | tag(16) | ct>  — KDF : scrypt(material, salt fixe).
+//    Toute nouvelle écriture utilise v2.
+//
+// Le salt scrypt est fixe par déploiement : la dérivation se fait une fois au
+// premier usage puis est mise en cache. Cela laisse à scrypt sa résistance
+// au bruteforce sur material faible (passphrase) sans payer le coût à chaque
+// chiffrement.
+const ENCRYPTED_PREFIX_V1 = 'enc:v1:';
+const ENCRYPTED_PREFIX_V2 = 'enc:v2:';
+const ENCRYPTED_PREFIX = ENCRYPTED_PREFIX_V2;
+
+const SCRYPT_SALT = Buffer.from('feedplug.secret-crypto.v2', 'utf8');
+const SCRYPT_PARAMS = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+
+let cachedKeyV1 = null;
+let cachedKeyV2 = null;
 
 function getKeyMaterial() {
   return process.env.FEEDPLUG_SECRET_ENCRYPTION_KEY ||
@@ -10,47 +27,67 @@ function getKeyMaterial() {
     '';
 }
 
-function getKey() {
-  const material = getKeyMaterial();
-  if (!material) return null;
-  if (!cachedKey || cachedKey.material !== material) {
-    cachedKey = {
+function getKeyV1(material) {
+  if (!cachedKeyV1 || cachedKeyV1.material !== material) {
+    cachedKeyV1 = {
       material,
       key: crypto.createHash('sha256').update(material).digest(),
     };
   }
-  return cachedKey.key;
+  return cachedKeyV1.key;
+}
+
+function getKeyV2(material) {
+  if (!cachedKeyV2 || cachedKeyV2.material !== material) {
+    cachedKeyV2 = {
+      material,
+      key: crypto.scryptSync(material, SCRYPT_SALT, 32, SCRYPT_PARAMS),
+    };
+  }
+  return cachedKeyV2.key;
 }
 
 function isEncryptedSecret(value) {
-  return typeof value === 'string' && value.startsWith(ENCRYPTED_PREFIX);
+  return typeof value === 'string' &&
+    (value.startsWith(ENCRYPTED_PREFIX_V2) || value.startsWith(ENCRYPTED_PREFIX_V1));
 }
 
 function encryptSecret(value) {
   if (value == null || value === '') return value;
   if (isEncryptedSecret(value)) return value;
-  const key = getKey();
-  if (!key) {
+  const material = getKeyMaterial();
+  if (!material) {
     throw new Error('SECRET_ENCRYPTION_KEY is required to encrypt secrets');
   }
 
+  const key = getKeyV2(material);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const plaintext = String(value);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
 
-  return `${ENCRYPTED_PREFIX}${Buffer.concat([iv, tag, encrypted]).toString('base64url')}`;
+  return `${ENCRYPTED_PREFIX_V2}${Buffer.concat([iv, tag, encrypted]).toString('base64url')}`;
 }
 
 function decryptSecret(value) {
   if (!isEncryptedSecret(value)) return value;
-  const key = getKey();
-  if (!key) {
+  const material = getKeyMaterial();
+  if (!material) {
     throw new Error('SECRET_ENCRYPTION_KEY is required to decrypt stored secrets');
   }
 
-  const payload = Buffer.from(value.slice(ENCRYPTED_PREFIX.length), 'base64url');
+  let key;
+  let payloadStart;
+  if (value.startsWith(ENCRYPTED_PREFIX_V2)) {
+    key = getKeyV2(material);
+    payloadStart = ENCRYPTED_PREFIX_V2.length;
+  } else {
+    key = getKeyV1(material);
+    payloadStart = ENCRYPTED_PREFIX_V1.length;
+  }
+
+  const payload = Buffer.from(value.slice(payloadStart), 'base64url');
   const iv = payload.subarray(0, 12);
   const tag = payload.subarray(12, 28);
   const encrypted = payload.subarray(28);

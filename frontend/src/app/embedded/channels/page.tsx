@@ -703,9 +703,16 @@ export default function EmbeddedChannelsPage() {
                 ) : null}
                 <InlineStack gap="300" wrap>
                   {amazonStatus.connected ? (
-                    <Button tone="critical" loading={amazonLoading} onClick={() => void handleDisconnectAmazon()}>
-                      Déconnecter
-                    </Button>
+                    <>
+                      {amazonStatus.tokenExpired ? (
+                        <Button variant="primary" loading={amazonLoading} onClick={() => void handleConnectAmazon()}>
+                          Reconnecter
+                        </Button>
+                      ) : null}
+                      <Button tone="critical" loading={amazonLoading} onClick={() => void handleDisconnectAmazon()}>
+                        Déconnecter
+                      </Button>
+                    </>
                   ) : (
                     <Button variant="primary" loading={amazonLoading} onClick={() => void handleConnectAmazon()}>
                       Connecter Amazon
@@ -718,6 +725,12 @@ export default function EmbeddedChannelsPage() {
                     Marketplaces actives
                   </Text>
                 </Box>
+
+                {amazonStatus.connected && amazonChannels.length === 0 ? (
+                  <Text variant="bodySm" as="p" tone="caution">
+                    Activez au moins un marketplace pour pouvoir pousser vos produits vers Amazon.
+                  </Text>
+                ) : null}
 
                 <InlineGrid columns={{ xs: 1, md: 2 }} gap="200">
                   {AMAZON_EXPORT_CHANNELS.map((channel) => {

@@ -20,6 +20,7 @@ const APP_ROUTES = [
   '/catalogue',
   '/flux',
   '/markets',
+  '/channels',
   '/optimiser',
   '/ia',
   '/rapports',
@@ -129,6 +130,19 @@ export function middleware(request: NextRequest) {
     return applyFrameHeaders(NextResponse.next(), true);
   }
 
+  // Variante préfixée par la locale (ex: /fr/embedded/channels) : certaines
+  // navigations client ajoutent le préfixe locale, ce qui échappe à
+  // isEmbeddedRoute et fait tomber la requête dans le gate cookie plus bas →
+  // redirect /login DANS l'iframe Shopify (le cookie app.feedplug.com étant
+  // tiers, donc non envoyé). On réécrit vers le path embedded canonique
+  // (/embedded/..., qui ne vit pas sous [locale]) en préservant les query params.
+  const embeddedWithoutLocale = stripLocalePrefix(pathname);
+  if (embeddedWithoutLocale !== pathname && isEmbeddedRoute(embeddedWithoutLocale)) {
+    const url = request.nextUrl.clone();
+    url.pathname = embeddedWithoutLocale;
+    return applyFrameHeaders(NextResponse.redirect(url, 307), true);
+  }
+
   // Shopify Admin charge parfois l'app sur un path autre que /embedded en
   // injectant ses query params (host base64 + shop myshopify.com). C'est le
   // cas notamment après approbation Managed Pricing (Shopify redirige vers
@@ -151,6 +165,7 @@ export function middleware(request: NextRequest) {
   if (hostname === 'www.feedplug.com') {
     const url = new URL(request.url);
     url.hostname = 'feedplug.com';
+    url.port = ''; // sinon le :3000 interne Cloud Run fuit dans le Location → URL morte
     return NextResponse.redirect(url, 301);
   }
 
@@ -233,15 +248,23 @@ export function middleware(request: NextRequest) {
     url.hostname = 'app.feedplug.com';
     url.port = ''; // port par défaut HTTPS (443)
     url.pathname = pathnameWithoutLocale;
-    return NextResponse.redirect(url, 301);
+    // 302 (temporaire) et non 301 : ces redirections dépendent de la
+    // classification app/marketing (APP_ROUTES / MARKETING_ROUTES_PATTERNS).
+    // Un 301 serait mis en cache de façon permanente par les navigateurs ; si
+    // une route est mal classée (bug), la mauvaise redirection « colle » dans
+    // les caches même après correctif. Le 302 évite ce piège.
+    return NextResponse.redirect(url, 302);
   }
-  
+
   if (!isLocalHost && isAppDomain && isMarketingRoute) {
     const url = new URL(request.url);
     url.protocol = 'https:';
     url.hostname = 'feedplug.com';
     url.port = '';
-    return NextResponse.redirect(url, 301);
+    // 302 (temporaire) : voir explication ci-dessus — redirection dépendante de
+    // la classification de route, ne doit pas être mise en cache de façon
+    // permanente.
+    return NextResponse.redirect(url, 302);
   }
   
   // Docs

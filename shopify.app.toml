@@ -21,7 +21,9 @@ api_version = "2026-04"
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_products"
-optional_scopes = [ ]
+# Scopes demandés à la volée (App Bridge scopes API) quand le marchand active
+# la source de stock Shopify POS pour les Local Inventory Ads.
+optional_scopes = [ "read_inventory", "read_locations" ]
 use_legacy_install_flow = false
 
 [auth]

@@ -47,7 +47,7 @@ const SHOPIFY_PLANS = Object.freeze({
   premium: {
     handle: 'premium',
     name: 'Premium',
-    priceEur: 449,
+    priceEur: 499,
     trialDays: 14,
     productsLimit: 50000,
     channelsLimit: 5,
@@ -73,9 +73,13 @@ function shopHandleFromDomain(shop) {
  * plan parmi ceux publiés dans Partners. Pas idéal UX (notre frontend montre
  * déjà les 4 plans), mais c'est la limite documentée Managed Pricing 2026-04.
  *
- * Le paramètre `planHandle` reste validé en entrée pour qu'on refuse les
- * tentatives de subscribe avec un plan inconnu, et pour tracer côté DB lequel
- * le merchant a cliqué initialement.
+ * Le `planHandle` est OPTIONNEL. L'URL Managed Pricing est de toute façon
+ * générique (la page liste tous les plans, Shopify ne supporte pas le deep-link
+ * vers un plan précis — cf. doc ci-dessous). On accepte donc :
+ *  - avec `planHandle` : on le valide (refuse un plan inconnu) et on peut tracer
+ *    côté DB lequel le merchant visait.
+ *  - sans `planHandle` : on ouvre simplement la page de sélection Shopify, où le
+ *    merchant choisit + approuve en une seule fois.
  *
  * Format documenté :
  *   https://admin.shopify.com/store/{shop_handle}/charges/{app_handle}/pricing_plans
@@ -87,8 +91,8 @@ function buildManagedPricingUrl({ shop, planHandle, appHandle = SHOPIFY_APP_HAND
   if (!shopHandle) {
     throw new Error(`buildManagedPricingUrl: shop invalide (${shop})`);
   }
-  const plan = getPlan(planHandle);
-  if (!plan) {
+  // Si un planHandle est fourni, on le valide ; sinon on ouvre la page générique.
+  if (planHandle != null && String(planHandle).trim() !== '' && !getPlan(planHandle)) {
     throw new Error(`buildManagedPricingUrl: plan inconnu (${planHandle})`);
   }
   return `https://admin.shopify.com/store/${encodeURIComponent(shopHandle)}/charges/${encodeURIComponent(appHandle)}/pricing_plans`;

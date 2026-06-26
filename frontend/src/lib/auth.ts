@@ -127,8 +127,11 @@ class AuthService {
       console.error('Logout API call failed:', error);
     } finally {
       this.clearAuth();
-      // Rediriger vers la page de connexion
-      if (typeof window !== 'undefined') {
+      // Rediriger vers la page de connexion — SAUF dans l'app embarquée Shopify.
+      // L'embarqué s'authentifie par session token Shopify (pas le JWT SaaS) ;
+      // un window.location vers /login ferait SORTIR le marchand de l'iframe
+      // Shopify vers la page de login SaaS standalone (bug constaté sur /embedded/channels).
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/embedded')) {
         window.location.href = '/login';
       }
     }

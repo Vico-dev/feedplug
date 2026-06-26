@@ -21,6 +21,7 @@ import { useOnboarding } from "@/contexts/onboarding-context";
 import Link from "next/link";
 import { getFeeds, getFeedAudit, updateFeedAutoPush, exportFeedAsCsv,exportFeedAsCsvAmazon, exportFeedAsCsvAmazonForDestination, exportFeedAsCsvBaidu, exportFeedAsCsvBing, exportFeedAsCsvCdiscount, exportFeedAsCsvForDestination, exportFeedAsCsvGemini, exportFeedAsCsvLia, exportFeedAsCsvMeta, exportFeedAsCsvPerplexity, exportFeedAsCsvPinterest, exportFeedAsCsvRakuten, exportFeedAsCsvSnapchat, exportFeedAsCsvTikTok, exportFeedAsCsvYandex, exportFeedAsChatGPT, AMAZON_EXPORT_CHANNELS, type Feed, type FeedAudit } from "@/lib/services/flux.service";
 import { getMarkets, type Market } from "@/lib/services/markets.service";
+import { connectAmazon } from "@/lib/services/platforms.service";
 import { CreateExportModal } from "@/components/forms/create-export-modal";
 import { usePlanCapabilities } from "@/hooks/use-plan-capabilities";
 import {
@@ -360,14 +361,20 @@ export default function FluxPage() {
   const handleConnectAmazon = async () => {
     setAmazonLoading(true);
     try {
-      const { data } = await apiClient.get<{ connectUrl?: string; message?: string }>('/platforms/amazon/connect-init');
-      if (data?.connectUrl) {
-        window.location.href = data.connectUrl;
-      } else {
-        showToast(data.message || 'Connexion Amazon non configurée. Contactez le support.', 'error');
+      const result = await connectAmazon(`/${locale}/flux`);
+      if (result.kind === 'redirect') {
+        window.location.href = result.url;
+        return;
       }
+      // SP-API pas encore activé (configured:false) → message neutre, pas une erreur rouge.
+      showToast(result.message, 'info');
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Erreur de connexion Amazon', 'error');
+      const message = e instanceof Error ? e.message : 'Erreur de connexion Amazon';
+      if (/oauth\s*non\s*configur/i.test(message)) {
+        showToast('La connexion Amazon Seller Central arrive bientôt sur FeedPlug.', 'info');
+      } else {
+        showToast(message, 'error');
+      }
     } finally {
       setAmazonLoading(false);
     }
@@ -956,13 +963,18 @@ export default function FluxPage() {
                     </p>
                   </div>
                 </div>
-                {amazonStatus.connected ? (
-                  <PageButtonSecondary onClick={requestDisconnectAmazon} disabled={amazonLoading}>Deconnecter</PageButtonSecondary>
-                ) : (
-                  <PageButtonPrimary onClick={handleConnectAmazon} disabled={amazonLoading}>
-                    {amazonLoading ? t("fluxPage.connecting") : t("fluxPage.connectAmazon")}
-                  </PageButtonPrimary>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  {amazonStatus.connected ? (
+                    <PageButtonSecondary onClick={requestDisconnectAmazon} disabled={amazonLoading}>Deconnecter</PageButtonSecondary>
+                  ) : (
+                    <PageButtonPrimary onClick={handleConnectAmazon} disabled={amazonLoading}>
+                      {amazonLoading ? t("fluxPage.connecting") : t("fluxPage.connectAmazon")}
+                    </PageButtonPrimary>
+                  )}
+                  <Link href={`/${locale}/channels`} style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
+                    Gérer les canaux →
+                  </Link>
+                </div>
               </div>
             </PageCard>
           </div>

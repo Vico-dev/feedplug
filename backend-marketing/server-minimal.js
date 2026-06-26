@@ -1161,10 +1161,50 @@ function buildAuthUser(user, req) {
 
 function issueAuthTokens(user) {
   const payload = buildAuthPayload(user);
+  // jti distinct par token : permet la révocation explicite (logout) sans
+  // affecter les autres sessions du même utilisateur.
   return {
-    accessToken: jwt.sign(payload, EFFECTIVE_JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN }),
-    refreshToken: jwt.sign(payload, EFFECTIVE_JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN })
+    accessToken: jwt.sign({ ...payload, jti: crypto.randomUUID() }, EFFECTIVE_JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN }),
+    refreshToken: jwt.sign({ ...payload, jti: crypto.randomUUID() }, EFFECTIVE_JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN })
   };
+}
+
+/**
+ * Vérifie si un JWT déjà décodé doit être rejeté.
+ * Combine deux mécanismes :
+ *  - RevokedJti : révocation explicite (logout)
+ *  - User.passwordchangedat : tout token signé avant un changement de
+ *    mot de passe est rejeté (couvre password change / reset / accept-invitation)
+ */
+async function isTokenRevoked(decoded) {
+  if (!decoded || !prismaReady || !prisma) return false;
+  try {
+    if (decoded.jti) {
+      const revoked = await prisma.$queryRawUnsafe(
+        `SELECT 1 FROM "RevokedJti" WHERE jti = $1::text AND expiresat > NOW() LIMIT 1`,
+        decoded.jti
+      );
+      if (revoked && revoked.length > 0) return true;
+    }
+    if (decoded.id && typeof decoded.iat === 'number') {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT passwordchangedat FROM "User" WHERE id = $1::text LIMIT 1`,
+        decoded.id
+      );
+      const pca = rows?.[0]?.passwordchangedat;
+      if (pca) {
+        // iat est en secondes (RFC 7519), passwordchangedat en ms côté JS.
+        const pcaSec = Math.floor(new Date(pca).getTime() / 1000);
+        if (decoded.iat < pcaSec) return true;
+      }
+    }
+  } catch (err) {
+    // En cas d'erreur DB on est strict : on ne peut pas confirmer l'état,
+    // donc on rejette plutôt que d'autoriser un token potentiellement révoqué.
+    console.warn('isTokenRevoked error:', err?.message);
+    return true;
+  }
+  return false;
 }
 
 // Stripe webhook AVANT express.json() (nécessite body raw pour signature)
@@ -1261,10 +1301,18 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
           const planKey = accountRow?.[0]?.plan_key;
           if (accountId) {
             if (status === 'ACTIVE') {
+              // Pack IA bundlé dans les tiers (Option B) : on active/désactive
+              // l'add-on IA selon que le plan souscrit l'inclut (Business/Premium)
+              // ou non (Starter/Pro). Source de vérité : SHOPIFY_PLANS.includesAI.
+              const planForAddon = planKey
+                ? shopifyManagedPricing.getPlan(String(planKey).toLowerCase())
+                : null;
+              const addonIA = planForAddon?.includesAI === true;
               await prisma.$executeRawUnsafe(
-                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
+                `UPDATE "Account" SET plan = $2::text, billing_provider = 'SHOPIFY'::text, billingstatus = 'active'::text, addonia = $3::boolean, paymentgraceuntil = NULL, updatedat = NOW() WHERE id = $1::text`,
                 accountId,
-                planKey
+                planKey,
+                addonIA
               );
             } else if (status === 'CANCELLED' || status === 'EXPIRED' || status === 'FROZEN' || status === 'DECLINED') {
               await prisma.$executeRawUnsafe(
@@ -1398,6 +1446,9 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const user = jwt.verify(token, EFFECTIVE_JWT_SECRET, JWT_VERIFY_OPTIONS);
+    if (await isTokenRevoked(user)) {
+      return res.status(401).json({ message: 'Token révoqué' });
+    }
     req.user = user;
     req.accountId = user.accountId;
     if (!req.accountId) {
@@ -1440,6 +1491,9 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
       // basculer sur Shopify (risque de routage cross-tenant si on tentait
       // l'auto-provisioning derrière).
       return res.status(403).json({ message: 'Compte non associé au token' });
+    }
+    if (await isTokenRevoked(user)) {
+      return res.status(401).json({ message: 'Token révoqué' });
     }
     req.user = user;
     req.accountId = user.accountId;
@@ -5624,6 +5678,13 @@ function parseJsonObject(value) {
   return typeof value === 'object' ? value : {};
 }
 
+// Parse le champ `customfields` d'un FeedItem (string JSON ou objet) en objet.
+// Alias historique attendu par le code destinations/activations (était appelé
+// sans être défini → ReferenceError → 500 sur GET .../destinations).
+function parseProductCustomFields(value) {
+  return parseJsonObject(value);
+}
+
 function decryptPlatformConnection(row) {
   if (!row || typeof row !== 'object') return row;
   return {
@@ -5692,6 +5753,20 @@ function buildLocalizedAppUrl(appUrl, locale, pathname) {
 
 function buildFluxRedirectUrl(appUrl, locale, params = {}) {
   const target = new URL(buildLocalizedAppUrl(appUrl, locale, '/flux'));
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue;
+    target.searchParams.set(key, String(value));
+  }
+  return target.toString();
+}
+
+// Redirige une surface dashboard vers le `returnTo` stocké (ex. /fr/channels)
+// quand il est sûr, sinon retombe EXACTEMENT sur `fallbackBaseUrl` (comportement
+// historique : /flux pour GMC, /performance pour Google Ads). Sert à ramener
+// l'utilisateur sur la page d'où il a lancé la connexion.
+function buildSurfaceReturnRedirectUrl(appUrl, returnTo, fallbackBaseUrl, params = {}) {
+  const safe = normalizeDashboardReturnTo(returnTo, '');
+  const target = safe ? new URL(safe, appUrl) : new URL(fallbackBaseUrl);
   for (const [key, value] of Object.entries(params || {})) {
     if (value === undefined || value === null || value === '') continue;
     target.searchParams.set(key, String(value));
@@ -6352,8 +6427,12 @@ async function maybeGenerateMarketingAuditReport(auditRow) {
 // Export feed as CSV (Google Merchant Center style)
 function escapeCsvCell(val) {
   if (val === null || val === undefined) return '""';
-  const s = String(val).replace(/"/g, '""');
-  if (/[",\n\r]/.test(s)) return `"${s}"`;
+  let s = String(val).replace(/"/g, '""');
+  // Neutralise l'injection de formule (Excel/Calc) : préfixe ' si la cellule
+  // commence par un caractère interprété comme formule.
+  if (s.length > 0 && '=+-@\t\r'.includes(s[0])) {
+    s = `'${s}`;
+  }
   return `"${s}"`;
 }
 
@@ -10059,6 +10138,7 @@ registerAuthRoutes(app, {
   verifyTurnstileToken,
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  isTokenRevoked,
   jwtRefreshSecret: EFFECTIVE_JWT_REFRESH_SECRET,
   jwtVerifyOptions: JWT_VERIFY_OPTIONS,
 });
@@ -13011,7 +13091,9 @@ app.get('/api/v1/platforms/gmc/auth-url', authenticateJwtOrShopifySession, async
   ];
   const locale = normalizeAppLocale(req.query.locale);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /flux
   const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 
   // State CSRF : on stocke le payload en base derrière un UUID opaque au lieu
@@ -13140,7 +13222,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Compte FeedPlug manquant pour la connexion GMC.',
       }));
@@ -13205,7 +13287,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
           },
         }));
       }
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'error',
         message: 'Aucun Merchant Center accessible n’a ete trouve pour ce compte Google.',
       }));
@@ -13245,7 +13327,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
         }));
       }
 
-      return res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
         gmc: 'select',
         selection: selectionId,
       }));
@@ -13310,7 +13392,7 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(buildFluxRedirectUrl(appUrl, dashboardLocale, {
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, buildLocalizedAppUrl(appUrl, dashboardLocale, '/flux'), {
       gmc: 'connected',
       merchant: selectedMerchant.merchantId || '',
     }));
@@ -13473,7 +13555,9 @@ app.get('/api/v1/platforms/google-ads/auth-url', authenticateJwtOrShopifySession
   const scopes = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/userinfo.email'];
   const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
   const embeddedSurface = String(req.query.surface || '').trim().toLowerCase() === 'embedded';
-  const returnTo = normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels');
+  const returnTo = embeddedSurface
+    ? normalizeEmbeddedReturnTo(req.query.returnTo, '/embedded/channels')
+    : normalizeDashboardReturnTo(req.query.returnTo, ''); // '' → le callback retombe sur /performance
   const stateId = crypto.randomUUID();
   try {
     await storeOAuthEphemeralState({
@@ -13533,7 +13617,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
           params: { google_ads: 'error', message: 'Configuration Google Ads manquante.' },
         }));
       }
-      return res.redirect(`${performanceRedirect}?error=config`);
+      return res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+        google_ads: 'error',
+        error: 'config',
+        message: 'Configuration Google Ads manquante.',
+      }));
     }
     const oauth2Client = new OAuth2Client(GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REDIRECT_URI);
     const { tokens } = await oauth2Client.getToken(code);
@@ -13584,7 +13672,10 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
       }));
     }
 
-    res.redirect(`${performanceRedirect}?google_ads=connected&customer=${customerId || ''}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData.returnTo, performanceRedirect, {
+      google_ads: 'connected',
+      customer: customerId || '',
+    }));
   } catch (error) {
     console.error('Google Ads OAuth callback error:', error);
     if (stateData?.surface === 'embedded') {
@@ -13595,7 +13686,11 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         params: { google_ads: 'error', message: error.message || 'Connexion Google Ads impossible.' },
       }));
     }
-    res.redirect(`${appUrl}/performance?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
+    res.redirect(buildSurfaceReturnRedirectUrl(appUrl, stateData?.returnTo, performanceRedirect, {
+      google_ads: 'error',
+      error: 'oauth_failed',
+      message: error.message || 'Connexion Google Ads impossible.',
+    }));
   }
 });
 
@@ -14374,7 +14469,7 @@ app.get('/api/v1/platforms/amazon/callback', async (req, res) => {
       const meta = stringifyEncryptedJson({ sellerId });
       if (existing && existing.length > 0) {
         await prisma.$executeRawUnsafe(`
-          UPDATE "PlatformConnection" SET merchantid = $1::text, accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
+          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
           tokenexpiry = $4::timestamptz, status = 'active', metadata = $5::jsonb, updatedat = NOW()
           WHERE accountid = $6::text AND platform = 'amazon'
         `, sellerId || null, encryptSecret(tokens.access_token), encryptSecret(tokens.refresh_token), expiry, meta, accountId);
@@ -14532,7 +14627,7 @@ app.post('/api/v1/platforms/amazon/connect', authenticateJwtOrShopifySession, as
       const meta = stringifyEncryptedJson({ sellerId: seller_id });
       if (existing && existing.length > 0) {
         await prisma.$executeRawUnsafe(`
-          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = $3::text,
+          UPDATE "PlatformConnection" SET merchantid = COALESCE($1::text, merchantid), accesstoken = $2::text, refreshtoken = COALESCE($3::text, refreshtoken),
           tokenexpiry = $4::timestamptz, status = 'active', metadata = $5::jsonb, updatedat = NOW()
           WHERE accountid = $6::text AND platform = 'amazon'
         `, seller_id || null, encryptSecret(tokens.access_token), encryptSecret(refresh_token), expiry, meta, req.accountId);
@@ -16403,9 +16498,14 @@ app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, a
       return res.status(503).json({ message: 'Service indisponible' });
     }
     const accountId = req.user.accountId;
-    const planHandle = String(req.body?.plan || '').trim().toLowerCase();
-    const plan = shopifyManagedPricing.getPlan(planHandle);
-    if (!plan) {
+    // `plan` est OPTIONNEL : Managed Pricing redirige de toute façon vers la
+    // page de sélection Shopify (pas de deep-link plan possible). On accepte
+    //  - sans plan : on ouvre juste la page de sélection (choix + approbation
+    //    en une seule fois côté Shopify) — pas de trace PENDING.
+    //  - avec plan : on valide le handle et on trace l'intention en DB.
+    const planHandleRaw = String(req.body?.plan || '').trim().toLowerCase();
+    const plan = planHandleRaw ? shopifyManagedPricing.getPlan(planHandleRaw) : null;
+    if (planHandleRaw && !plan) {
       return res.status(400).json({
         message: 'Plan inconnu. Valeurs valides : starter, pro, business, premium.',
       });
@@ -16420,34 +16520,36 @@ app.post('/api/v1/billing/shopify/subscribe', authenticateJwtOrShopifySession, a
 
     const confirmationUrl = shopifyManagedPricing.buildManagedPricingUrl({
       shop: credential.shop,
-      planHandle: plan.handle,
+      planHandle: plan ? plan.handle : undefined,
     });
 
-    // Trace la tentative en DB (status PENDING). Le subscription_id réel est
-    // attribué par Shopify lors de l'approbation et nous arrive via webhook
-    // app_subscriptions/update. Ici on stocke un id provisoire.
-    await shopifyBilling.upsertShopifySubscription({
-      prisma,
-      row: {
-        accountId,
-        shopDomain: credential.shop,
-        shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
-        planKey: plan.handle.toUpperCase(),
-        priceAmount: plan.priceEur,
-        currency: 'EUR',
-        interval: 'EVERY_30_DAYS',
-        status: 'PENDING',
-        trialDays: plan.trialDays || 0,
-        confirmationUrl,
-        returnUrl: null,
-        testMode: process.env.NODE_ENV !== 'production',
-      },
-    });
+    // Trace la tentative en DB (status PENDING) uniquement si un plan précis a
+    // été cliqué. Le subscription_id réel est attribué par Shopify lors de
+    // l'approbation et nous arrive via webhook app_subscriptions/update.
+    if (plan) {
+      await shopifyBilling.upsertShopifySubscription({
+        prisma,
+        row: {
+          accountId,
+          shopDomain: credential.shop,
+          shopifySubscriptionId: `pending_${accountId}_${plan.handle}_${Date.now()}`,
+          planKey: plan.handle.toUpperCase(),
+          priceAmount: plan.priceEur,
+          currency: 'EUR',
+          interval: 'EVERY_30_DAYS',
+          status: 'PENDING',
+          trialDays: plan.trialDays || 0,
+          confirmationUrl,
+          returnUrl: null,
+          testMode: process.env.NODE_ENV !== 'production',
+        },
+      });
+    }
 
     return res.json({
       confirmationUrl,
-      plan: plan.handle,
-      priceEur: plan.priceEur,
+      plan: plan ? plan.handle : null,
+      priceEur: plan ? plan.priceEur : null,
     });
   } catch (err) {
     console.error('Shopify managed pricing subscribe error:', err);

@@ -15,7 +15,7 @@ import {
   parseProductCustomFields,
   type OptimizedPlatformKey,
 } from "@/lib/optimized-product-content";
-import { AlertCircle, Copy, ImagePlus, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, ChevronDown, Copy, FileText, ImageIcon, ImagePlus, Loader2, Sparkles } from "lucide-react";
 
 type LifestyleChannel = "global" | "gmc" | "facebook" | "leroyMerlin";
 
@@ -223,6 +223,8 @@ export function ProductAiOptimizationModal({
   const [uploadedBase64, setUploadedBase64] = useState<string | null>(null);
   const [uploadedMimeType, setUploadedMimeType] = useState("image/jpeg");
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"texte" | "image">("texte");
+  const [showAdvancedImage, setShowAdvancedImage] = useState(false);
   const pasteZoneRef = useRef<HTMLDivElement>(null);
   const autoGenerateTriggeredRef = useRef(false);
   const scopeBootstrapPendingRef = useRef(false);
@@ -623,12 +625,12 @@ export function ProductAiOptimizationModal({
         }}
       />
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleRequestClose(); }}>
-      <DialogContent className="max-w-5xl w-[96vw] max-h-[92vh] overflow-hidden p-0">
+      <DialogContent className="max-w-3xl w-[92vw] max-h-[90vh] overflow-hidden p-0">
         <DialogTitle className="sr-only">Optimisation IA produit</DialogTitle>
         <DialogDescription className="sr-only">
           Une seule modale pour optimiser le titre, la description, les highlights et l&apos;image produit.
         </DialogDescription>
-        <div className="flex max-h-[92vh] flex-col bg-white">
+        <div className="flex max-h-[90vh] flex-col bg-white">
           <div className="border-b border-border bg-white px-6 py-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
@@ -702,273 +704,327 @@ export function ProductAiOptimizationModal({
                 </AlertDescription>
               </Alert>
             )}
-            <Alert className="mt-4 border-sky-200 bg-sky-50 text-sky-950">
-              <AlertDescription>
-                <strong>{selectedScopeLabel}</strong>
-                {selectedDestination
-                  ? hasScopedDestinationContent
-                    ? " dispose déjà d'une version dédiée. Les changements resteront limités à cette destination."
-                    : " n'a pas encore de version dédiée. FeedPlug part de la meilleure version existante pour vous laisser l'adapter sans toucher à la fiche source."
-                  : " reste la base commune partagée entre vos différents marchés."}
-              </AlertDescription>
-            </Alert>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              <strong className="font-medium text-foreground">{selectedScopeLabel}</strong>
+              {selectedDestination
+                ? hasScopedDestinationContent
+                  ? " dispose déjà d'une version dédiée. Les changements resteront limités à cette destination."
+                  : " n'a pas encore de version dédiée. FeedPlug part de la meilleure version existante pour vous laisser l'adapter sans toucher à la fiche source."
+                : " reste la base commune partagée entre vos différents marchés."}
+            </p>
           </div>
 
-          <div className="grid flex-1 gap-0 overflow-y-auto lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-6 px-6 py-5">
-              <section className="rounded-xl border border-border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Titre produit</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedDestination
-                        ? `Version mémorisée pour ${selectedScopeLabel}, sans écraser le titre source.`
-                        : `Version appliquée à la fiche et mémorisée pour ${PLATFORMS.find((entry) => entry.value === platform)?.label}.`}
-                    </p>
-                  </div>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void generateTitle()} disabled={!canUseAddonIA || titleLoading}>
-                    {titleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Générer
-                  </Button>
-                </div>
-                <textarea
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
-                />
-              </section>
-
-              <section className="rounded-xl border border-border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Description</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {platform === "gmc"
-                        ? "Texte factuel, lisible et conforme au style Google Merchant Center. Pas de ✓, pas de blocs marketing."
-                        : selectedDestination
-                          ? "Texte localisé pour cette destination, sans modifier la description source."
-                          : "Texte long optimisé pour la fiche produit et la plateforme cible."}
-                    </p>
-                  </div>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void generateDescription()} disabled={!canUseAddonIA || descriptionLoading}>
-                    {descriptionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Générer
-                  </Button>
-                </div>
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={8}
-                  placeholder={platform === "gmc" ? "Description factuelle en 2 à 3 paragraphes courts." : undefined}
-                  className="min-h-[220px] w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
-                />
-              </section>
-
-              <section className="rounded-xl border border-border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Highlights produit</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {platform === "gmc"
-                        ? "Un fragment par ligne. Pour GMC: 4 à 6 points courts, concrets, sans promo ni information magasin."
-                        : selectedDestination
-                          ? "Un point par ligne. Ils seront stockés dans la couche optimisée de cette destination."
-                          : "Un point par ligne. Ils sont stockés dans la couche optimisée par plateforme."}
-                    </p>
-                  </div>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void generateHighlights()} disabled={!canUseAddonIA || highlightsLoading}>
-                    {highlightsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Générer
-                  </Button>
-                </div>
-                {currentPlatformContent.highlights.length > 0 && (
-                  <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                    <div className="text-xs uppercase tracking-wide text-emerald-700">Version actuellement retenue</div>
-                    <p className="mt-1 text-sm text-emerald-900">
-                      Les arguments déjà mémorisés pour {PLATFORMS.find((entry) => entry.value === platform)?.label}.
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {currentPlatformContent.highlights.slice(0, 6).map((highlight) => (
-                        <div key={highlight} className="rounded-lg bg-white/85 px-3 py-2 text-sm text-foreground">
-                          {highlight}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <textarea
-                  value={highlightsText}
-                  onChange={(event) => setHighlightsText(event.target.value)}
-                  rows={6}
-                  placeholder={platform === "gmc"
-                    ? "Ex: Bol inox 3 L\nEx: 10 programmes automatiques\nEx: Cuisson vapeur et mijotage"
-                    : "Ex: Matériaux durables\nEx: Format compact\nEx: Usage quotidien"}
-                  className="min-h-[188px] w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
-                />
-              </section>
+          <div className="border-b border-border bg-white px-6">
+            <div role="tablist" aria-label="Sections d'optimisation" className="flex gap-6">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "texte"}
+                onClick={() => setActiveTab("texte")}
+                className={`-mb-px flex items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors ${
+                  activeTab === "texte"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+                Texte
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "image"}
+                onClick={() => setActiveTab("image")}
+                className={`-mb-px flex items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors ${
+                  activeTab === "image"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ImageIcon className="h-4 w-4" />
+                Image
+                {imageUrl && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />}
+              </button>
             </div>
+          </div>
 
-            <div className="border-t border-border bg-slate-50/50 px-6 py-5 lg:border-l lg:border-t-0">
-              <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Image produit</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Mise en situation générée et réutilisable sur la fiche. Pour l&apos;instant, le visuel reste partagé entre les destinations.
-                    </p>
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {activeTab === "texte" ? (
+              <div className="space-y-6">
+                <section className="rounded-xl border border-border p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Titre produit</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedDestination
+                          ? `Version mémorisée pour ${selectedScopeLabel}, sans écraser le titre source.`
+                          : `Version appliquée à la fiche et mémorisée pour ${PLATFORMS.find((entry) => entry.value === platform)?.label}.`}
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void generateTitle()} disabled={!canUseAddonIA || titleLoading}>
+                      {titleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Générer
+                    </Button>
                   </div>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void generateImage()} disabled={!canUseAddonIA || imageLoading}>
+                  <textarea
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
+                  />
+                </section>
+
+                <section className="rounded-xl border border-border p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Description</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {platform === "gmc"
+                          ? "Texte factuel, lisible et conforme au style Google Merchant Center. Pas de ✓, pas de blocs marketing."
+                          : selectedDestination
+                            ? "Texte localisé pour cette destination, sans modifier la description source."
+                            : "Texte long optimisé pour la fiche produit et la plateforme cible."}
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void generateDescription()} disabled={!canUseAddonIA || descriptionLoading}>
+                      {descriptionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Générer
+                    </Button>
+                  </div>
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    rows={8}
+                    placeholder={platform === "gmc" ? "Description factuelle en 2 à 3 paragraphes courts." : undefined}
+                    className="min-h-[220px] w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
+                  />
+                </section>
+
+                <section className="rounded-xl border border-border p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Highlights produit</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {platform === "gmc"
+                          ? "Un fragment par ligne. Pour GMC: 4 à 6 points courts, concrets, sans promo ni information magasin."
+                          : selectedDestination
+                            ? "Un point par ligne. Ils seront stockés dans la couche optimisée de cette destination."
+                            : "Un point par ligne. Ils sont stockés dans la couche optimisée par plateforme."}
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void generateHighlights()} disabled={!canUseAddonIA || highlightsLoading}>
+                      {highlightsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Générer
+                    </Button>
+                  </div>
+                  {currentPlatformContent.highlights.length > 0 && (
+                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                      <div className="text-xs uppercase tracking-wide text-emerald-700">Version actuellement retenue</div>
+                      <p className="mt-1 text-sm text-emerald-900">
+                        Les arguments déjà mémorisés pour {PLATFORMS.find((entry) => entry.value === platform)?.label}.
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {currentPlatformContent.highlights.slice(0, 6).map((highlight) => (
+                          <div key={highlight} className="rounded-lg bg-white/85 px-3 py-2 text-sm text-foreground">
+                            {highlight}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <textarea
+                    value={highlightsText}
+                    onChange={(event) => setHighlightsText(event.target.value)}
+                    rows={6}
+                    placeholder={platform === "gmc"
+                      ? "Ex: Bol inox 3 L\nEx: 10 programmes automatiques\nEx: Cuisson vapeur et mijotage"
+                      : "Ex: Matériaux durables\nEx: Format compact\nEx: Usage quotidien"}
+                    className="min-h-[188px] w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
+                  />
+                </section>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Mise en situation générée et réutilisable sur la fiche. Pour l&apos;instant, le visuel reste partagé entre les destinations.
+                  </p>
+                  <Button type="button" size="sm" onClick={() => void generateImage()} disabled={!canUseAddonIA || imageLoading} className="shrink-0">
                     {imageLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />}
                     Générer
                   </Button>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
-                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
-                      Recommandation FeedPlug
-                    </div>
-                    <div className="mt-1 text-sm text-slate-700">
-                      Type detecte : <span className="font-medium">{getProfileLabel(productProfile)}</span> ·
-                      rendu recommandé : <span className="font-medium">{IMAGE_RENDER_MODES.find((mode) => mode.value === recommendedRenderMode)?.label}</span>
-                    </div>
+                <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
+                    Recommandation FeedPlug
                   </div>
+                  <div className="mt-1 text-sm text-slate-700">
+                    Type détecté : <span className="font-medium">{getProfileLabel(productProfile)}</span> ·
+                    rendu recommandé : <span className="font-medium">{IMAGE_RENDER_MODES.find((mode) => mode.value === recommendedRenderMode)?.label}</span>
+                  </div>
+                </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Mode de rendu</label>
                     <select
                       value={renderMode}
                       onChange={(event) => setRenderMode(event.target.value as ImageRenderMode)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     >
                       {IMAGE_RENDER_MODES.map((mode) => (
                         <option key={mode.value} value={mode.value}>{mode.label}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Décor / preset</label>
                     <select
                       value={lifestylePreset}
                       onChange={(event) => setLifestylePreset(event.target.value)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     >
                       {availablePresets.map((preset) => (
                         <option key={preset.value} value={preset.value}>{preset.label}</option>
                       ))}
                     </select>
                   </div>
+                </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <select
-                      value={mannequinProfile}
-                      onChange={(event) => setMannequinProfile(event.target.value as MannequinProfile)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {MANNEQUIN_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <div className="flex items-center rounded-md border border-dashed border-border px-3 text-xs text-muted-foreground">
-                      Ajoute un mannequin quand tu veux montrer le porte, la coupe ou l echelle du produit.
-                    </div>
-                  </div>
+                <p className="text-xs text-muted-foreground">
+                  {IMAGE_RENDER_MODES.find((mode) => mode.value === renderMode)?.hint ||
+                    IMAGE_RENDER_MODES.find((mode) => mode.value === recommendedRenderMode)?.hint}
+                </p>
 
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Lieu ou scene specifique
-                    </label>
-                    <textarea
-                      value={customSceneInput}
-                      onChange={(event) => setCustomSceneInput(event.target.value)}
-                      rows={3}
-                      placeholder="Ex: dans un manege equestre couvert, au bord d un green de golf, dans une rue elegante, dans une sellerie premium, sur un terrain de concours..."
-                      className="w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Ce champ libre permet d&apos;ajouter ton contexte metier. Il affine le preset au lieu de te limiter a une liste fermee.
-                    </p>
-                  </div>
-
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                    {IMAGE_RENDER_MODES.find((mode) => mode.value === renderMode)?.hint ||
-                      IMAGE_RENDER_MODES.find((mode) => mode.value === recommendedRenderMode)?.hint}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <select
-                      value={lifestyleModel}
-                      onChange={(event) => setLifestyleModel(event.target.value)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {LIFESTYLE_MODELS.map((model) => (
-                        <option key={model.id} value={model.id}>{model.label}</option>
-                      ))}
-                    </select>
-                    <div className="flex items-center rounded-md border border-dashed border-border px-3 text-xs text-muted-foreground">
-                      Les scenes proposees sont filtrees pour eviter les rendus incoherents pour ce type de produit.
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-                      <ImagePlus className="h-4 w-4" />
-                      Envoyer une image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            const result = String(reader.result || "");
-                            const match = result.match(/^data:([^;]+);base64,(.+)$/);
-                            if (!match) return;
-                            setUploadedBase64(match[2]);
-                            setUploadedMimeType(match[1] || "image/jpeg");
-                          };
-                          reader.readAsDataURL(file);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <div
-                      ref={pasteZoneRef}
-                      tabIndex={0}
-                      role="button"
-                      onPaste={handleLifestylePaste}
-                      onClick={() => pasteZoneRef.current?.focus()}
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
-                    >
-                      <ImagePlus className="h-4 w-4" />
-                      Coller une image
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-muted/30 p-3">
-                    {imageUrl ? (
-                      <div className="space-y-3">
-                        <img src={imageUrl} alt="Aperçu optimisation image" className="h-[320px] w-full rounded-xl border border-border bg-white object-cover" />
-                        <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs text-muted-foreground">
-                          <span className="truncate">Visuel pret a appliquer sur la fiche produit.</span>
-                          <Button type="button" variant="outline" size="sm" onClick={() => void copyImageUrl()}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Copier l&apos;URL
-                          </Button>
-                        </div>
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  {imageUrl ? (
+                    <div className="space-y-3">
+                      <img src={imageUrl} alt="Aperçu optimisation image" className="h-[320px] w-full rounded-xl border border-border bg-white object-cover" />
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs text-muted-foreground">
+                        <span className="truncate">Visuel prêt à appliquer sur la fiche produit.</span>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void copyImageUrl()}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copier l&apos;URL
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="flex h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-white px-6 text-center text-sm text-muted-foreground">
-                        <ImagePlus className="mb-3 h-8 w-8 text-muted-foreground/70" />
-                        <p className="font-medium text-foreground">Aucun visuel IA genere pour le moment</p>
-                        <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-                          Genere une image de mise en situation a partir du visuel produit ou ajoute une image de reference.
+                    </div>
+                  ) : (
+                    <div className="flex h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-white px-6 text-center text-sm text-muted-foreground">
+                      <ImagePlus className="mb-3 h-8 w-8 text-muted-foreground/70" />
+                      <p className="font-medium text-foreground">Aucun visuel IA généré pour le moment</p>
+                      <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                        Génère une image de mise en situation à partir du visuel produit ou ajoute une image de référence.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedImage((value) => !value)}
+                    aria-expanded={showAdvancedImage}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-foreground"
+                  >
+                    Options avancées
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showAdvancedImage ? "rotate-180" : ""}`} />
+                  </button>
+                  {showAdvancedImage && (
+                    <div className="space-y-4 border-t border-border px-4 py-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Mannequin</label>
+                        <select
+                          value={mannequinProfile}
+                          onChange={(event) => setMannequinProfile(event.target.value as MannequinProfile)}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {MANNEQUIN_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Ajoute un mannequin quand tu veux montrer le porté, la coupe ou l&apos;échelle du produit.
                         </p>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Lieu ou scène spécifique</label>
+                        <textarea
+                          value={customSceneInput}
+                          onChange={(event) => setCustomSceneInput(event.target.value)}
+                          rows={3}
+                          placeholder="Ex: dans un manège équestre couvert, au bord d'un green de golf, dans une rue élégante, dans une sellerie premium, sur un terrain de concours..."
+                          className="w-full rounded-md border border-input px-3 py-2 text-sm leading-6"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Champ libre pour ajouter ton contexte métier. Il affine le preset au lieu de te limiter à une liste fermée.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Modèle de génération</label>
+                        <select
+                          value={lifestyleModel}
+                          onChange={(event) => setLifestyleModel(event.target.value)}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {LIFESTYLE_MODELS.map((model) => (
+                            <option key={model.id} value={model.id}>{model.label}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Les scènes proposées sont filtrées pour éviter les rendus incohérents pour ce type de produit.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Image de référence</label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-foreground/40">
+                            <ImagePlus className="h-4 w-4" />
+                            Envoyer une image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const result = String(reader.result || "");
+                                  const match = result.match(/^data:([^;]+);base64,(.+)$/);
+                                  if (!match) return;
+                                  setUploadedBase64(match[2]);
+                                  setUploadedMimeType(match[1] || "image/jpeg");
+                                };
+                                reader.readAsDataURL(file);
+                                event.target.value = "";
+                              }}
+                            />
+                          </label>
+                          <div
+                            ref={pasteZoneRef}
+                            tabIndex={0}
+                            role="button"
+                            onPaste={handleLifestylePaste}
+                            onClick={() => pasteZoneRef.current?.focus()}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-foreground/40"
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                            Coller une image
+                          </div>
+                          {uploadedBase64 && (
+                            <span className="text-xs font-medium text-emerald-600">Image de référence ajoutée</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </section>
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4">
