@@ -2871,83 +2871,10 @@ async function verifyEnrichmentSourceAccess(esId, accountId) {
 // Endpoint pour exécuter automatiquement les feeds selon leur horaire programmé
 // Cet endpoint est appelé par Cloud Scheduler toutes les heures
 // ===== Centre de notifications in-app =====
-app.use('/api/v1/notifications', requireAuth);
-
-app.get('/api/v1/notifications', async (req, res) => {
-  // Dégradation douce : si la table n'existe pas encore (migration 036 non
-  // appliquée) ou erreur DB, on renvoie une liste vide plutôt qu'un 500.
-  try {
-    if (!prismaReady || !prisma) return res.json({ notifications: [], unreadCount: 0 });
-    const rows = await prisma.$queryRawUnsafe(
-      `SELECT id, type, priority, title, message, actionurl, read, createdat
-       FROM notification WHERE accountid = $1::text
-       ORDER BY createdat DESC LIMIT 50`,
-      req.accountId
-    );
-    const unread = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int AS c FROM notification WHERE accountid = $1::text AND read = false`,
-      req.accountId
-    );
-    res.json({
-      notifications: (rows || []).map((n) => ({
-        id: n.id,
-        type: n.type,
-        priority: n.priority,
-        title: n.title,
-        message: n.message,
-        actionUrl: n.actionurl || null,
-        read: n.read === true,
-        timestamp: n.createdat,
-      })),
-      unreadCount: unread?.[0]?.c ?? 0,
-    });
-  } catch (e) {
-    console.warn('GET notifications error (table absente?):', e?.message);
-    res.json({ notifications: [], unreadCount: 0 });
-  }
-});
-
-app.post('/api/v1/notifications/:id/read', async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
-    await prisma.$executeRawUnsafe(
-      `UPDATE notification SET read = true WHERE id = $1::text AND accountid = $2::text`,
-      req.params.id, req.accountId
-    );
-    res.json({ success: true });
-  } catch (e) {
-    console.error('Mark notification read error:', e);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
-
-app.post('/api/v1/notifications/read-all', async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
-    await prisma.$executeRawUnsafe(
-      `UPDATE notification SET read = true WHERE accountid = $1::text AND read = false`,
-      req.accountId
-    );
-    res.json({ success: true });
-  } catch (e) {
-    console.error('Mark all notifications read error:', e);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
-
-app.delete('/api/v1/notifications/:id', async (req, res) => {
-  try {
-    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM notification WHERE id = $1::text AND accountid = $2::text`,
-      req.params.id, req.accountId
-    );
-    res.json({ success: true });
-  } catch (e) {
-    console.error('Delete notification error:', e);
-    res.status(500).json({ message: 'Erreur' });
-  }
-});
+// Les 4 routes /api/v1/notifications/* (+ le middleware requireAuth associé) sont
+// extraites dans routes/notifications.js (pattern routes/ingestion.js). Enregistrées
+// plus bas dans run() via registerNotificationsRoutes(app, {...}). Aucun autre chemin
+// ne chevauche /api/v1/notifications -> ordre de matching préservé.
 
 // Exports planifiés : pousse automatiquement vers GMC/Amazon les flux dont
 // l'auto-push est activé (opt-in `autopush_enabled`). Déclenché par le job
@@ -7165,6 +7092,16 @@ registerEnrichmentRoutes(app, {
   verifyItemAccess,
   getDestinationPushContext,
   resolveItemId,
+});
+
+// ====== NOTIFICATIONS (4 routes /api/v1/notifications/* extraites dans routes/notifications.js, pattern routes/ingestion.js) ======
+// Enregistrées ici (et non à leur position d'origine) car requireAuth est défini
+// plus bas dans run() (hoisté). Aucun autre chemin ne chevauche /api/v1/notifications.
+const { registerNotificationsRoutes } = require('./routes/notifications');
+registerNotificationsRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requireAuth,
 });
 
 // ====== TESTS A/B (témoin + variant, statistiquement cohérents) ======
