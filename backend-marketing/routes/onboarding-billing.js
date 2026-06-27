@@ -452,6 +452,14 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
       const accountId = req.user.accountId;
       const { plan, successUrl, cancelUrl, productTier, channelCount, addonIA } = req.body;
 
+      // Conformité Shopify : un marchand acquis via l'App Store (billing_provider
+      // = 'SHOPIFY') doit payer EXCLUSIVEMENT via Shopify Billing. Interdire le
+      // checkout Stripe pour ces comptes (sinon double facturation = rejet App Store).
+      const acctRows = await prisma.$queryRawUnsafe(`SELECT billing_provider FROM "Account" WHERE id = $1 LIMIT 1`, accountId);
+      if (acctRows?.[0]?.billing_provider === 'SHOPIFY') {
+        return res.status(403).json({ code: 'SHOPIFY_BILLED', message: 'Compte facturé via Shopify : la facturation Stripe est désactivée. Gérez votre abonnement depuis l\'app Shopify.' });
+      }
+
       const billingRows = await prisma.$queryRawUnsafe(`SELECT * FROM "Billing" WHERE accountid = $1 LIMIT 1`, accountId);
       const billing = billingRows?.[0];
       if (!billing) {
@@ -606,6 +614,11 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
 
       const accountId = req.user.accountId;
       const { returnUrl } = req.body || {};
+      // Conformité Shopify : pas de portail Stripe pour un compte facturé via Shopify.
+      const acctRows = await prisma.$queryRawUnsafe(`SELECT billing_provider FROM "Account" WHERE id = $1 LIMIT 1`, accountId);
+      if (acctRows?.[0]?.billing_provider === 'SHOPIFY') {
+        return res.status(403).json({ code: 'SHOPIFY_BILLED', message: 'Compte facturé via Shopify : gérez votre abonnement depuis l\'app Shopify.' });
+      }
       const billingRows = await prisma.$queryRawUnsafe(
         `SELECT stripe_customer_id FROM "Billing" WHERE accountid = $1 LIMIT 1`,
         accountId

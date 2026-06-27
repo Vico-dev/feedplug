@@ -34,12 +34,6 @@ const SHOP_INFO_QUERY = `
       billingAddress {
         firstName
         lastName
-        phone
-        country
-        countryCodeV2
-        city
-        zip
-        address1
       }
     }
   }
