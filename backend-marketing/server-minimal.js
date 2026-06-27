@@ -316,6 +316,10 @@ const { checkAiQuota, quotaMessage } = require('./lib/ai-caps');
 const { createNotification } = require('./lib/notifications');
 const { enqueueJob: enqueueBackgroundJob, configureJobs } = require('./lib/jobs');
 const { createJobHandlers } = require('./domains/jobs/handlers');
+// Fonctions de sync perf régies (injectées dans createJobHandlers pour la sync auto).
+const { syncGoogleAdsPerformance } = require('./performance/sync-google-ads');
+const { syncMetaAdsPerformance } = require('./performance/sync-meta-ads');
+const { syncAmazonAdsPerformance } = require('./performance/sync-amazon-ads');
 const gmcDomain = require('./domains/gmc/push');
 const { createGmcPush } = gmcDomain;
 const amazonDomain = require('./domains/amazon/push');
@@ -349,6 +353,13 @@ const JOB_TYPES = {
   AUTO_OPTIMIZATION: 'auto_optimization',
   AUTO_LIA_SYNC: 'auto_lia_sync',
   INGESTION_RUN: 'ingestion_run',
+  // Sync auto des performances régies (Google Ads / Meta Ads / Amazon Ads) vers
+  // PerformanceChannel + History. Déclenchés (a) après une connexion OAuth régie
+  // réussie et (b) quotidiennement par Cloud Scheduler via /internal/sync/performance.
+  // Handlers idempotents (dédup par accountId+plateforme+fenêtre journalière).
+  SYNC_PERF_GOOGLE_ADS: 'sync_performance_google_ads',
+  SYNC_PERF_META_ADS: 'sync_performance_meta_ads',
+  SYNC_PERF_AMAZON_ADS: 'sync_performance_amazon_ads',
 };
 
 // Routeur de jobs : appelé par le worker HTTP (/internal/jobs/run) ET par le
@@ -3163,6 +3174,61 @@ app.post('/internal/jobs/run', express.json({ limit: '256kb' }), async (req, res
     // 500 → Cloud Tasks retentera (backoff). Les handlers étant idempotents, le
     // retry est sûr.
     return res.status(500).json({ ok: false, type, error: err?.message || String(err) });
+  }
+});
+
+// ===== Scheduler de sync des performances régies (reporting pré-launch) =====
+// Cible Cloud Scheduler (job quotidien à créer côté infra, voir ARCHITECTURE).
+// Authentifié par SCHEDULER_SECRET (timing-safe) ou OIDC (IAM Cloud Run amont),
+// même classe que /api/v1/exports/scheduled-runs et /internal/jobs/run.
+// Énumère les comptes ayant une connexion régie active (google_ads / meta /
+// amazon_ads) et enqueue la sync perf correspondante (dédup journalière). Ne
+// déclenche PAS la sync en synchrone : on passe par enqueueJob (Cloud Tasks en
+// prod, fallback in-process en dev) pour étaler la charge et bénéficier des retries.
+app.post('/internal/sync/performance', express.json({ limit: '64kb' }), async (req, res) => {
+  const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string' ? process.env.SCHEDULER_SECRET.trim() : '';
+  if (schedulerSecret) {
+    const hdr = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+    const raw = Array.isArray(hdr) ? hdr[0] : hdr;
+    const provided = typeof raw === 'string' ? raw.replace('Bearer ', '').trim() : '';
+    const oidcPresent = !!(req.headers['authorization'] && /^Bearer /i.test(String(req.headers['authorization'])) && !req.headers['x-scheduler-secret']);
+    if (!oidcPresent && !timingSafeSecretEqual(provided, schedulerSecret)) {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+  }
+  if (!prismaReady || !prisma) {
+    return res.status(503).json({ message: 'Service indisponible' });
+  }
+  try {
+    // Une ligne par (compte, plateforme régie active). DISTINCT pour éviter les
+    // doublons si plusieurs connexions de même plateforme existaient.
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT DISTINCT accountid, platform FROM "PlatformConnection"
+       WHERE status = 'active' AND platform IN ('google_ads', 'meta', 'amazon_ads')`
+    );
+    const results = { google_ads: 0, meta: 0, amazon_ads: 0, accounts: 0 };
+    const seenAccounts = new Set();
+    for (const row of rows || []) {
+      const accountId = row.accountid;
+      const platform = String(row.platform || '').toLowerCase();
+      if (!accountId) continue;
+      seenAccounts.add(accountId);
+      if (platform === 'google_ads') {
+        await scheduleSyncGoogleAdsPerformance(accountId, 'scheduler');
+        results.google_ads++;
+      } else if (platform === 'meta') {
+        await scheduleSyncMetaAdsPerformance(accountId, 'scheduler');
+        results.meta++;
+      } else if (platform === 'amazon_ads') {
+        await scheduleSyncAmazonAdsPerformance(accountId, 'scheduler');
+        results.amazon_ads++;
+      }
+    }
+    results.accounts = seenAccounts.size;
+    return res.json({ ok: true, enqueued: results });
+  } catch (e) {
+    console.error('Scheduler sync performance error:', e);
+    return res.status(500).json({ message: 'Erreur scheduler sync performance', error: e.message });
   }
 });
 
@@ -5994,6 +6060,7 @@ registerPlatformsRoutes(app, {
   revokeGoogleOAuthToken,
   saveGmcConnection,
   scheduleAutoGmcPush,
+  scheduleSyncGoogleAdsPerformance,
   storeOAuthEphemeralState,
   upsertPlatformConnection,
 });
@@ -6954,11 +7021,33 @@ jobHandlers = createJobHandlers({
   optimizeDescriptionWithAI,
   trackAiUsage,
   runIngestionJob,
+  // Sync auto des performances régies (reporting pré-launch).
+  syncGoogleAdsPerformance,
+  syncMetaAdsPerformance,
+  syncAmazonAdsPerformance,
+  decryptSecret,
+  decryptPlatformConnection,
+  perfAdsConfig: {
+    googleAdsClientId: GOOGLE_ADS_CLIENT_ID,
+    googleAdsClientSecret: GOOGLE_ADS_CLIENT_SECRET,
+  },
 });
 
 // Bloc 1 extrait dans domains/jobs/handlers.js ; wrappers de signatures inchangées.
 function scheduleAutoOptimization(accountId, feedId, reason, delayMs = AUTO_OPTIM_DEBOUNCE_MS) {
   return jobHandlers.scheduleAutoOptimization(accountId, feedId, reason, delayMs);
+}
+
+// Wrappers de schedulers de sync perf régies (délèguent à jobHandlers, invoqués
+// au runtime post-boot). Utilisés par les callbacks OAuth régies et le scheduler.
+function scheduleSyncGoogleAdsPerformance(accountId, reason) {
+  return jobHandlers.scheduleSyncGoogleAdsPerformance(accountId, reason);
+}
+function scheduleSyncMetaAdsPerformance(accountId, reason) {
+  return jobHandlers.scheduleSyncMetaAdsPerformance(accountId, reason);
+}
+function scheduleSyncAmazonAdsPerformance(accountId, reason) {
+  return jobHandlers.scheduleSyncAmazonAdsPerformance(accountId, reason);
 }
 
 // Handler idempotent de l'auto-optimisation IA (bloc 1 extrait dans

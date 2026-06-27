@@ -192,6 +192,7 @@
   "POST /api/v1/shopify/session-token/probe",
   "POST /api/v1/webhooks/shopify",
   "POST /internal/jobs/run",
+  "POST /internal/sync/performance",
   "PUT /api/v1/account/company-info",
   "PUT /api/v1/accounts",
   "PUT /api/v1/accounts/users/:userId/role",

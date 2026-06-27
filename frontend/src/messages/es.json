@@ -898,7 +898,11 @@
     },
     "rapports": {
       "title": "Informes y analíticas",
-      "subtitle": "Analiza el rendimiento de tu feed y optimiza tus campañas"
+      "subtitle": "Analiza el rendimiento de tu feed y optimiza tus campañas",
+      "comingSoonBadge": "Próximamente",
+      "comingSoonTitle": "Los informes llegan pronto",
+      "comingSoonBody": "Los informes consolidados y las pruebas A/B se están finalizando. Mientras tanto, consulta tus métricas por canal en tiempo real en la página de Rendimiento.",
+      "comingSoonCta": "Ir a Rendimiento"
     },
     "notifications": {
       "title": "Notificaciones",

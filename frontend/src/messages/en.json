@@ -898,7 +898,11 @@
     },
     "rapports": {
       "title": "Reports & Analytics",
-      "subtitle": "Analyze your feed performance and optimize your campaigns"
+      "subtitle": "Analyze your feed performance and optimize your campaigns",
+      "comingSoonBadge": "Coming soon",
+      "comingSoonTitle": "Reports are coming soon",
+      "comingSoonBody": "Consolidated reports and A/B tests are being finalized. In the meantime, find your real-time per-channel metrics on the Performance page.",
+      "comingSoonCta": "Go to Performance"
     },
     "notifications": {
       "title": "Notifications",
