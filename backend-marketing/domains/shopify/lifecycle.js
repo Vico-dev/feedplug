@@ -18,11 +18,18 @@
  * (déclenché 48h après uninstall si vraiment abandon) fait le hard delete.
  *
  * @param {object} opts
- * @param {object} opts.prisma         Prisma client (avec $executeRawUnsafe)
- * @param {string} opts.shopDomain     ex: "demo.myshopify.com"
+ * @param {object} opts.prisma                  Prisma client (avec $executeRawUnsafe)
+ * @param {string} opts.shopDomain              ex: "demo.myshopify.com"
+ * @param {string} [opts.appId]                 'listed' | 'connector' : scope la
+ *                                              PAUSE aux Credentials de cette app
+ *                                              (une boutique peut avoir les deux).
+ *                                              Si absent, scope sur le shop seul
+ *                                              (rétro-compat).
+ * @param {boolean} [opts.cancelSubscriptions=true] N'annule les abonnements du
+ *                                              shop que pour une app facturée.
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
-async function handleAppUninstalled({ prisma, shopDomain }) {
+async function handleAppUninstalled({ prisma, shopDomain, appId, cancelSubscriptions = true }) {
   if (!shopDomain) {
     return { ok: false, error: 'shopDomain manquant' };
   }
@@ -31,32 +38,57 @@ async function handleAppUninstalled({ prisma, shopDomain }) {
   }
 
   try {
-    await prisma.$executeRawUnsafe(
-      `
-        UPDATE "FeedSource"
-        SET status = 'PAUSED'::text,
-            updatedat = NOW()
-        WHERE connector = 'SHOPIFY'::text
-          AND credentialid IN (
-            SELECT id
-            FROM "Credential"
-            WHERE connector = 'SHOPIFY'::text
-              AND secretjson->>'shop' = $1::text
-          )
-      `,
-      shopDomain,
-    );
-    await prisma.$executeRawUnsafe(
-      `
-        UPDATE shopify_subscriptions
-        SET status = 'CANCELLED'::text,
-            cancelled_at = NOW(),
-            updatedat = NOW()
-        WHERE shop_domain = $1::text
-          AND status IN ('PENDING', 'ACTIVE')
-      `,
-      shopDomain,
-    );
+    // Scope par appId si fourni : on ne met en PAUSE que les sources liées aux
+    // Credentials de l'app qui se désinstalle (tag secretjson->>'appId').
+    // Les credentials legacy sans appId sont traités comme 'listed'.
+    if (appId) {
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE "FeedSource"
+          SET status = 'PAUSED'::text,
+              updatedat = NOW()
+          WHERE connector = 'SHOPIFY'::text
+            AND credentialid IN (
+              SELECT id
+              FROM "Credential"
+              WHERE connector = 'SHOPIFY'::text
+                AND secretjson->>'shop' = $1::text
+                AND COALESCE(secretjson->>'appId', 'listed') = $2::text
+            )
+        `,
+        shopDomain,
+        appId,
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE "FeedSource"
+          SET status = 'PAUSED'::text,
+              updatedat = NOW()
+          WHERE connector = 'SHOPIFY'::text
+            AND credentialid IN (
+              SELECT id
+              FROM "Credential"
+              WHERE connector = 'SHOPIFY'::text
+                AND secretjson->>'shop' = $1::text
+            )
+        `,
+        shopDomain,
+      );
+    }
+    if (cancelSubscriptions) {
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE shopify_subscriptions
+          SET status = 'CANCELLED'::text,
+              cancelled_at = NOW(),
+              updatedat = NOW()
+          WHERE shop_domain = $1::text
+            AND status IN ('PENDING', 'ACTIVE')
+        `,
+        shopDomain,
+      );
+    }
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error?.message || String(error) };

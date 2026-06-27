@@ -1,0 +1,36 @@
+# App CONNECTEUR Shopify (unlisted, gratuite, NON embedded).
+#
+# 2e app FeedPlug : pour les marchands venus de feedplug.com qui paient via
+# Stripe et veulent juste importer leur catalogue Shopify. PAS de Managed Pricing
+# (donc pas de topic app_subscriptions/update). Webhooks routés sur le chemin
+# dédié /api/v1/webhooks/shopify/connector (HMAC vérifié avec le secret de CETTE app).
+#
+# Déploiement : shopify app deploy --config connector
+# Remplacer client_id par celui de l'app B créée dans Shopify Partners.
+
+client_id = "PLACEHOLDER_CONNECTOR_CLIENT_ID"
+name = "FeedPlug Connector"
+application_url = "https://app.feedplug.com"
+embedded = false
+handle = "feedplug-connector"
+
+[webhooks]
+api_version = "2026-04"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/webhooks/shopify/connector"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/create", "products/update", "products/delete" ]
+  uri = "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/webhooks/shopify/connector"
+
+[access_scopes]
+scopes = "read_products"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/connectors/shopify/callback"
+]

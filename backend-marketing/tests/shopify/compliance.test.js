@@ -144,6 +144,46 @@ test('handleShopRedact cascade Credential → FeedSource → Feed → FeedItem',
   assert.ok(credIdx > sourceIdx, 'FeedSource doit être supprimé avant Credential');
 });
 
+test('handleShopRedact : appId scope la sélection des credentials (isolation inter-app)', async () => {
+  const { prisma, calls } = createPrismaMock({
+    credentialIds: ['cred-conn'],
+    sourceIds: ['src-1'],
+    feedIds: ['feed-1'],
+  });
+
+  await handleShopRedact({
+    prisma,
+    shopDomain: 'demo-shop.myshopify.com',
+    payload: {},
+    appId: 'connector',
+  });
+
+  const credQuery = calls.find(
+    (c) => c.kind === 'query' && /FROM "Credential"/i.test(c.query)
+  );
+  assert.ok(credQuery);
+  assert.match(credQuery.query, /COALESCE\(secretjson->>'appId', 'listed'\)/, 'doit filtrer par appId');
+  assert.equal(credQuery.args[0], 'demo-shop.myshopify.com');
+  assert.equal(credQuery.args[1], 'connector');
+});
+
+test('handleShopRedact : sans appId (rétro-compat) scope sur le shop seul', async () => {
+  const { prisma, calls } = createPrismaMock({ credentialIds: ['cred-1'] });
+
+  await handleShopRedact({
+    prisma,
+    shopDomain: 'demo-shop.myshopify.com',
+    payload: {},
+  });
+
+  const credQuery = calls.find(
+    (c) => c.kind === 'query' && /FROM "Credential"/i.test(c.query)
+  );
+  assert.ok(credQuery);
+  assert.doesNotMatch(credQuery.query, /appId/, 'sans appId : pas de filtre appId');
+  assert.equal(credQuery.args.length, 1);
+});
+
 test('handleShopRedact appelle notifyAdmin avec un résumé', async () => {
   const { prisma } = createPrismaMock({
     credentialIds: ['cred-1'],

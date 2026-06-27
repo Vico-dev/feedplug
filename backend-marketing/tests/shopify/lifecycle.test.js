@@ -70,6 +70,54 @@ test('handleAppUninstalled met FeedSource en PAUSED + subscriptions en CANCELLED
   assert.match(subsUpdate.query, /\bIN \('PENDING', 'ACTIVE'\)/, 'doit cibler PENDING + ACTIVE');
 });
 
+test('handleAppUninstalled : appId scope le UPDATE FeedSource par secretjson->>appId', async () => {
+  const { prisma, calls } = createPrismaMock();
+  const result = await handleAppUninstalled({
+    prisma,
+    shopDomain: 'demo.myshopify.com',
+    appId: 'connector',
+    cancelSubscriptions: false,
+  });
+
+  assert.equal(result.ok, true);
+
+  const sourcesUpdate = calls.find(
+    (c) => c.kind === 'execute' && /UPDATE "FeedSource"/i.test(c.query)
+  );
+  assert.ok(sourcesUpdate);
+  assert.match(sourcesUpdate.query, /secretjson->>'appId'/, 'doit scoper par appId');
+  assert.match(sourcesUpdate.query, /COALESCE\(secretjson->>'appId', 'listed'\)/, 'credentials legacy traités comme listed');
+  assert.equal(sourcesUpdate.args[0], 'demo.myshopify.com');
+  assert.equal(sourcesUpdate.args[1], 'connector');
+});
+
+test('handleAppUninstalled : cancelSubscriptions=false (app connecteur) n annule AUCUN abonnement', async () => {
+  const { prisma, calls } = createPrismaMock();
+  const result = await handleAppUninstalled({
+    prisma,
+    shopDomain: 'demo.myshopify.com',
+    appId: 'connector',
+    cancelSubscriptions: false,
+  });
+
+  assert.equal(result.ok, true);
+  const subsUpdate = calls.find(
+    (c) => c.kind === 'execute' && /UPDATE shopify_subscriptions/i.test(c.query)
+  );
+  assert.equal(subsUpdate, undefined, 'l uninstall du connecteur ne doit pas annuler l abonnement Managed Pricing de l app listée');
+});
+
+test('handleAppUninstalled : sans appId (rétro-compat) scope sur le shop seul', async () => {
+  const { prisma, calls } = createPrismaMock();
+  await handleAppUninstalled({ prisma, shopDomain: 'demo.myshopify.com' });
+
+  const sourcesUpdate = calls.find(
+    (c) => c.kind === 'execute' && /UPDATE "FeedSource"/i.test(c.query)
+  );
+  assert.ok(sourcesUpdate);
+  assert.doesNotMatch(sourcesUpdate.query, /secretjson->>'appId'/, 'sans appId : pas de filtre appId');
+});
+
 test('handleAppUninstalled ne casse pas le serveur si la DB throw', async () => {
   const errPrisma = {
     $executeRawUnsafe: async () => { throw new Error('DB down'); },

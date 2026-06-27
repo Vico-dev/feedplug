@@ -109,6 +109,10 @@ const {
   matchPendingSubscriptionToWebhook: shopifyMatchPendingSubToWebhook,
 } = require('./domains/shopify/lifecycle');
 const {
+  buildShopifyApps,
+  resolveShopifyApp: resolveShopifyAppEntry,
+} = require('./domains/shopify/app-registry');
+const {
   getPriceEur: getPlanPriceEur,
   getPlanLabel: getPlanLabel,
   tierIdFromProductTier,
@@ -704,6 +708,14 @@ const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
 const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || DEFAULT_SHOPIFY_SCOPES;
 const SHOPIFY_CALLBACK_URL = process.env.SHOPIFY_CALLBACK_URL || 'https://api.feedplug.com/api/v1/connectors/shopify/callback';
 const SHOPIFY_WEBHOOK_PATH = '/api/v1/webhooks/shopify';
+
+// Registre multi-app Shopify. `listed` = app App Store embedded (creds
+// SHOPIFY_API_*). `connector` = app unlisted gratuite (creds
+// SHOPIFY_CONNECTOR_API_*), ajoutée uniquement si ses env sont présentes —
+// sinon l'app connecteur est désactivée et l'app listée reste inchangée.
+// Voir domains/shopify/app-registry.js.
+const SHOPIFY_APPS = buildShopifyApps(process.env, { defaultScopes: DEFAULT_SHOPIFY_SCOPES });
+const resolveShopifyApp = (appId) => resolveShopifyAppEntry(SHOPIFY_APPS, appId);
 const SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS = Math.max(
   0,
   Number(process.env.SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS || 5 * 60 * 1000)
@@ -926,14 +938,17 @@ function verifyShopifyWebhookHmac(rawBody, hmacHeader, secret) {
   }
 }
 
-function verifyShopifySessionToken(token) {
-  if (!token || !SHOPIFY_API_SECRET || !SHOPIFY_API_KEY) {
+// Les session tokens App Bridge proviennent UNIQUEMENT de l'app embedded
+// (listée). La clé/secret sont passés explicitement pour rester app-aware ;
+// l'appelant fournit les creds de l'app `listed`.
+function verifyShopifySessionToken(token, { apiKey, apiSecret } = {}) {
+  if (!token || !apiSecret || !apiKey) {
     throw new Error('Shopify session token verification unavailable');
   }
 
-  const payload = jwt.verify(token, SHOPIFY_API_SECRET, {
+  const payload = jwt.verify(token, apiSecret, {
     algorithms: ['HS256'],
-    audience: SHOPIFY_API_KEY,
+    audience: apiKey,
     clockTolerance: 10,
   });
 
@@ -960,21 +975,30 @@ function shouldRefreshShopifyTokenExchange(row) {
   return (Date.now() - updatedAt) >= SHOPIFY_TOKEN_EXCHANGE_MIN_INTERVAL_MS;
 }
 
-async function handleShopifyAppUninstalled(shopDomain) {
+async function handleShopifyAppUninstalled(shopDomain, appEntry = SHOPIFY_APPS.listed) {
   if (!prismaReady || !prisma) return;
-  const result = await shopifyHandleAppUninstalled({ prisma, shopDomain });
+  const result = await shopifyHandleAppUninstalled({
+    prisma,
+    shopDomain,
+    appId: appEntry.appId,
+    // Seul l'uninstall d'une app facturée annule les abonnements du shop : sans
+    // ça, désinstaller le connecteur annulerait l'abonnement Managed Pricing de
+    // l'app listée sur une boutique qui aurait les deux apps.
+    cancelSubscriptions: appEntry.billing === true,
+  });
   if (!result.ok && result.error) {
     console.warn('Shopify uninstall cleanup skipped:', result.error);
   }
 }
 
-async function listShopifyFeedsForShop(shopDomain) {
+async function listShopifyFeedsForShop(shopDomain, appId) {
   if (!shopDomain || !prismaReady || !prisma) {
     return [];
   }
 
-  return prisma.$queryRawUnsafe(
-    `
+  // Si appId fourni, ne sync que les feeds de l'app à l'origine du webhook (une
+  // boutique peut avoir les deux apps). Credentials legacy sans appId = 'listed'.
+  const selectClause = `
       SELECT
         f.id AS feed_id,
         f.name AS feed_name,
@@ -991,9 +1015,20 @@ async function listShopifyFeedsForShop(shopDomain) {
         AND s.status = 'ACTIVE'::text
         AND s.connector = 'SHOPIFY'::text
         AND c.connector = 'SHOPIFY'::text
-        AND c.secretjson->>'shop' = $1::text
-      ORDER BY f.createdat DESC
-    `,
+        AND c.secretjson->>'shop' = $1::text`;
+
+  if (appId) {
+    return prisma.$queryRawUnsafe(
+      `${selectClause}
+        AND COALESCE(c.secretjson->>'appId', 'listed') = $2::text
+      ORDER BY f.createdat DESC`,
+      shopDomain,
+      appId
+    );
+  }
+  return prisma.$queryRawUnsafe(
+    `${selectClause}
+      ORDER BY f.createdat DESC`,
     shopDomain
   );
 }
@@ -1045,12 +1080,12 @@ async function runShopifyPostSyncHooks(feedId, accountId) {
   scheduleAutoLiaSync(accountId, 'webhook Shopify');
 }
 
-async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }) {
+async function triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload, appId }) {
   if (!shopDomain || !prismaReady || !prisma) {
     return;
   }
 
-  const feeds = await listShopifyFeedsForShop(shopDomain);
+  const feeds = await listShopifyFeedsForShop(shopDomain, appId);
   if (!feeds.length) {
     return;
   }
@@ -1287,10 +1322,13 @@ async function isTokenRevoked(decoded) {
 const { registerStripeWebhook } = require('./routes/onboarding-billing');
 registerStripeWebhook(app, { getPrisma: () => prisma, getPrismaReady: () => prismaReady });
 
-// Shopify webhooks AVANT express.json() (nécessite le body raw pour la signature HMAC)
-app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
+// Shopify webhooks AVANT express.json() (nécessite le body raw pour la signature HMAC).
+// Factory app-aware : chaque app (listée / connecteur) monte ce handler sur SON
+// chemin avec SON secret. Le HMAC est vérifié avec le secret de l'app du chemin.
+function makeShopifyWebhookHandler(appEntry) {
+  return async (req, res) => {
   const hmacHeader = req.get('x-shopify-hmac-sha256');
-  if (!verifyShopifyWebhookHmac(req.body, hmacHeader, SHOPIFY_API_SECRET)) {
+  if (!verifyShopifyWebhookHmac(req.body, hmacHeader, appEntry.apiSecret)) {
     return res.status(401).send('Invalid Shopify HMAC signature');
   }
 
@@ -1333,18 +1371,19 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
 
   try {
     if (topic === 'app/uninstalled') {
-      await handleShopifyAppUninstalled(shopDomain);
+      await handleShopifyAppUninstalled(shopDomain, appEntry);
     } else if (SHOPIFY_INCREMENTAL_WEBHOOK_TOPICS.has(topic) || SHOPIFY_FULL_SYNC_WEBHOOK_TOPICS.has(topic)) {
       if (shopDomain) {
         setImmediate(() => {
-          triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload }).catch((error) => {
+          triggerShopifyCatalogWebhookSync({ topic, shopDomain, payload, appId: appEntry.appId }).catch((error) => {
             console.error(`Shopify webhook async sync failed (${topic} / ${shopDomain}):`, error);
           });
         });
       }
-    } else if (topic === 'app_subscriptions/update') {
+    } else if (topic === 'app_subscriptions/update' && appEntry.billing) {
       // Sync l'état de l'abonnement Shopify (ACTIVE/CANCELLED/EXPIRED/FROZEN/DECLINED)
-      // déclenché à chaque transition côté Shopify.
+      // déclenché à chaque transition côté Shopify. Réservé aux apps facturées
+      // (app listée) : l'app connecteur n'a pas de Managed Pricing.
       const sub = payload?.app_subscription || payload || {};
       const shopifySubscriptionId = sub.admin_graphql_api_id || sub.id || '';
       const subName = String(sub.name || '').trim();
@@ -1420,6 +1459,7 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
           shopDomain,
           payload,
           notifyAdmin: notifyInternalAlert,
+          appId: appEntry.appId,
         });
         console.log('✅ Shopify compliance webhook processed:', { topic, shopDomain, ...result });
       } catch (complianceErr) {
@@ -1445,7 +1485,14 @@ app.post(SHOPIFY_WEBHOOK_PATH, express.raw({ type: '*/*', limit: '2mb' }), async
     console.error('Shopify webhook handling error:', error);
     return res.status(500).send('Shopify webhook handling failed');
   }
-});
+  };
+}
+
+// Montage app listée (chemin + options inchangés) puis, si configurée, app connecteur.
+app.post(SHOPIFY_APPS.listed.webhookPath, express.raw({ type: '*/*', limit: '2mb' }), makeShopifyWebhookHandler(SHOPIFY_APPS.listed));
+if (SHOPIFY_APPS.connector) {
+  app.post(SHOPIFY_APPS.connector.webhookPath, express.raw({ type: '*/*', limit: '2mb' }), makeShopifyWebhookHandler(SHOPIFY_APPS.connector));
+}
 
 // Limite 10 MB pour permettre image base64 sur generate-lifestyle-image (évite PayloadTooLargeError)
 app.use(express.json({ limit: '10mb' }));
@@ -1580,13 +1627,17 @@ const authenticateJwtOrShopifySession = async (req, res, next) => {
     // Bascule sur session token Shopify
   }
 
-  // 2) Shopify session token
-  if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+  // 2) Shopify session token — embedded = app listée uniquement.
+  const listedApp = SHOPIFY_APPS.listed;
+  if (!listedApp.apiKey || !listedApp.apiSecret) {
     return res.status(403).json({ message: 'Token invalide' });
   }
   let shopifyAuth;
   try {
-    shopifyAuth = verifyShopifySessionToken(token);
+    shopifyAuth = verifyShopifySessionToken(token, {
+      apiKey: listedApp.apiKey,
+      apiSecret: listedApp.apiSecret,
+    });
   } catch {
     return res.status(403).json({ message: 'Token invalide' });
   }
@@ -6410,11 +6461,9 @@ registerConnectorsRoutes(app, {
   OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE,
   OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
   SHOPIFY_ADMIN_API_VERSION,
-  SHOPIFY_API_KEY,
-  SHOPIFY_API_SECRET,
-  SHOPIFY_CALLBACK_URL,
+  SHOPIFY_APPS,
+  resolveShopifyApp,
   SHOPIFY_OAUTH_STATE_TTL_MS,
-  SHOPIFY_SCOPES,
   authenticateToken,
   buildShopifyAdminGraphqlUrl,
   consumeOAuthEphemeralState,
@@ -6425,7 +6474,12 @@ registerConnectorsRoutes(app, {
   storeOAuthEphemeralState,
   stringifyEncryptedJson,
   verifyShopifyInstallHmac,
-  verifyShopifySessionToken,
+  // Session tokens = app embedded listée uniquement → pré-lié à ses creds.
+  verifyShopifySessionToken: (token) =>
+    verifyShopifySessionToken(token, {
+      apiKey: SHOPIFY_APPS.listed.apiKey,
+      apiSecret: SHOPIFY_APPS.listed.apiSecret,
+    }),
 });
 
 // ====== PLATEFORMES — Google Merchant Center OAuth2 + Push ======
@@ -6448,11 +6502,9 @@ registerMarketingAuditsConnectRoutes(app, {
   OAUTH_EPHEMERAL_PROVIDER_GMC,
   OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
   OAuth2Client,
-  SHOPIFY_API_KEY,
-  SHOPIFY_API_SECRET,
-  SHOPIFY_CALLBACK_URL,
+  SHOPIFY_APPS,
+  resolveShopifyApp,
   SHOPIFY_OAUTH_STATE_TTL_MS,
-  SHOPIFY_SCOPES,
   crypto,
   decryptObjectSecrets,
   fetchMarketingAuditFileItems,
@@ -7407,6 +7459,20 @@ console.log('📊 Stockage marketing persisté en base (fallback mémoire désac
     }
   } else {
     console.log('✅ Secrets webhook (Stripe + Shopify) présents.');
+  }
+
+  // App connecteur Shopify : signaler une config asymétrique (une seule des deux
+  // clés posée). buildShopifyApps exige les DEUX pour activer l'app → sinon elle
+  // est silencieusement désactivée. On loggue l'état pour éviter un connecteur
+  // qui semble "configuré" mais dont la route webhook n'est jamais montée.
+  const hasConnKey = !!process.env.SHOPIFY_CONNECTOR_API_KEY;
+  const hasConnSecret = !!process.env.SHOPIFY_CONNECTOR_API_SECRET;
+  if (hasConnKey !== hasConnSecret) {
+    const present = hasConnKey ? 'SHOPIFY_CONNECTOR_API_KEY' : 'SHOPIFY_CONNECTOR_API_SECRET';
+    const missing = hasConnKey ? 'SHOPIFY_CONNECTOR_API_SECRET' : 'SHOPIFY_CONNECTOR_API_KEY';
+    console.warn(`⚠️  App connecteur Shopify DÉSACTIVÉE : ${present} est posé mais ${missing} manque. /connect et l'audit-connect renverront 503, le webhook /connector n'est pas monté.`);
+  } else if (hasConnKey && hasConnSecret) {
+    console.log('✅ App connecteur Shopify activée (webhook /api/v1/webhooks/shopify/connector monté).');
   }
 }
 

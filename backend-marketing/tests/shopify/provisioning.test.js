@@ -233,6 +233,46 @@ test('linkCredentialToAccount idempotent : ne duplique pas FeedSource', async ()
   assert.equal(sourceInserts.length, 0);
 });
 
+test('provisionAccountFromShopify : billing_provider par défaut SHOPIFY (install App Store)', async () => {
+  const { prisma, calls } = createPrismaMock();
+  const fetchImpl = shopFetchOk(SAMPLE_SHOP);
+
+  await provisionAccountFromShopify({
+    prisma,
+    shop: 'demo.myshopify.com',
+    accessToken: 'shpat_xxx',
+    credentialId: 'cred-123',
+    fetchImpl,
+  });
+
+  const accountInsert = calls.find(
+    (c) => c.kind === 'execute' && /INSERT INTO "Account"/i.test(c.query)
+  );
+  assert.ok(accountInsert);
+  assert.match(accountInsert.query, /billing_provider/, 'colonne billing_provider présente');
+  assert.equal(accountInsert.args[6], 'SHOPIFY', 'défaut = SHOPIFY');
+});
+
+test('provisionAccountFromShopify : billingProvider=STRIPE propagé (app connecteur)', async () => {
+  const { prisma, calls } = createPrismaMock();
+  const fetchImpl = shopFetchOk(SAMPLE_SHOP);
+
+  await provisionAccountFromShopify({
+    prisma,
+    shop: 'demo.myshopify.com',
+    accessToken: 'shpat_xxx',
+    credentialId: 'cred-123',
+    billingProvider: 'STRIPE',
+    fetchImpl,
+  });
+
+  const accountInsert = calls.find(
+    (c) => c.kind === 'execute' && /INSERT INTO "Account"/i.test(c.query)
+  );
+  assert.ok(accountInsert);
+  assert.equal(accountInsert.args[6], 'STRIPE', 'connecteur reste sur STRIPE');
+});
+
 test('provisionAccountFromShopify gère shop sans email', async () => {
   const { prisma, calls } = createPrismaMock();
   const fetchImpl = shopFetchOk({ ...SAMPLE_SHOP, email: null, contactEmail: null });

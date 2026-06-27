@@ -18,11 +18,9 @@ function registerConnectorsRoutes(app, {
   OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE,
   OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
   SHOPIFY_ADMIN_API_VERSION,
-  SHOPIFY_API_KEY,
-  SHOPIFY_API_SECRET,
-  SHOPIFY_CALLBACK_URL,
+  SHOPIFY_APPS,
+  resolveShopifyApp,
   SHOPIFY_OAUTH_STATE_TTL_MS,
-  SHOPIFY_SCOPES,
   authenticateToken,
   buildShopifyAdminGraphqlUrl,
   consumeOAuthEphemeralState,
@@ -63,13 +61,15 @@ app.post('/api/v1/shopify/session-token/probe', async (req, res) => {
 app.get('/api/v1/connectors/shopify/install', async (req, res) => {
   try {
     const { shop, timestamp, hmac } = req.query;
-    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    // /install = lien Partners de l'app listée (App Store) → app `listed`.
+    const shopifyApp = SHOPIFY_APPS.listed;
+    if (!shopifyApp.apiKey || !shopifyApp.apiSecret) {
       return res.status(500).send('Clés Shopify non configurées');
     }
     if (!shop || !hmac) {
       return res.status(400).send('Paramètres shop et hmac requis');
     }
-    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
+    if (!verifyShopifyInstallHmac(req.query || {}, shopifyApp.apiSecret)) {
       return res.status(400).send('Signature HMAC invalide');
     }
     const normalizedShop = normalizeShopifyShop(shop);
@@ -85,6 +85,7 @@ app.get('/api/v1/connectors/shopify/install', async (req, res) => {
         payload: {
           shop: normalizedShop,
           guest: true,
+          appId: shopifyApp.appId,
           locale: ['fr', 'en', 'es'].includes(String(req.query?.locale || ''))
             ? String(req.query.locale)
             : 'fr',
@@ -96,9 +97,9 @@ app.get('/api/v1/connectors/shopify/install', async (req, res) => {
       return res.status(503).send('Connexion Shopify temporairement indisponible');
     }
     const authUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${encodeURIComponent(
-      SHOPIFY_API_KEY
-    )}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(
-      SHOPIFY_CALLBACK_URL
+      shopifyApp.apiKey
+    )}&scope=${encodeURIComponent(shopifyApp.scopes)}&redirect_uri=${encodeURIComponent(
+      shopifyApp.callbackUrl
     )}&state=${encodeURIComponent(state)}&grant_options[]=`;
     res.redirect(302, authUrl);
   } catch (err) {
@@ -111,7 +112,12 @@ app.get('/api/v1/connectors/shopify/install', async (req, res) => {
 app.post('/api/v1/connectors/shopify/connect', authenticateToken, async (req, res) => {
   try {
     const { shop, locale, host } = req.body || {};
-    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    // /connect = marchand authentifié venu de feedplug.com → app `connector`.
+    const shopifyApp = resolveShopifyApp('connector');
+    if (!SHOPIFY_APPS.connector) {
+      return res.status(503).json({ message: 'Connecteur Shopify non configuré' });
+    }
+    if (!shopifyApp.apiKey || !shopifyApp.apiSecret) {
       return res.status(500).json({ message: 'Clés Shopify non configurées côté serveur' });
     }
     if (!shop) {
@@ -133,6 +139,7 @@ app.post('/api/v1/connectors/shopify/connect', authenticateToken, async (req, re
           accountId: req.user.accountId,
           userId: req.user.id,
           shop: normalizedShop,
+          appId: shopifyApp.appId,
           locale: ['fr', 'en', 'es'].includes(String(locale)) ? String(locale) : 'fr',
           host: typeof host === 'string' ? host.trim() : '',
         },
@@ -144,9 +151,9 @@ app.post('/api/v1/connectors/shopify/connect', authenticateToken, async (req, re
     }
 
     const authUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${encodeURIComponent(
-      SHOPIFY_API_KEY
-    )}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(
-      SHOPIFY_CALLBACK_URL
+      shopifyApp.apiKey
+    )}&scope=${encodeURIComponent(shopifyApp.scopes)}&redirect_uri=${encodeURIComponent(
+      shopifyApp.callbackUrl
     )}&state=${encodeURIComponent(state)}&grant_options[]=`;
 
     res.json({ url: authUrl });
@@ -160,9 +167,6 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
       const prisma = getPrisma(); const prismaReady = getPrismaReady();
   try {
     const { shop, code, state } = req.query;
-    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
-      return res.status(500).send('Clés Shopify non configurées');
-    }
     if (!shop || !code || !state) {
       return res.status(400).send('Requête invalide (shop/code/state manquant)');
     }
@@ -170,10 +174,15 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
     if (!normalizedShop) {
       return res.status(400).send('Nom de boutique Shopify invalide');
     }
-    if (!verifyShopifyInstallHmac(req.query || {}, SHOPIFY_API_SECRET)) {
-      return res.status(400).send('Signature HMAC Shopify invalide');
-    }
 
+    // Le callback est partagé par les deux apps. On consomme d'abord le state
+    // (UUID non devinable, usage unique) pour résoudre l'app, PUIS on vérifie le
+    // HMAC avec le secret de cette app. Sans appId (states legacy) → `listed`.
+    // Compromis assumé : une requête portant un state valide mais un HMAC
+    // invalide « brûle » le state avant le rejet HMAC. Acceptable car le state
+    // est un UUID v4 non devinable (pas de DoS exploitable à distance) ; au pire
+    // le marchand relance l'install. L'alternative (HMAC d'abord) imposerait de
+    // connaître l'app AVANT le state — impossible sur un callback mutualisé.
     let oauthContext = null;
     try {
       oauthContext = await consumeOAuthEphemeralState({
@@ -189,13 +198,21 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
       return res.status(400).send('State OAuth Shopify invalide ou expiré');
     }
 
+    const shopifyApp = resolveShopifyApp(oauthContext.appId);
+    if (!shopifyApp.apiKey || !shopifyApp.apiSecret) {
+      return res.status(500).send('Clés Shopify non configurées');
+    }
+    if (!verifyShopifyInstallHmac(req.query || {}, shopifyApp.apiSecret)) {
+      return res.status(400).send('Signature HMAC Shopify invalide');
+    }
+
     const tokenUrl = `https://${normalizedShop}/admin/oauth/access_token`;
     const tokenResp = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: SHOPIFY_API_KEY,
-        client_secret: SHOPIFY_API_SECRET,
+        client_id: shopifyApp.apiKey,
+        client_secret: shopifyApp.apiSecret,
         code,
       }),
     });
@@ -218,6 +235,7 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
           accessToken: tokenJson.access_token,
           scope: tokenJson.scope,
           shop: normalizedShop,
+          appId: shopifyApp.appId,
         });
 
         await prisma.$executeRawUnsafe(`
@@ -256,6 +274,7 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
               shop: normalizedShop,
               accessToken: tokenJson.access_token,
               credentialId: credId,
+              billingProvider: shopifyApp.billingProvider,
             });
             if (provision.provisioned) {
               console.log(`✅ Shopify auto-provisioning : Account ${provision.accountId} créé pour ${normalizedShop}`);
@@ -323,7 +342,10 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
     const isAuditFlow = Boolean(oauthContext?.auditShareToken);
 
     let redirectUrl;
-    if (cameFromShopifyAdmin && !isAuditFlow && SHOPIFY_API_KEY) {
+    // BRANCH A réservée aux apps embedded (listée). L'app connecteur
+    // (embedded=false) ne renvoie jamais dans l'admin Shopify : un marchand venu
+    // de feedplug.com doit revenir sur feedplug.com (BRANCH C).
+    if (cameFromShopifyAdmin && !isAuditFlow && shopifyApp.embedded && shopifyApp.apiKey) {
       // Redirige vers l'URL canonique de l'app embedded dans Shopify Admin.
       // Format : https://{shop}/admin/apps/{api_key}
       // Shopify Admin charge alors notre iframe avec les bons paramètres host/embedded.
@@ -332,7 +354,7 @@ app.get('/api/v1/connectors/shopify/callback', async (req, res) => {
         shop: normalizedShop,
       });
       if (isGuestInstall) embeddedParams.set('guest', '1');
-      redirectUrl = `https://${normalizedShop}/admin/apps/${encodeURIComponent(SHOPIFY_API_KEY)}?${embeddedParams.toString()}`;
+      redirectUrl = `https://${normalizedShop}/admin/apps/${encodeURIComponent(shopifyApp.apiKey)}?${embeddedParams.toString()}`;
     } else if (isAuditFlow) {
       redirectUrl = `${APP_URL}/${resolvedLocale}/audit-flux/${encodeURIComponent(oauthContext.auditShareToken)}?shopify=connected`;
     } else {

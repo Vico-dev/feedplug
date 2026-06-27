@@ -103,21 +103,37 @@ async function handleCustomersRedact({ prisma, shopDomain, payload, notifyAdmin 
  * Reçu 48h après uninstall, donc 48h de grâce pour erreurs d'uninstall accidentelles.
  * SLA : effacer sous 48h après réception.
  */
-async function handleShopRedact({ prisma, shopDomain, payload, notifyAdmin }) {
+async function handleShopRedact({ prisma, shopDomain, payload, notifyAdmin, appId }) {
   if (!shopDomain) {
     throw new Error('shop/redact: shopDomain manquant');
   }
 
-  // Trouver tous les credentials Shopify liés à cette boutique.
-  const credentials = await prisma.$queryRawUnsafe(
-    `
-      SELECT id
-      FROM "Credential"
-      WHERE connector = 'SHOPIFY'::text
-        AND secretjson->>'shop' = $1::text
-    `,
-    shopDomain
-  );
+  // Trouver les credentials Shopify liés à cette boutique. Si appId est fourni,
+  // on NE supprime QUE les données de l'app concernée (une boutique peut avoir
+  // les deux apps : un shop/redact reçu pour le connecteur ne doit pas effacer
+  // les données de l'app listée encore active). Credentials legacy sans appId
+  // = 'listed'. Sans appId (rétro-compat / tests) : scope sur le shop seul.
+  const credentials = appId
+    ? await prisma.$queryRawUnsafe(
+        `
+          SELECT id
+          FROM "Credential"
+          WHERE connector = 'SHOPIFY'::text
+            AND secretjson->>'shop' = $1::text
+            AND COALESCE(secretjson->>'appId', 'listed') = $2::text
+        `,
+        shopDomain,
+        appId
+      )
+    : await prisma.$queryRawUnsafe(
+        `
+          SELECT id
+          FROM "Credential"
+          WHERE connector = 'SHOPIFY'::text
+            AND secretjson->>'shop' = $1::text
+        `,
+        shopDomain
+      );
 
   if (!credentials || credentials.length === 0) {
     return { credentialsRemoved: 0, sourcesRemoved: 0, feedsRemoved: 0, itemsRemoved: 0 };
@@ -214,7 +230,7 @@ async function handleShopRedact({ prisma, shopDomain, payload, notifyAdmin }) {
   return summary;
 }
 
-async function processComplianceWebhook({ prisma, topic, shopDomain, payload, notifyAdmin }) {
+async function processComplianceWebhook({ prisma, topic, shopDomain, payload, notifyAdmin, appId }) {
   const requestId = await recordComplianceRequest({ prisma, topic, shopDomain, payload });
 
   try {
@@ -223,7 +239,7 @@ async function processComplianceWebhook({ prisma, topic, shopDomain, payload, no
     } else if (topic === COMPLIANCE_TOPICS.CUSTOMERS_REDACT) {
       await handleCustomersRedact({ prisma, shopDomain, payload, notifyAdmin });
     } else if (topic === COMPLIANCE_TOPICS.SHOP_REDACT) {
-      await handleShopRedact({ prisma, shopDomain, payload, notifyAdmin });
+      await handleShopRedact({ prisma, shopDomain, payload, notifyAdmin, appId });
     } else {
       throw new Error(`Topic compliance inconnu: ${topic}`);
     }

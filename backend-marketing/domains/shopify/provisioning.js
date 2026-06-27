@@ -84,6 +84,9 @@ async function provisionAccountFromShopify({
   shop,
   accessToken,
   credentialId,
+  // 'SHOPIFY' (install App Store, facturé via Managed Pricing) par défaut ;
+  // 'STRIPE' pour l'app connecteur (marchand venu de feedplug.com).
+  billingProvider = 'SHOPIFY',
   fetchImpl,
 }) {
   if (!prisma || !shop || !accessToken) {
@@ -178,7 +181,7 @@ async function provisionAccountFromShopify({
       )
       VALUES (
         $1::text, $2::text, $3::text, $4::text,
-        $5::timestamptz, NULL::text, 'SHOPIFY'::text,
+        $5::timestamptz, NULL::text, $7::text,
         $6::timestamptz, $6::timestamptz
       )
       ON CONFLICT (id) DO NOTHING
@@ -188,7 +191,8 @@ async function provisionAccountFromShopify({
     DEFAULT_PLAN,
     email || null,
     trialEndsAt,
-    now
+    now,
+    billingProvider
   );
 
   if (email && !hasEmailConflict) {

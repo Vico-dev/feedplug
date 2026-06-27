@@ -25,11 +25,9 @@ function registerMarketingAuditsConnectRoutes(app, {
   OAUTH_EPHEMERAL_PROVIDER_GMC,
   OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
   OAuth2Client,
-  SHOPIFY_API_KEY,
-  SHOPIFY_API_SECRET,
-  SHOPIFY_CALLBACK_URL,
+  SHOPIFY_APPS,
+  resolveShopifyApp,
   SHOPIFY_OAUTH_STATE_TTL_MS,
-  SHOPIFY_SCOPES,
   crypto,
   decryptObjectSecrets,
   fetchMarketingAuditFileItems,
@@ -85,7 +83,12 @@ app.post('/api/v1/marketing/audits/:shareToken/connectors/shopify/connect', asyn
   try {
     const shareToken = String(req.params.shareToken || '').trim();
     const { shop } = req.body || {};
-    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    // Connexion depuis un audit public → app connecteur (marchand qui paiera via Stripe).
+    const shopifyApp = resolveShopifyApp('connector');
+    if (!SHOPIFY_APPS.connector) {
+      return res.status(503).json({ message: 'Connecteur Shopify non configuré' });
+    }
+    if (!shopifyApp.apiKey || !shopifyApp.apiSecret) {
       return res.status(500).json({ message: 'Clés Shopify non configurées côté serveur' });
     }
     if (!shareToken) {
@@ -114,6 +117,7 @@ app.post('/api/v1/marketing/audits/:shareToken/connectors/shopify/connect', asyn
         payload: {
           shop: normalizedShop,
           guest: true,
+          appId: shopifyApp.appId,
           auditShareToken: shareToken,
           locale: audits[0].locale || 'fr',
         },
@@ -124,9 +128,9 @@ app.post('/api/v1/marketing/audits/:shareToken/connectors/shopify/connect', asyn
       return res.status(503).json({ message: 'Connexion Shopify temporairement indisponible' });
     }
     const authUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${encodeURIComponent(
-      SHOPIFY_API_KEY
-    )}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(
-      SHOPIFY_CALLBACK_URL
+      shopifyApp.apiKey
+    )}&scope=${encodeURIComponent(shopifyApp.scopes)}&redirect_uri=${encodeURIComponent(
+      shopifyApp.callbackUrl
     )}&state=${encodeURIComponent(state)}&grant_options[]=`;
     res.json({ url: authUrl });
   } catch (err) {
