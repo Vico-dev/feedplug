@@ -6059,53 +6059,17 @@ process.on('SIGTERM', async () => {
   }
 });
 
-// ====== ROUTES MODULAIRES ======
-try {
-  const { registerAllRoutes } = require('./routes/index');
-  const getPrismaReady = () => prismaReady;
-  registerAllRoutes(app, prisma, getPrismaReady, {
-    EFFECTIVE_JWT_SECRET,
-    EFFECTIVE_JWT_REFRESH_SECRET,
-    chaos,
-    authenticateToken,
-    requireStaffAccess,
-    verifyFeedAccess,
-    verifySourceAccess,
-    verifyItemAccess,
-    findUserByEmail,
-    findUserById,
-    issueAuthTokens,
-    buildAuthUser,
-    hashAuthActionToken,
-    canUseFeature,
-    getHealthSnapshot: async () => {
-      chaos.maybeFailDb();
-      let dbOk = false;
-      let dbLatencyMs = null;
-      if (prismaReady && prisma) {
-        const start = Date.now();
-        try {
-          await withTimeout(prisma.$queryRaw`SELECT 1`, 5000, 'Health DB');
-          dbOk = true;
-          dbLatencyMs = Date.now() - start;
-        } catch (err) {
-          console.warn('Health check DB:', err?.message || err);
-        }
-      }
-      return {
-        ready: prismaReady && dbOk,
-        status: prismaReady && dbOk ? 'OK' : 'DEGRADED',
-        timestamp: new Date().toISOString(),
-        prismaReady,
-        dbOk,
-        dbLatencyMs,
-      };
-    },
-  });
-  console.log('✅ Routes modulaires enregistrées');
-} catch (e) {
-  console.warn('Routes modulaires non chargées:', e.message);
-}
+// ====== ROUTES MODULAIRES (ancien agrégateur supprimé) ======
+// L'ancien `registerAllRoutes` (routes/index.js) était CASSÉ et silencieusement
+// avalé par un try/catch : il appelait `registerAuthRoutes(app, prisma, …)` alors
+// que routes/auth.js attend la signature `(app, deps)` → destructuration depuis
+// `prisma` (null au moment de l'enregistrement) → throw. Résultat : seul
+// registerHealthRoutes s'exécutait (1er appel) en n'enregistrant que des doublons
+// morts, puis tout s'arrêtait. Net : AUCUNE route utile n'était servie par ce
+// chemin (health/diagnostic/chaos servis inline ; auth/enrichment enregistrés
+// directement ; accounts servi inline). Bloc + modules morts supprimés
+// (routes/index.js, routes/health.js, routes/accounts.js) — route-inventory
+// inchangé (preuve que c'était du code mort).
 
 // ====== ENRICHISSEMENT IA ======
 
