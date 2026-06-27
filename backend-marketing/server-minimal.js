@@ -5507,6 +5507,194 @@ app.put('/api/v1/accounts', authenticateToken, async (req, res) => {
   }
 });
 
+// ===== RGPD : portabilité des données (export) =====
+// Export JSON des données du compte : profil, équipe, feeds (+ comptage items),
+// billing. OWNER uniquement. La privacy policy promet ce droit à la portabilité.
+app.get('/api/v1/accounts/export', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (req.user.role !== 'OWNER') {
+      return res.status(403).json({ message: 'Seuls les propriétaires peuvent exporter les données du compte' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    if (!accountId) {
+      return res.status(403).json({ message: 'Compte non associé' });
+    }
+
+    let accountRows;
+    try {
+      accountRows = await prisma.$queryRawUnsafe(`
+        SELECT id, name, plan, email, companyname, billingemail, phonee164,
+               trialendsat, billingstatus, paymentgraceuntil, createdat
+        FROM "Account" WHERE id = $1::text LIMIT 1
+      `, accountId);
+    } catch (err) {
+      if (!err?.message || !/billingstatus|paymentgraceuntil|companyname|billingemail|phonee164|42703/i.test(err.message)) {
+        throw err;
+      }
+      accountRows = await prisma.$queryRawUnsafe(`
+        SELECT id, name, plan, email, trialendsat, createdat
+        FROM "Account" WHERE id = $1::text LIMIT 1
+      `, accountId);
+    }
+    if (!accountRows || accountRows.length === 0) {
+      return res.status(404).json({ message: 'Compte non trouvé' });
+    }
+    const account = accountRows[0];
+
+    const users = await prisma.$queryRawUnsafe(`
+      SELECT id, email, firstname, lastname, role, status, createdat
+      FROM "User" WHERE accountid = $1::text ORDER BY createdat ASC
+    `, accountId);
+
+    // Feeds + comptage d'items par feed (LEFT JOIN pour inclure les feeds vides).
+    let feeds = [];
+    try {
+      feeds = await prisma.$queryRawUnsafe(`
+        SELECT f.id, f.name, f.status, f.frequency, f.createdat,
+               COUNT(fi.id)::int AS itemcount
+        FROM "Feed" f
+        LEFT JOIN "FeedItem" fi ON fi.feedid = f.id
+        WHERE f.accountid = $1::text
+        GROUP BY f.id
+        ORDER BY f.createdat ASC
+      `, accountId);
+    } catch (feedErr) {
+      console.warn('GET /accounts/export feeds error:', feedErr?.message);
+      feeds = [];
+    }
+
+    let billing = null;
+    try {
+      const billingRows = await prisma.$queryRawUnsafe(`
+        SELECT companyname, siret, siren, vatnumber, addressline1, addressline2,
+               postalcode, city, country, billingemail, createdat
+        FROM "Billing" WHERE accountid = $1::text LIMIT 1
+      `, accountId);
+      billing = (billingRows && billingRows[0]) || null;
+    } catch (billingErr) {
+      console.warn('GET /accounts/export billing error:', billingErr?.message);
+      billing = null;
+    }
+
+    const exportPayload = {
+      exportedAt: new Date().toISOString(),
+      format: 'feedplug-account-export-v1',
+      account: {
+        id: account.id,
+        name: account.name,
+        plan: account.plan || 'STARTER',
+        email: account.email || null,
+        companyName: account.companyname || null,
+        billingEmail: account.billingemail || null,
+        phone: account.phonee164 || null,
+        trialEndsAt: account.trialendsat || null,
+        billingStatus: account.billingstatus || null,
+        paymentGraceUntil: account.paymentgraceuntil || null,
+        createdAt: account.createdat || null,
+      },
+      users: (users || []).map(u => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.firstname || '',
+        lastName: u.lastname || '',
+        role: u.role,
+        status: u.status || 'ACTIVE',
+        createdAt: u.createdat || null,
+      })),
+      feeds: (feeds || []).map(f => ({
+        id: f.id,
+        name: f.name,
+        status: f.status,
+        frequency: f.frequency,
+        itemCount: typeof f.itemcount === 'number' ? f.itemcount : Number(f.itemcount || 0),
+        createdAt: f.createdat || null,
+      })),
+      billing: billing ? {
+        companyName: billing.companyname || null,
+        siret: billing.siret || null,
+        siren: billing.siren || null,
+        vatNumber: billing.vatnumber || null,
+        addressLine1: billing.addressline1 || null,
+        addressLine2: billing.addressline2 || null,
+        postalCode: billing.postalcode || null,
+        city: billing.city || null,
+        country: billing.country || null,
+        billingEmail: billing.billingemail || null,
+        createdAt: billing.createdat || null,
+      } : null,
+    };
+
+    const filename = `feedplug-export-${accountId}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(JSON.stringify(exportPayload, null, 2));
+  } catch (error) {
+    console.error('GET /accounts/export error:', error);
+    res.status(500).json({ message: 'Erreur lors de l\'export des données du compte' });
+  }
+});
+
+// ===== RGPD : suppression de compte (droit à l'effacement) =====
+// DESTRUCTIF & IRRÉVERSIBLE. OWNER uniquement. Supprime l'Account et tout
+// ce qui en dépend, puis révoque le token courant de l'appelant.
+//
+// Le schéma Prisma pose `onDelete: Cascade` sur la plupart des relations vers
+// Account (User, Market, Destination, Billing, etc.) — la suppression de la
+// ligne Account les efface automatiquement. MAIS quelques relations n'ont PAS
+// de cascade et provoqueraient une violation de clé étrangère :
+//   - FeedSource.account, Feed.account, ExportLog.account
+// et la chaîne des feeds (FeedItem, IngestionRun, FeedError, EnrichmentSource,
+// FeedItemRevision) doit être supprimée dans l'ordre enfant -> parent.
+// StoreLocation / LocalInventory n'ont pas de FK vers Account mais portent un
+// accountid : on les nettoie aussi pour ne laisser aucune donnée résiduelle.
+// Le tout dans une transaction : soit tout part, soit rien.
+app.delete('/api/v1/accounts', authenticateToken, async (req, res) => {
+  try {
+    if (!prismaReady || !prisma) {
+      return res.status(503).json({ message: 'Service non disponible' });
+    }
+    if (req.user.role !== 'OWNER') {
+      return res.status(403).json({ message: 'Seuls les propriétaires peuvent supprimer le compte' });
+    }
+    const accountId = req.user.accountId || req.accountId;
+    if (!accountId) {
+      return res.status(403).json({ message: 'Compte non associé' });
+    }
+
+    // Vérifie l'existence avant la transaction (404 clair si déjà supprimé).
+    const existing = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Account" WHERE id = $1::text LIMIT 1`,
+      accountId
+    );
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ message: 'Compte non trouvé' });
+    }
+
+    // Logique de suppression extraite & testée (tests/accounts/deletion.test.js).
+    // Suppression ordonnée enfant -> parent (DELETE Account en dernier, déclenche
+    // la cascade Prisma) puis révocation du token courant (RevokedJti, comme le
+    // logout). Best-effort par table : l'erreur "table inexistante" (42P01) est
+    // ignorée ; toute autre erreur fait échouer la transaction (rollback).
+    const { runAccountDeletion } = require('./domains/accounts/deletion');
+    await prisma.$transaction(async (tx) => {
+      await runAccountDeletion(tx, accountId, {
+        authorizationHeader: req.headers['authorization'],
+        refreshToken: req.body?.refreshToken,
+        jwtDecode: jwt.decode,
+        onMissingTableWarn: (msg) => console.warn('DELETE /accounts: table absente, ignorée:', msg),
+      });
+    });
+
+    return res.status(200).json({ message: 'Compte supprimé définitivement. Toutes vos données ont été effacées.' });
+  } catch (error) {
+    console.error('DELETE /accounts error:', error);
+    res.status(500).json({ message: 'Erreur lors de la suppression du compte' });
+  }
+});
+
 app.put('/api/v1/accounts/users/me', authenticateToken, async (req, res) => {
   try {
     if (!prismaReady || !prisma) {
