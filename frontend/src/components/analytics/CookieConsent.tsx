@@ -1,10 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 const CONSENT_KEY = "feedplug_cookie_consent";
+
+// CookieConsent est monté globalement (root layout), y compris sur des routes
+// NON localisées (/docs, /register, /choose-plan…) qui n'ont PAS de contexte
+// next-intl → useTranslations y planterait au prérendu statique. On résout donc
+// la locale depuis l'URL et on garde des strings inline (sans dépendre de next-intl).
+const COOKIE_STRINGS: Record<string, { body: string; learnMore: string; refuse: string; accept: string }> = {
+  fr: { body: "Nous utilisons des cookies pour mesurer l'audience et améliorer votre expérience.", learnMore: "En savoir plus", refuse: "Refuser", accept: "Accepter" },
+  en: { body: "We use cookies to measure traffic and improve your experience.", learnMore: "Learn more", refuse: "Decline", accept: "Accept" },
+  es: { body: "Utilizamos cookies para medir la audiencia y mejorar tu experiencia.", learnMore: "Más información", refuse: "Rechazar", accept: "Aceptar" },
+};
+
+function localeFromPath(pathname: string | null): "fr" | "en" | "es" {
+  if (pathname?.startsWith("/en")) return "en";
+  if (pathname?.startsWith("/es")) return "es";
+  return "fr";
+}
 
 type ConsentStatus = "accepted" | "refused" | null;
 
@@ -38,7 +54,10 @@ export default function CookieConsent({
   onAccept: () => void;
   onRefuse: () => void;
 }) {
-  const t = useTranslations("cookieConsent");
+  const pathname = usePathname();
+  const locale = localeFromPath(pathname);
+  const t = COOKIE_STRINGS[locale];
+  const cookiesHref = locale === "fr" ? "/legal/cookies" : `/${locale}/legal/cookies`;
   const { consent, accept, refuse } = useConsent();
   const [visible, setVisible] = useState(false);
 
@@ -96,9 +115,9 @@ export default function CookieConsent({
           color: "var(--ink-2)",
           margin: "0 0 16px 0",
         }}>
-          {t("body")}{" "}
-          <Link href="/legal/cookies" style={{ color: "var(--ink)", textDecoration: "underline" }}>
-            {t("learnMore")}
+          {t.body}{" "}
+          <Link href={cookiesHref} style={{ color: "var(--ink)", textDecoration: "underline" }}>
+            {t.learnMore}
           </Link>
         </p>
         <div style={{ display: "flex", gap: "10px" }}>
@@ -114,7 +133,7 @@ export default function CookieConsent({
             fontFamily: "inherit",
             transition: "border-color 0.2s",
           }}>
-            {t("refuse")}
+            {t.refuse}
           </button>
           <button onClick={handleAccept} style={{
             padding: "10px 20px",
@@ -128,7 +147,7 @@ export default function CookieConsent({
             fontFamily: "inherit",
             transition: "background-color 0.2s",
           }}>
-            {t("accept")}
+            {t.accept}
           </button>
         </div>
       </div>
