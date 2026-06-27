@@ -7,5 +7,5 @@ export default async function FeedPlugVsShoppingfeedPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  return <ComparisonLanding copy={getComparisonCopy("shoppingfeed", locale)} />;
+  return <ComparisonLanding copy={getComparisonCopy("shoppingfeed", locale)} locale={locale} />;
 }

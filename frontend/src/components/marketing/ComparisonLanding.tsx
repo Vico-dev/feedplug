@@ -10,6 +10,7 @@ import {
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import { Link } from "@/i18n/routing";
 import { createFaqJsonLd, type FAQJsonLdItem } from "@/lib/lp-metadata";
+import { getAuditCta } from "@/lib/audit-cta";
 
 type HeroStat = {
   value: string;
@@ -77,9 +78,13 @@ export type ComparisonLandingCopy = {
 
 export default function ComparisonLanding({
   copy,
+  locale = "fr",
 }: {
   copy: ComparisonLandingCopy;
+  locale?: string;
 }) {
+  const auditCta = getAuditCta(locale);
+  const auditHref = auditCta.href;
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "var(--paper-2)", color: "var(--ink)" }}>
       {createFaqJsonLd(copy.faqs)}
@@ -249,7 +254,7 @@ export default function ComparisonLanding({
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 28 }}>
                 <Link
-                  href={copy.primaryHref}
+                  href={auditHref}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -262,11 +267,11 @@ export default function ComparisonLanding({
                     fontWeight: 700,
                   }}
                 >
-                  {copy.primaryLabel}
+                  {auditCta.label}
                   <ArrowRight size={16} />
                 </Link>
                 <Link
-                  href={copy.secondaryHref}
+                  href={copy.primaryHref}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -280,9 +285,29 @@ export default function ComparisonLanding({
                     fontWeight: 700,
                   }}
                 >
+                  {copy.primaryLabel}
+                </Link>
+                <Link
+                  href={copy.secondaryHref}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "14px 18px",
+                    borderRadius: 16,
+                    border: "1px solid var(--line)",
+                    background: "transparent",
+                    color: "var(--ink-2)",
+                    textDecoration: "none",
+                    fontWeight: 700,
+                  }}
+                >
                   {copy.secondaryLabel}
                 </Link>
               </div>
+              <p style={{ margin: "14px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}>
+                {auditCta.reassurance}
+              </p>
               <div className="comparison-stat-grid" style={{ marginTop: 28 }}>
                 {copy.heroStats.map((stat, index) => {
                   const Icon = index === 0 ? Gauge : index === 1 ? Layers3 : Sparkles;
@@ -513,24 +538,44 @@ export default function ComparisonLanding({
             <p style={{ margin: "12px 0 0", color: "rgba(248,250,252,0.74)", lineHeight: 1.75, maxWidth: 820 }}>
               {copy.ctaBody}
             </p>
-            <Link
-              href={copy.ctaHref}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 22,
-                padding: "14px 18px",
-                borderRadius: 16,
-                background: "var(--paper-2)",
-                color: "var(--ink)",
-                textDecoration: "none",
-                fontWeight: 700,
-              }}
-            >
-              {copy.ctaLabel}
-              <ArrowRight size={16} />
-            </Link>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 22 }}>
+              <Link
+                href={auditHref}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "14px 18px",
+                  borderRadius: 16,
+                  background: "var(--paper-2)",
+                  color: "var(--ink)",
+                  textDecoration: "none",
+                  fontWeight: 700,
+                }}
+              >
+                {auditCta.label}
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                href={copy.ctaHref}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "14px 18px",
+                  borderRadius: 16,
+                  border: "1px solid rgba(248,250,252,0.3)",
+                  color: "var(--paper-2)",
+                  textDecoration: "none",
+                  fontWeight: 700,
+                }}
+              >
+                {copy.ctaLabel}
+              </Link>
+            </div>
+            <p style={{ margin: "14px 0 0", fontSize: 13, fontWeight: 600, color: "rgba(248,250,252,0.74)" }}>
+              {auditCta.reassurance}
+            </p>
           </section>
         </div>
       </main>

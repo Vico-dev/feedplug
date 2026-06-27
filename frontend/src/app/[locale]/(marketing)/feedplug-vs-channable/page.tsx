@@ -7,5 +7,5 @@ export default async function FeedPlugVsChannablePage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  return <ComparisonLanding copy={getComparisonCopy("channable", locale)} />;
+  return <ComparisonLanding copy={getComparisonCopy("channable", locale)} locale={locale} />;
 }

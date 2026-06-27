@@ -26,6 +26,7 @@ import { getIngestionSyncToastMessage, getIngestionEmptyFileMessage } from '@/li
 import { ALL_MAPPING_FIELDS, CHANNEL_OPTIONS, MAPPING_FIELDS_GROUPS, getMappingFieldsForChannel, type MappingOutputChannel } from '@/lib/mapping-field-groups';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { buildLocalizedPath, getLocalePrefixForLocale } from '@/lib/locale-navigation';
+import { trackEvent } from '@/components/analytics/GoogleAnalytics';
 import type { FeedSource, Feed } from '@/lib/shopify/types';
 
 interface EnrichmentSource {
@@ -415,6 +416,8 @@ export default function SourcesPage() {
     if (params.get('shopify') === 'connected') {
       const shop = params.get('shop');
       const guest = params.get('guest');
+      // P0-7 — Connexion de boutique réussie (retour OAuth Shopify).
+      trackEvent('store_connected', { connector: 'shopify', method: 'oauth' });
       if (guest === '1' && shop) {
         apiClient.post('/connectors/shopify/claim', { shop }).then(() => {
           fetchData();
@@ -423,14 +426,35 @@ export default function SourcesPage() {
           fetchData();
           showToast('Boutique Shopify connectée. Si elle n’apparaît pas, réessayez dans un instant.', 'success');
         }).finally(() => {
-          window.history.replaceState({}, '', window.location.pathname);
+          // P0-6 — Après import, on emmène vers l'écran de douleur (produits à corriger).
+          router.push(buildLocalizedPath('/catalogue?smartView=to_fix', localePrefix));
         });
       } else {
         fetchData();
         showToast('Boutique Shopify connectée ! Vous pouvez maintenant synchroniser vos produits.', 'success');
-        window.history.replaceState({}, '', window.location.pathname);
+        router.push(buildLocalizedPath('/catalogue?smartView=to_fix', localePrefix));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // P0-6 — Deep-link depuis l'onboarding : ?connect=1 ouvre directement le
+  // catalogue de connecteurs ; ?connect=shopify|csv|prestashop pré-sélectionne
+  // le connecteur. Évite la page Sources vide intermédiaire.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const connect = params.get('connect');
+    if (!connect) return;
+    setShowCreateModal(true);
+    const known = ['shopify', 'csv', 'prestashop'];
+    if (known.includes(connect.toLowerCase())) {
+      handleSelectConnector(connect.toLowerCase());
+    }
+    // Nettoyer l'URL sans recharger
+    params.delete('connect');
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
   }, []);
 
   const fetchData = async () => {
@@ -776,8 +800,21 @@ export default function SourcesPage() {
       }
 
       setCsvAnalysis(response.data);
+      // P1 (CSV happy path) — On accepte d'office le mapping suggéré ; l'utilisateur
+      // n'a qu'à vérifier (et ne sera bloqué que s'il manque des champs requis).
       setMapping(response.data.suggestedMapping || {});
-      
+
+      // P1 — Filet de sécurité : si aucun nom n'a été auto-généré (ex. mode URL),
+      // on en pose un par défaut pour ne pas bloquer la création.
+      if (!sourceName.trim()) {
+        if (uploadMode === 'url') {
+          const fromUrl = csvUrl.split('/').pop()?.split('?')[0]?.replace(/\.[a-z0-9]+$/i, '') || '';
+          setSourceName(fromUrl || 'Catalogue importé');
+        } else {
+          setSourceName('Catalogue importé');
+        }
+      }
+
       // Si upload de fichier, sauvegarder l'URL retournée
       if (uploadMode === 'file' && response.data.csvUrl) {
         setCsvUrl(response.data.csvUrl);
@@ -789,6 +826,26 @@ export default function SourcesPage() {
       setAnalyzingCsv(false);
     }
   };
+
+  // P0-7 — Sélection d'un connecteur = début de création de source. On émet
+  // l'événement d'analytics (même pattern que sign_up) et on pré-sélectionne.
+  const handleSelectConnector = (connectorId: string) => {
+    trackEvent('source_create_started', { connector: connectorId });
+    setSelectedConnector(connectorId);
+  };
+
+  // P1 (CSV happy path) — Lancer l'analyse automatiquement dès qu'un fichier est
+  // déposé/sélectionné (mode fichier), pour masquer l'étape « Analyser ». Le nom
+  // est déjà auto-généré par les handlers de drop/select. On ne déclenche qu'une
+  // fois (pas d'analyse en cours, pas de résultat existant).
+  useEffect(() => {
+    if (selectedConnector !== 'csv') return;
+    if (uploadMode !== 'file') return;
+    if (!csvFile) return;
+    if (csvAnalysis || analyzingCsv) return;
+    handleAnalyzeCsv();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [csvFile, selectedConnector, uploadMode]);
 
   const resetModal = () => {
     setShowCreateModal(false);
@@ -905,13 +962,22 @@ export default function SourcesPage() {
         }
       }
 
+      // P0-7 — Source connectée avec succès (CSV ou PrestaShop).
+      trackEvent('store_connected', {
+        connector: selectedConnector || 'unknown',
+        method: selectedConnector === 'csv' ? uploadMode : 'api',
+      });
+
       resetModal();
       await fetchData();
       showToast('Source créée avec succès ! Le flux a été configuré automatiquement.', 'success');
 
-      // Rediriger vers le catalogue avec le nouveau flux pour lancer la synchronisation
+      // P0-6 — Rediriger vers l'écran de douleur (produits à corriger) plutôt
+      // qu'une vue neutre. On conserve le feed en query pour cibler le bon flux.
       if (createdFeed?.id) {
-        router.push(buildLocalizedPath(`/catalogue?feed=${createdFeed.id}`, localePrefix));
+        router.push(buildLocalizedPath(`/catalogue?feed=${createdFeed.id}&smartView=to_fix`, localePrefix));
+      } else {
+        router.push(buildLocalizedPath('/catalogue?smartView=to_fix', localePrefix));
       }
     } catch (err: unknown) {
       console.error('Error creating source:', err);
@@ -942,21 +1008,6 @@ export default function SourcesPage() {
   const csvNameReady = sourceName.trim().length > 0;
   const csvInputReady = uploadMode === 'url' ? csvUrl.trim().length > 0 : Boolean(csvFile);
   const csvAnalysisReady = Boolean(csvAnalysis);
-  const csvCurrentStep = csvAnalysisReady ? 3 : csvInputReady ? 2 : 1;
-  const csvSteps = [
-    { id: 1, title: 'Nommer la source', description: 'Choisis un nom interne pour retrouver ce catalogue.' },
-    { id: 2, title: 'Ajouter le fichier', description: uploadMode === 'file' ? 'Dépose un CSV/XML ou choisis un fichier.' : 'Renseigne une URL publique vers le fichier.' },
-    { id: 3, title: 'Vérifier le mapping', description: 'Contrôle les colonnes détectées avant la création.' },
-  ];
-  const csvNextAction = !csvNameReady
-    ? 'Renseigne d’abord un nom de source.'
-    : !csvInputReady
-      ? uploadMode === 'file'
-        ? 'Ajoute un fichier pour lancer l’analyse.'
-        : 'Ajoute une URL de fichier pour lancer l’analyse.'
-      : !csvAnalysisReady
-        ? 'Analyse le fichier pour préremplir le mapping.'
-        : 'Vérifie le mapping puis crée la source.';
   const fieldsForSelectedChannel = getMappingFieldsForChannel(mappingOutputChannel);
   const requiredFieldsForSelectedChannel = fieldsForSelectedChannel.filter((field) => field.required);
   const mappedColumns = new Set(Object.values(mapping).filter(Boolean));
@@ -967,6 +1018,23 @@ export default function SourcesPage() {
   const customMappings = Object.entries(mapping).filter(([target, column]) => Boolean(column) && isCustomMappingTarget(target));
   const editCustomMappings = Object.entries(editMapping).filter(([target, column]) => Boolean(column) && isCustomMappingTarget(target));
   const enrichmentCustomMappings = Object.entries(addEnrichmentMapping).filter(([target, column]) => Boolean(column) && isCustomMappingTarget(target));
+  // P1 (CSV happy path) — Le nom de source est auto-généré depuis le fichier :
+  // on retire l'étape « nommer » du parcours. Reste 2 étapes : ajouter le
+  // fichier, puis vérifier le mapping (souvent déjà prêt).
+  const csvCurrentStep = csvAnalysisReady ? 2 : 1;
+  const csvSteps = [
+    { id: 1, title: 'Ajouter le fichier', description: uploadMode === 'file' ? 'Dépose un CSV/XML : l’analyse démarre toute seule.' : 'Renseigne une URL publique vers le fichier.' },
+    { id: 2, title: 'Vérifier le mapping', description: 'Le mapping est prérempli — un coup d’œil suffit avant de créer.' },
+  ];
+  const csvNextAction = !csvInputReady
+    ? uploadMode === 'file'
+      ? 'Dépose un fichier : l’analyse se lance automatiquement.'
+      : 'Ajoute une URL de fichier pour lancer l’analyse.'
+    : !csvAnalysisReady
+      ? 'Analyse en cours / à lancer pour préremplir le mapping.'
+      : missingRequiredFields.length > 0
+        ? 'Vérifie les champs clés manquants puis crée la source.'
+        : 'Tout est prêt : crée la source et ouvre ton catalogue.';
 
   return (
     <PageLayout>
@@ -1452,7 +1520,7 @@ export default function SourcesPage() {
                 return (
                   <div
                     key={connector.id}
-                    onClick={() => connector.available && setSelectedConnector(connector.id)}
+                    onClick={() => connector.available && handleSelectConnector(connector.id)}
                     style={{
                       border: '2px solid var(--line)',
                       borderRadius: '8px',
@@ -1776,19 +1844,23 @@ export default function SourcesPage() {
                 </div>
               </div>
 
-              {/* Nom de la source */}
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--ink-2)', marginBottom: '8px' }}>
-                  Nom de la source *
-                </label>
-                <input
-                  type="text"
-                  value={sourceName}
-                  onChange={(e) => setSourceName(e.target.value)}
-                  placeholder="Ex: Catalogue principal"
-                  style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px' }}
-                />
-              </div>
+              {/* P1 (CSV happy path) — Le nom est auto-généré depuis le fichier.
+                  On ne le montre (discrètement, repliable) qu'une fois un fichier/URL
+                  fourni, pour ne pas en faire une étape bloquante en tête de parcours. */}
+              {csvInputReady && (
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', color: 'var(--ink-3)', marginBottom: '6px' }}>
+                    Nom de la source <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(auto-rempli, modifiable)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={sourceName}
+                    onChange={(e) => setSourceName(e.target.value)}
+                    placeholder="Catalogue importé"
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '13px', color: 'var(--ink-2)', backgroundColor: '#fafafa' }}
+                  />
+                </div>
+              )}
 
               {/* Toggle URL vs File */}
               <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

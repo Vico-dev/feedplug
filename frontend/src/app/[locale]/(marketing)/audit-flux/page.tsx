@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "next-intl";
 import { useState } from "react";
-import { ArrowRight, CheckCircle2, ChevronLeft, Database, Link2, PhoneCall, Store } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronLeft, Gauge, Link2, ShieldCheck, Sparkles } from "lucide-react";
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import TurnstileWidget from "@/components/auth/turnstile-widget";
 import {
@@ -97,9 +97,8 @@ const CATALOG_SIZE_OPTIONS = [
 ];
 
 const STEPS = [
-  { id: 1, title: "Vos coordonnees", caption: "On identifie le bon interlocuteur." },
-  { id: 2, title: "Votre source produit", caption: "On capte le CMS et la source reelle." },
-  { id: 3, title: "Vos priorites", caption: "On prepare l’audit avant connexion." },
+  { id: 1, title: "Votre flux", caption: "Source catalogue et email pour recevoir le diagnostic." },
+  { id: 2, title: "Vos priorites", caption: "Canaux a regarder et contact (optionnel)." },
 ];
 
 const initialForm = {
@@ -166,22 +165,21 @@ export default function AuditFluxPage() {
   }));
 
   const selectedSource = SOURCE_OPTIONS.find((option) => option.id === form.sourceId) || SOURCE_OPTIONS[0];
-  const stepOneValid = [form.firstName, form.lastName, form.jobTitle, form.company, form.email].every((value) => value.trim().length > 0);
-  const stepTwoValid = form.sourceValue.trim().length > 0 && form.catalogSize > 0;
-  const stepThreeValid = form.targetChannels.length > 0;
-  const canSubmit = stepOneValid && stepTwoValid && stepThreeValid && (!captchaEnabled || !!captchaToken) && !submitting;
+  // Friction minimale : on ne demande que la source du flux + un email pour
+  // envoyer le diagnostic. Les coordonnees (entreprise, fonction, nom) sont
+  // optionnelles et collectees en aval, jamais comme barriere au resultat.
+  const emailValid = /.+@.+\..+/.test(form.email.trim());
+  const stepOneValid = form.sourceValue.trim().length > 0 && form.catalogSize > 0 && emailValid;
+  const stepTwoValid = form.targetChannels.length > 0;
+  const canSubmit = stepOneValid && stepTwoValid && (!captchaEnabled || !!captchaToken) && !submitting;
 
   const nextStep = () => {
     if (step === 1 && !stepOneValid) {
-      setError("Renseignez au minimum le prenom, le nom, la fonction, l'entreprise et l'email pour continuer.");
-      return;
-    }
-    if (step === 2 && !stepTwoValid) {
-      setError("Choisissez votre source et indiquez l URL ou le Merchant ID.");
+      setError("Indiquez votre source de flux (URL ou Merchant ID) et un email valide pour recevoir le diagnostic.");
       return;
     }
     setError("");
-    setStep((current) => Math.min(3, current + 1));
+    setStep((current) => Math.min(2, current + 1));
   };
 
   const previousStep = () => {
@@ -216,8 +214,12 @@ export default function AuditFluxPage() {
 
     try {
       const isGmc = selectedSource.connectorType === "GMC";
+      // Fallback de courtoisie : si le prospect n'a pas renseigne son nom
+      // (champ optionnel), on derive un libelle depuis l'email pour garder
+      // la creation d'audit fonctionnelle cote service.
+      const emailLocalPart = form.email.trim().split("@")[0] || "Prospect";
       const audit = await createMarketingAudit({
-        firstName: form.firstName.trim(),
+        firstName: form.firstName.trim() || emailLocalPart,
         lastName: form.lastName.trim(),
         jobTitle: form.jobTitle.trim(),
         phone: form.phone.trim(),
@@ -252,13 +254,13 @@ export default function AuditFluxPage() {
           <div style={{ maxWidth: 1180, margin: "0 auto" }}>
             <div style={{ maxWidth: 760, marginBottom: 28 }}>
               <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#2A6FE8" }}>
-                Audit technique gratuit
+                Audit de flux gratuit
               </p>
               <h1 style={{ margin: "0 0 14px", fontSize: "clamp(36px, 5vw, 58px)", lineHeight: 1.02, letterSpacing: "-0.05em", color: "var(--ink)" }}>
-                Un audit de flux base sur vos vraies donnees, pas sur du declaratif.
+                Recevez le diagnostic de votre flux produit, gratuitement.
               </h1>
               <p style={{ margin: 0, fontSize: 18, lineHeight: 1.75, color: "var(--ink-2)" }}>
-                Vous laissez vos coordonnees, vous indiquez la source catalogue, puis FeedPlug attend une vraie connexion Shopify, Google Merchant Center ou flux pour produire la note gratuite.
+                Indiquez votre source catalogue (Shopify, Google Merchant Center, flux CSV…) et l’email où recevoir votre diagnostic. FeedPlug analyse la qualité technique de votre flux et les blocages qui empêchent vos produits d’être diffusés.
               </p>
             </div>
 
@@ -271,9 +273,9 @@ export default function AuditFluxPage() {
               }}
             >
               {[
-                "30 secondes pour lancer la demande",
-                "Telephone optionnel au depart",
-                "Rapport avec top 5 blocages et potentiel estimé",
+                "Sans carte bancaire",
+                "Sans engagement",
+                "5 min",
               ].map((item) => (
                 <div
                   key={item}
@@ -298,9 +300,9 @@ export default function AuditFluxPage() {
                   Honeypot historique retiré : les gestionnaires de mots de passe
                   (Dashlane, 1Password) remplissaient le champ caché même hors-écran
                   et bloquaient les vraies submissions. Cloudflare Turnstile (étape
-                  2) + rate limiter backend + risk assessment couvrent déjà les bots.
+                  1) + rate limiter backend + risk assessment couvrent déjà les bots.
                 */}
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 28 }}>
+                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", marginBottom: 28 }}>
                   {STEPS.map((item) => {
                     const active = item.id === step;
                     const done = item.id < step;
@@ -321,28 +323,9 @@ export default function AuditFluxPage() {
                 {step === 1 ? (
                   <section>
                     <div style={{ marginBottom: 20 }}>
-                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Qui doit recevoir l’audit ?</h2>
+                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Quelle est la source de votre flux ?</h2>
                       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
-                        On collecte les coordonnees du bon contact avant toute connexion technique.
-                      </p>
-                    </div>
-                    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                      <Field label="Prenom" value={form.firstName} onChange={(value) => setForm((current) => ({ ...current, firstName: value }))} />
-                      <Field label="Nom" value={form.lastName} onChange={(value) => setForm((current) => ({ ...current, lastName: value }))} />
-                      <Field label="Fonction" value={form.jobTitle} onChange={(value) => setForm((current) => ({ ...current, jobTitle: value }))} />
-                      <Field label="Telephone (optionnel)" value={form.phone} type="tel" placeholder="+33 6 12 34 56 78" onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
-                      <Field label="Entreprise" value={form.company} onChange={(value) => setForm((current) => ({ ...current, company: value }))} />
-                      <Field label="Email" value={form.email} type="email" onChange={(value) => setForm((current) => ({ ...current, email: value }))} />
-                    </div>
-                  </section>
-                ) : null}
-
-                {step === 2 ? (
-                  <section>
-                    <div style={{ marginBottom: 20 }}>
-                      <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Quelle est la vraie source du flux ?</h2>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
-                        On capte le CMS ou la source catalogue pour brancher l’audit sur les vraies donnees ensuite.
+                        On capte la source réelle du catalogue pour brancher l’audit sur vos vraies données.
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginBottom: 20 }}>
@@ -388,16 +371,40 @@ export default function AuditFluxPage() {
                           ))}
                         </select>
                       </label>
+                      <Field
+                        label="Email (pour recevoir le diagnostic)"
+                        value={form.email}
+                        type="email"
+                        placeholder="vous@votre-boutique.com"
+                        onChange={(value) => setForm((current) => ({ ...current, email: value }))}
+                      />
                     </div>
+
+                    {captchaEnabled ? (
+                      <div
+                        style={{
+                          marginTop: 22,
+                          borderRadius: 20,
+                          border: "1px solid var(--line)",
+                          background: "var(--paper-2)",
+                          padding: 18,
+                        }}
+                      >
+                        <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>
+                          Verification anti-spam
+                        </div>
+                        <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />
+                      </div>
+                    ) : null}
                   </section>
                 ) : null}
 
-                {step === 3 ? (
+                {step === 2 ? (
                   <section>
                     <div style={{ marginBottom: 20 }}>
                       <h2 style={{ margin: "0 0 8px", fontSize: 24, color: "var(--ink)" }}>Que faut-il auditer en priorite ?</h2>
                       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink-3)" }}>
-                        Cette etape ne sert pas a calculer une note. Elle sert a preparer l’analyse technique reelle du flux une fois la source connectee.
+                        On prépare l’analyse technique du flux sur les canaux qui comptent pour vous.
                       </p>
                     </div>
 
@@ -430,47 +437,20 @@ export default function AuditFluxPage() {
                       </div>
                     </div>
 
-                    <div style={{ borderRadius: 24, border: "1px solid var(--line)", background: "var(--paper-2)", padding: 22 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#2A6FE8", marginBottom: 8 }}>
-                        Ce qui va se passer ensuite
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 4 }}>Vos coordonnees (optionnel)</div>
+                      <p style={{ margin: "0 0 14px", fontSize: 13, lineHeight: 1.6, color: "var(--ink-3)" }}>
+                        Pour personnaliser le diagnostic et reprendre contact si vous le souhaitez. Aucun de ces champs n’est obligatoire.
+                      </p>
+                      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                        <Field label="Prenom (optionnel)" value={form.firstName} onChange={(value) => setForm((current) => ({ ...current, firstName: value }))} />
+                        <Field label="Nom (optionnel)" value={form.lastName} onChange={(value) => setForm((current) => ({ ...current, lastName: value }))} />
+                        <Field label="Entreprise (optionnel)" value={form.company} onChange={(value) => setForm((current) => ({ ...current, company: value }))} />
+                        <Field label="Fonction (optionnel)" value={form.jobTitle} onChange={(value) => setForm((current) => ({ ...current, jobTitle: value }))} />
+                        <Field label="Telephone (optionnel)" value={form.phone} type="tel" placeholder="+33 6 12 34 56 78" onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
                       </div>
-                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
-                        1. Votre demande d’audit est enregistree.
-                      </p>
-                      <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
-                        2. Vous connectez Shopify ou Google Merchant Center, ou bien notre equipe reprend votre source Presta, CSV ou PIM.
-                      </p>
-                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "var(--ink-2)" }}>
-                        3. La note gratuite est ensuite calculee sur les vraies donnees du flux.
-                      </p>
                     </div>
                   </section>
-                ) : null}
-
-                {/*
-                  Turnstile sur step 2 (et non step 3) : on profite de la pause
-                  naturelle entre "choisir la source" et "valider les canaux"
-                  pour que Cloudflare fasse son challenge en arrière-plan. Au
-                  moment où l'utilisateur arrive sur la dernière étape, le token
-                  est déjà obtenu — on évite un clic supplémentaire en fin de
-                  parcours. Décision UX validée par le user (régression rétablie
-                  le 2026-06-12).
-                */}
-                {step === 2 && captchaEnabled ? (
-                  <div
-                    style={{
-                      marginTop: 22,
-                      borderRadius: 20,
-                      border: "1px solid var(--line)",
-                      background: "var(--paper-2)",
-                      padding: 18,
-                    }}
-                  >
-                    <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>
-                      Verification anti-spam
-                    </div>
-                    <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setCaptchaToken} />
-                  </div>
                 ) : null}
 
                 {error ? (
@@ -488,14 +468,14 @@ export default function AuditFluxPage() {
                       </button>
                     ) : null}
 
-                    {step < 3 ? (
+                    {step < 2 ? (
                       <button type="button" onClick={nextStep} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "var(--ink)", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
                         Continuer
                         <ArrowRight size={16} />
                       </button>
                     ) : (
                       <button type="submit" disabled={!canSubmit} style={{ minHeight: 50, padding: "0 20px", borderRadius: 16, border: "none", background: "var(--ink)", color: "#fff", fontSize: 15, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 10, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.6 }}>
-                        {submitting ? "Creation..." : "Creer ma demande d audit"}
+                        {submitting ? "Creation..." : "Recevoir mon diagnostic"}
                         <ArrowRight size={16} />
                       </button>
                     )}
@@ -505,40 +485,45 @@ export default function AuditFluxPage() {
                     Retour au site
                   </Link>
                 </div>
+
+                {/* Réassurance sous le CTA principal */}
+                <p style={{ margin: "16px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}>
+                  Sans carte bancaire · Sans engagement · 5 min
+                </p>
               </form>
 
               <aside style={{ display: "grid", gap: 18 }}>
                 <div style={{ background: "var(--ink)", color: "#fff", borderRadius: 28, padding: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                     <CheckCircle2 size={18} />
-                    <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Promesse gratuite</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Diagnostic gratuit</span>
                   </div>
-                  <h3 style={{ margin: "0 0 10px", fontSize: 24, lineHeight: 1.15, color: "#fff" }}>Un audit technique gratuit, puis le scoring performance en offre payante.</h3>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 24, lineHeight: 1.15, color: "#fff" }}>Recevez votre diagnostic de flux, sans engagement.</h3>
                   <p style={{ margin: 0, fontSize: 14, lineHeight: 1.75, color: "rgba(255,255,255,0.74)" }}>
-                    Le gratuit porte sur la qualite technique du flux et sa diffusabilite. Le scoring de performance reste reserve a l’offre payante.
+                    On analyse la qualité technique de votre flux et sa diffusabilité, puis on vous remonte les blocages prioritaires à corriger.
                   </p>
                 </div>
 
                 {[
                   {
-                    icon: <PhoneCall size={18} />,
-                    title: "Lead qualifie",
-                    text: "Nom, prenom, fonction, entreprise et email sont collectes en amont. Le telephone peut venir ensuite.",
+                    icon: <Gauge size={18} />,
+                    title: "Un score clair",
+                    text: "Une note sur 100 et le détail par dimension : couverture, qualité produit, conformité canal.",
                   },
                   {
-                    icon: <Store size={18} />,
-                    title: "Source exploitable",
-                    text: "Le CMS et la source du catalogue sont identifies pour brancher la vraie analyse.",
+                    icon: <Sparkles size={18} />,
+                    title: "Vos blocages prioritaires",
+                    text: "Le top des problèmes qui empêchent vos produits d’être diffusés, classés par impact.",
                   },
                   {
                     icon: <Link2 size={18} />,
-                    title: "Connexion reelle",
-                    text: "L’audit gratuit ne sort pas de score tant que Shopify, GMC ou le flux n’est pas connecte.",
+                    title: "Sur vos vraies donnees",
+                    text: "Connectez Shopify, Google Merchant Center ou un flux : l’audit s’appuie sur votre catalogue réel.",
                   },
                   {
-                    icon: <Database size={18} />,
-                    title: "Donnees commerciales",
-                    text: "Les donnees collectees servent a qualifier le lead et a preparer la suite commerciale.",
+                    icon: <ShieldCheck size={18} />,
+                    title: "Sans engagement",
+                    text: "Pas de carte bancaire, pas d’abonnement. Vous repartez avec votre diagnostic.",
                   },
                 ].map((item) => (
                   <div key={item.title} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 24, padding: 22 }}>

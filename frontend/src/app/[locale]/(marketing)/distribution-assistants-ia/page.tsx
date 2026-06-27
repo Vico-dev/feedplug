@@ -18,6 +18,7 @@ const CHANNEL_ICONS = [MessageSquare, MessageSquare, Zap];
 
 export default function DistributionAssistantsIAPage() {
   const t = useTranslations("lpAssistantsIA");
+  const tNav = useTranslations("nav");
   const platforms = t.raw("channels.platforms") as {
     name: string;
     status: string;
@@ -85,24 +86,46 @@ export default function DistributionAssistantsIAPage() {
         >
           {t("hero.subtitle")}
         </p>
-        <Link
-          href="/demo?source=use_case_demo"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "16px 32px",
-            backgroundColor: "#0a0a0a",
-            color: "#fff",
-            textDecoration: "none",
-            fontSize: 16,
-            fontWeight: 500,
-            borderRadius: 2,
-          }}
-        >
-          {t("cta.button")}
-          <ArrowRight style={{ width: 18, height: 18 }} />
-        </Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <Link
+            href="/audit-flux"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "16px 32px",
+              backgroundColor: "#0a0a0a",
+              color: "#fff",
+              textDecoration: "none",
+              fontSize: 16,
+              fontWeight: 500,
+              borderRadius: 2,
+            }}
+          >
+            {tNav("auditCta")}
+            <ArrowRight style={{ width: 18, height: 18 }} />
+          </Link>
+          <Link
+            href="/demo?source=use_case_demo"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "16px 28px",
+              border: "1px solid var(--line-strong)",
+              color: "var(--ink)",
+              textDecoration: "none",
+              fontSize: 16,
+              fontWeight: 500,
+              borderRadius: 2,
+            }}
+          >
+            {t("cta.button")}
+          </Link>
+        </div>
+        <p style={{ margin: "14px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}>
+          {tNav("reassurance")}
+        </p>
       </section>
 
       {/* Contexte */}
@@ -497,24 +520,46 @@ export default function DistributionAssistantsIAPage() {
           >
             {t("cta.subtitle")}
           </p>
-          <Link
-            href="/demo?source=use_case_demo"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "16px 32px",
-              backgroundColor: "#fff",
-              color: "#0a0a0a",
-              textDecoration: "none",
-              fontSize: 16,
-              fontWeight: 500,
-              borderRadius: 2,
-            }}
-          >
-            {t("cta.button")}
-            <ArrowRight style={{ width: 18, height: 18 }} />
-          </Link>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", alignItems: "center" }}>
+            <Link
+              href="/audit-flux"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "16px 32px",
+                backgroundColor: "#fff",
+                color: "#0a0a0a",
+                textDecoration: "none",
+                fontSize: 16,
+                fontWeight: 500,
+                borderRadius: 2,
+              }}
+            >
+              {tNav("auditCta")}
+              <ArrowRight style={{ width: 18, height: 18 }} />
+            </Link>
+            <Link
+              href="/demo?source=use_case_demo"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "16px 28px",
+                border: "1px solid rgba(255,255,255,0.3)",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: 16,
+                fontWeight: 500,
+                borderRadius: 2,
+              }}
+            >
+              {t("cta.button")}
+            </Link>
+          </div>
+          <p style={{ margin: "16px 0 0", fontSize: 13, fontWeight: 600, color: "var(--line-strong)" }}>
+            {tNav("reassurance")}
+          </p>
         </div>
       </section>
 

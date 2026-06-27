@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckCircle2, Circle } from "lucide-react";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ProductGainsSection, type PotentialGain } from "./product-gains-section";
@@ -367,15 +368,14 @@ export function ProductQualityScoreCard({
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <span
-                          className={
+                        <Circle
+                          className={cn(
+                            "mt-0.5 h-3 w-3 shrink-0 fill-current",
                             rec.priority === "high"
-                              ? "text-red-500"
-                              : "text-amber-500"
-                          }
-                        >
-                          {rec.priority === "high" ? "🔴" : "🟡"}
-                        </span>
+                              ? "text-[var(--danger)]"
+                              : "text-[var(--warning)]"
+                          )}
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-foreground mb-1">
                             {rec.message}
@@ -437,14 +437,14 @@ export function ProductQualityScoreCard({
         />
 
         {positiveFields.length > 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-5 mb-6">
+          <div className="mb-6 rounded-lg border border-[var(--success)] bg-[var(--success-bg)] p-5">
             <button
               type="button"
               onClick={onTogglePositiveFields}
               className="w-full flex justify-between items-center bg-transparent border-0 cursor-pointer p-0 text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-xl">✅</span>
+                <CheckCircle2 className="h-5 w-5 text-[var(--success)]" />
                 <div>
                   <h3 className="text-base font-bold text-foreground m-0">
                     Ce qui va bien

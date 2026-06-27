@@ -2549,7 +2549,159 @@ export function CatalogueWorkbench() {
 
       <PageCard className="mb-24 overflow-hidden border-border/70 bg-white p-0 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
         <div className="border-b border-border/70 bg-[linear-gradient(180deg,#ffffff,#f7faf7)] px-4 py-4 sm:px-5">
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          {/* P0-3 : le diagnostic « Etat du catalogue » (score + actions prioritaires) s'affiche
+              en PLEINE LARGEUR en tête, comme un écran de résultat d'audit, avant la table.
+              Sorti de l'ancienne grille [1fr 360px] pour ne plus être relégué en sidebar. */}
+          {!loadingScore && catalogueScore && (
+            <div className="mb-4 rounded-3xl border border-border/70 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Etat du catalogue</p>
+                </div>
+                <span className="rounded-full border border-border/70 bg-[var(--paper-2)] px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  Flux actif
+                </span>
+              </div>
+              <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                <div className="space-y-4">
+                  <div className={cn("rounded-[28px] border bg-gradient-to-br p-4 shadow-[0_16px_30px_rgba(15,23,42,0.06)]", scoreAccentClass)}>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]", scoreBadgeClass)}>
+                            {catalogueScore.scoreBand?.label || "Catalogue"}
+                          </span>
+                          {pillarLead ? (
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-white/80 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                              <TriangleAlert className="h-3.5 w-3.5" />
+                              Point faible: {pillarLead.label}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 flex items-end gap-3">
+                          <div className={cn("text-4xl font-semibold leading-none tracking-tight sm:text-5xl", scoreTextClass)}>
+                            {catalogueScore.globalScore}
+                          </div>
+                          <div className="pb-1 text-lg font-medium text-muted-foreground">/100</div>
+                        </div>
+                        <p className="mt-3 max-w-[17rem] text-sm leading-6 text-slate-700 sm:max-w-sm">
+                          {catalogueScore?.scoreBand?.description || "Selectionne des produits pour entrer en edition"}
+                        </p>
+                      </div>
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center self-end rounded-full border border-white/90 bg-white/85 shadow-sm sm:h-24 sm:w-24 sm:self-auto">
+                        <div className="text-center">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Score</div>
+                          <div className={cn("mt-1 text-2xl font-semibold", scoreTextClass)}>{catalogueScore.globalScore}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Progress value={catalogueScore.globalScore} color={scoreTone} size="sm" />
+                    </div>
+                  </div>
+                  {Array.isArray(catalogueScore.auditPillars) && catalogueScore.auditPillars.length > 0 && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {catalogueScore.auditPillars.map((pillar) => (
+                        <div
+                          key={pillar.key}
+                          className={cn(
+                            "rounded-2xl border px-3 py-3 transition-colors",
+                            pillarLead?.key === pillar.key
+                              ? "border-rose-200 bg-rose-50/80"
+                              : "border-border/70 bg-[var(--paper-2)]"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{pillar.label}</span>
+                            <span className="text-sm font-semibold text-foreground">{pillar.score}/100</span>
+                          </div>
+                          <Progress value={pillar.score} color={pillar.score >= 80 ? "success" : pillar.score >= 60 ? "warning" : "error"} size="sm" className="mt-2" />
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">{pillar.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {priorityActions.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <Target className="h-4 w-4" />
+                        Actions prioritaires
+                      </div>
+                      <span className="text-[11px] font-medium leading-5 text-muted-foreground sm:text-right">Corriger d&apos;abord les plus gros volumes</span>
+                    </div>
+                    <div className="space-y-2">
+                      {priorityActions.map((issue, index) => (
+                        <button
+                          key={issue.key}
+                          type="button"
+                          onClick={() => issue.smartView ? applySmartView(issue.smartView) : undefined}
+                          className={cn(
+                            "group w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                            issue.smartView ? "border-border/70 bg-white hover:border-slate-300 hover:bg-[var(--paper-2)]" : "border-border/70 bg-white"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 gap-3">
+                              <div className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                                index === 0 ? "bg-rose-100 text-rose-700" : index === 1 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"
+                              )}>
+                                {index + 1}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-sm font-semibold text-foreground">{issue.label}</div>
+                                  {issue.smartView ? (
+                                    <span className="text-[11px] font-medium text-muted-foreground">Voir la vue</span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">{issue.recommendation}</p>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="rounded-full bg-slate-950 px-2.5 py-1 text-xs font-semibold text-white">{issue.count}</div>
+                              {issue.smartView ? <ArrowRight className="ml-auto mt-3 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /> : null}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* P1 boucle de valeur : quand des produits passent la qualité mais ne sont pas
+              encore poussés, on relie le diagnostic au push GMC. Donnée réelle = readyToPublish. */}
+          {catalogueSummary && catalogueSummary.readyToPublish > 0 && (
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <CheckCircle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {catalogueSummary.readyToPublish.toLocaleString()} produit{catalogueSummary.readyToPublish > 1 ? "s" : ""} prêt{catalogueSummary.readyToPublish > 1 ? "s" : ""} à diffuser
+                  </p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    Ces fiches passent les contrôles qualité. Poussez-les vers Google pour les mettre en ligne.
+                  </p>
+                </div>
+              </div>
+              <PageButtonPrimary
+                onClick={() => hardNavigate(`${localePrefix}/flux`)}
+                className="w-full shrink-0 sm:w-auto"
+              >
+                Pousser vers Google
+                <ArrowRight className="h-4 w-4" />
+              </PageButtonPrimary>
+            </div>
+          )}
+
+          <div className="grid items-start gap-4">
             <div className="space-y-4">
               <div className="min-w-0 rounded-3xl border border-border/70 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
                 <div className="flex flex-col gap-4">
@@ -2640,126 +2792,6 @@ export function CatalogueWorkbench() {
                   );
                 })}
               </div>
-            </div>
-
-            <div className="rounded-3xl border border-border/70 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Etat du catalogue</p>
-                </div>
-                <span className="rounded-full border border-border/70 bg-[var(--paper-2)] px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  Flux actif
-                </span>
-              </div>
-              {!loadingScore && catalogueScore && (
-                <div className="mt-4 space-y-4">
-                  <div className={cn("rounded-[28px] border bg-gradient-to-br p-4 shadow-[0_16px_30px_rgba(15,23,42,0.06)]", scoreAccentClass)}>
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]", scoreBadgeClass)}>
-                            {catalogueScore.scoreBand?.label || "Catalogue"}
-                          </span>
-                          {pillarLead ? (
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-white/80 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-700">
-                              <TriangleAlert className="h-3.5 w-3.5" />
-                              Point faible: {pillarLead.label}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-4 flex items-end gap-3">
-                          <div className={cn("text-4xl font-semibold leading-none tracking-tight sm:text-5xl", scoreTextClass)}>
-                            {catalogueScore.globalScore}
-                          </div>
-                          <div className="pb-1 text-lg font-medium text-muted-foreground">/100</div>
-                        </div>
-                        <p className="mt-3 max-w-[17rem] text-sm leading-6 text-slate-700 sm:max-w-sm">
-                          {catalogueScore?.scoreBand?.description || "Selectionne des produits pour entrer en edition"}
-                        </p>
-                      </div>
-                      <div className="flex h-20 w-20 shrink-0 items-center justify-center self-end rounded-full border border-white/90 bg-white/85 shadow-sm sm:h-24 sm:w-24 sm:self-auto">
-                        <div className="text-center">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Score</div>
-                          <div className={cn("mt-1 text-2xl font-semibold", scoreTextClass)}>{catalogueScore.globalScore}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <Progress value={catalogueScore.globalScore} color={scoreTone} size="sm" />
-                    </div>
-                  </div>
-                  {Array.isArray(catalogueScore.auditPillars) && catalogueScore.auditPillars.length > 0 && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {catalogueScore.auditPillars.map((pillar) => (
-                        <div
-                          key={pillar.key}
-                          className={cn(
-                            "rounded-2xl border px-3 py-3 transition-colors",
-                            pillarLead?.key === pillar.key
-                              ? "border-rose-200 bg-rose-50/80"
-                              : "border-border/70 bg-[var(--paper-2)]"
-                          )}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{pillar.label}</span>
-                            <span className="text-sm font-semibold text-foreground">{pillar.score}/100</span>
-                          </div>
-                          <Progress value={pillar.score} color={pillar.score >= 80 ? "success" : pillar.score >= 60 ? "warning" : "error"} size="sm" className="mt-2" />
-                          <p className="mt-2 text-xs leading-5 text-muted-foreground">{pillar.detail}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {priorityActions.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          <Target className="h-4 w-4" />
-                          Actions prioritaires
-                        </div>
-                        <span className="text-[11px] font-medium leading-5 text-muted-foreground sm:text-right">Corriger d&apos;abord les plus gros volumes</span>
-                      </div>
-                      <div className="space-y-2">
-                        {priorityActions.map((issue, index) => (
-                          <button
-                            key={issue.key}
-                            type="button"
-                            onClick={() => issue.smartView ? applySmartView(issue.smartView) : undefined}
-                            className={cn(
-                              "group w-full rounded-2xl border px-3 py-3 text-left transition-colors",
-                              issue.smartView ? "border-border/70 bg-white hover:border-slate-300 hover:bg-[var(--paper-2)]" : "border-border/70 bg-white"
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex min-w-0 gap-3">
-                                <div className={cn(
-                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                                  index === 0 ? "bg-rose-100 text-rose-700" : index === 1 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"
-                                )}>
-                                  {index + 1}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-sm font-semibold text-foreground">{issue.label}</div>
-                                    {issue.smartView ? (
-                                      <span className="text-[11px] font-medium text-muted-foreground">Voir la vue</span>
-                                    ) : null}
-                                  </div>
-                                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{issue.recommendation}</p>
-                                </div>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <div className="rounded-full bg-slate-950 px-2.5 py-1 text-xs font-semibold text-white">{issue.count}</div>
-                                {issue.smartView ? <ArrowRight className="ml-auto mt-3 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /> : null}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>

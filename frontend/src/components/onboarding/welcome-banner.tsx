@@ -47,26 +47,28 @@ export function WelcomeBanner({ onStartOnboarding, onDismiss }: WelcomeBannerPro
           Nouveau sur FeedPlug ?
         </p>
         <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--ink-3)" }}>
-          Découvrez les fonctionnalités en 2 minutes avec la visite guidée.
+          Le plus rapide : connectez une source. La visite guidée reste dispo si besoin.
         </p>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        {/* P1 — La visite guidée est une option secondaire : bouton discret (ghost),
+            pas un CTA plein à égalité avec l'activation. */}
         <button
           type="button"
           onClick={onStartOnboarding}
           style={{
-            padding: "10px 16px",
-            backgroundColor: "var(--accent)",
-            color: "#fff",
-            border: "none",
+            padding: "9px 14px",
+            backgroundColor: "transparent",
+            color: "var(--ink-3)",
+            border: "1px solid var(--line)",
             borderRadius: "8px",
-            fontSize: "14px",
+            fontSize: "13px",
             fontWeight: "500",
             cursor: "pointer",
             whiteSpace: "nowrap",
           }}
         >
-          Découvrir
+          Visite guidée
         </button>
         <button
           type="button"

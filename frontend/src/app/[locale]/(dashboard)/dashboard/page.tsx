@@ -19,8 +19,11 @@ import {
   BarChart3,
   ArrowUpRight,
   ArrowDownRight,
+  ShieldAlert,
+  TrendingUp,
+  Target,
 } from "lucide-react";
-import { API_BASE_URL, authFetch } from "@/lib/api";
+import { API_BASE_URL, authFetch, apiClient } from "@/lib/api";
 import {
   PageLayout,
   PageHeader,
@@ -53,13 +56,48 @@ interface DashboardData {
   }[];
 }
 
+// Issue remonté par /ingestion/catalogue/score (compte entier, sans feedId).
+// count = volume réel de produits concernés ; smartView = filtre catalogue ciblé.
+interface CatalogueIssue {
+  key: string;
+  label: string;
+  count: number;
+  recommendation: string;
+  impact?: string;
+  smartView?: string | null;
+  priority?: "high" | "medium" | "low";
+}
+
+interface CatalogueScore {
+  globalScore: number;
+  totalProducts: number;
+  topIssues?: CatalogueIssue[];
+}
+
+// Causes qui bloquent réellement la diffusion Google (produit non éligible).
+// Sert à chiffrer la douleur « X produits ne passeront pas sur Google ».
+const BLOCKING_ISSUE_KEYS = new Set(["missing_category", "missing_image"]);
+
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const pathname = usePathname();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [catalogueScore, setCatalogueScore] = useState<CatalogueScore | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const localePrefix = getLocalePrefixFromPathname(pathname);
+
+  // Score catalogue agrégé sur tout le compte (même endpoint que le workbench, sans feedId).
+  // Fournit les volumes de produits par cause (topIssues) pour héroïser la douleur.
+  const fetchCatalogueScore = useCallback(async () => {
+    try {
+      const response = await apiClient.get<CatalogueScore>("/ingestion/catalogue/score");
+      setCatalogueScore(response.data ?? null);
+    } catch {
+      // Non bloquant : si l'audit échoue, le dashboard reste fonctionnel sans le hero douleur.
+      setCatalogueScore(null);
+    }
+  }, []);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -73,6 +111,7 @@ export default function DashboardPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || t("dashboardPage.errorLoad"));
       setData(json);
+      void fetchCatalogueScore();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t("dashboardPage.errorGeneric");
       // "Failed to fetch" = blocage CORS ou réseau (pas de réponse reçue du backend)
@@ -80,7 +119,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, fetchCatalogueScore]);
 
   useEffect(() => {
     void fetchDashboard();
@@ -126,6 +165,30 @@ export default function DashboardPage() {
     ? (d.scoreEvolution[d.scoreEvolution.length - 1]?.avgScore ?? 0) -
       (d.scoreEvolution[0]?.avgScore ?? 0)
     : 0;
+
+  // ---- Douleur chiffrée (P0-2 / P0-4) ----
+  // Toutes les valeurs viennent de topIssues (compteurs RÉELS du backend). Aucun chiffre inventé.
+  const topIssues = catalogueScore?.topIssues ?? [];
+  const issueCount = (key: string) => topIssues.find((i) => i.key === key)?.count ?? 0;
+  const missingCategory = issueCount("missing_category");
+  const missingImage = issueCount("missing_image");
+  // Produits bloqués = ceux concernés par au moins une cause bloquante (catégorie OU image).
+  // On ne peut pas dédupliquer côté front (les compteurs sont par cause) → borne basse = max,
+  // borne haute = somme. On retient le max comme estimation prudente et honnête.
+  const blockedNow = Math.max(missingCategory, missingImage);
+  // Causes bloquantes triées par volume, pour l'affichage « 2-3 causes principales ».
+  const blockingIssues = topIssues
+    .filter((i) => BLOCKING_ISSUE_KEYS.has(i.key) && i.count > 0)
+    .sort((a, b) => b.count - a.count);
+  // Top causes (toutes, bloquantes ou non) pour le détail du diagnostic.
+  const sortedIssues = [...topIssues].filter((i) => i.count > 0).sort((a, b) => b.count - a.count);
+  // Projection avant/après : en corrigeant les 2 causes bloquantes principales, combien resteraient bloqués ?
+  const topTwoBlocking = blockingIssues.slice(0, 2);
+  // Reste bloqué = produits encore concernés par une cause bloquante NON traitée.
+  const remainingBlocking = blockingIssues.slice(2);
+  const stillBlocked = remainingBlocking.length > 0 ? Math.max(...remainingBlocking.map((i) => i.count)) : 0;
+  const wouldBeFixed = Math.max(0, blockedNow - stillBlocked);
+  const hasPain = blockedNow > 0 && d.totalProducts > 0;
 
   // État vide : compte neuf sans aucune source → on guide vers la première
   // action utile au lieu d'un dashboard à zéro (score 0/100 anxiogène).
@@ -193,6 +256,140 @@ export default function DashboardPage() {
           </PageButtonSecondary>
         }
       />
+
+      {/* HERO douleur (P0-2) — révèle le chiffre anxiogène avant tout KPI d'activité.
+          Données 100% réelles issues de topIssues (/ingestion/catalogue/score). */}
+      {hasPain && (
+        <div
+          style={{
+            border: "1px solid var(--danger)",
+            borderRadius: "var(--r-lg, 16px)",
+            backgroundColor: "var(--danger-bg, #fef2f2)",
+            padding: "28px",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "24px" }}>
+            <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <ShieldAlert style={{ width: 18, height: 18, color: "var(--danger)" }} />
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--danger)" }}>
+                  Diagnostic catalogue
+                </span>
+              </div>
+              <p style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 700, lineHeight: 1.15, color: "var(--ink)", margin: "0 0 8px" }}>
+                <span style={{ color: "var(--danger)" }}>{blockedNow.toLocaleString()}</span>{" "}
+                produit{blockedNow > 1 ? "s" : ""} ne passeront pas sur Google
+              </p>
+              <p style={{ fontSize: 14, color: "var(--ink-3)", margin: 0, lineHeight: 1.6, maxWidth: 520 }}>
+                Sur {d.totalProducts.toLocaleString()} produits, ces fiches sont bloquées avant
+                diffusion. Voici les causes principales à corriger :
+              </p>
+
+              {/* 2-3 causes : Cause → Conséquence Google → Action (P1 diagnostic en clair) */}
+              {sortedIssues.length > 0 && (
+                <ul style={{ listStyle: "none", padding: 0, margin: "16px 0 0", display: "grid", gap: "8px" }}>
+                  {sortedIssues.slice(0, 3).map((issue) => (
+                    <li
+                      key={issue.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        backgroundColor: "white",
+                        border: "1px solid var(--line)",
+                        borderRadius: "var(--r-md)",
+                        padding: "10px 12px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          minWidth: 36,
+                          textAlign: "center",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: BLOCKING_ISSUE_KEYS.has(issue.key) ? "var(--danger)" : "var(--warning)",
+                        }}
+                      >
+                        {issue.count.toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+                        <strong style={{ color: "var(--ink)" }}>{issue.label}</strong>
+                        {issue.impact ? ` — ${issue.impact}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* CTA unique → catalogue filtré sur les produits à corriger */}
+              <a
+                href={`${localePrefix}/catalogue?smartView=to_fix`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 20,
+                  padding: "13px 22px",
+                  backgroundColor: "var(--danger)",
+                  color: "#fff",
+                  borderRadius: "var(--r-md)",
+                  textDecoration: "none",
+                  fontSize: 15,
+                  fontWeight: 600,
+                }}
+              >
+                Voir le détail
+                <ArrowRight style={{ width: 18, height: 18 }} />
+              </a>
+            </div>
+
+            {/* Encart « Potentiel » (P0-4) : avant/après honnête basé sur les compteurs réels. */}
+            {wouldBeFixed > 0 && topTwoBlocking.length > 0 && (
+              <div
+                style={{
+                  flex: "1 1 260px",
+                  maxWidth: 360,
+                  backgroundColor: "white",
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--r-md)",
+                  padding: "20px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+                  <TrendingUp style={{ width: 16, height: 16, color: "var(--success)" }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-3)" }}>
+                    Potentiel catalogue
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: "var(--danger)", lineHeight: 1 }}>
+                    {blockedNow.toLocaleString()}
+                  </span>
+                  <ArrowRight style={{ width: 18, height: 18, color: "var(--ink-4)" }} />
+                  <span style={{ fontSize: 28, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>
+                    {stillBlocked.toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: 13, color: "var(--ink-3)" }}>bloqués</span>
+                </div>
+                <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "12px 0 0", lineHeight: 1.6 }}>
+                  En corrigeant{" "}
+                  {topTwoBlocking.map((i, idx) => (
+                    <span key={i.key}>
+                      {idx > 0 ? " et " : ""}
+                      <strong style={{ color: "var(--ink-2)" }}>{i.label.toLowerCase()}</strong>
+                    </span>
+                  ))}
+                  ,{" "}
+                  <strong style={{ color: "var(--success)" }}>+{wouldBeFixed.toLocaleString()}</strong> produit
+                  {wouldBeFixed > 1 ? "s" : ""} redeviendraient diffusables.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* KPIs principaux — grille style flux */}
       <div
@@ -469,6 +666,27 @@ export default function DashboardPage() {
             {t("dashboardPage.quickActions")}
           </h2>
           <div style={{ display: "grid", gap: "12px" }}>
+            <a
+              href={`${localePrefix}/catalogue?smartView=to_fix`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "14px",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-md)",
+                textDecoration: "none",
+                color: "var(--ink-2)",
+                cursor: "pointer",
+                backgroundColor: "white",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Target style={{ width: "18px", height: "18px", color: "var(--danger)" }} />
+                <span style={{ fontSize: "14px" }}>Corriger les produits bloqués</span>
+              </div>
+              <ArrowRight style={{ width: "16px", height: "16px", color: "var(--ink-4)" }} />
+            </a>
             <a
               href={`${localePrefix}/sources`}
               style={{

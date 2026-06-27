@@ -1,5 +1,6 @@
 "use client";
 
+import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface PotentialGain {
@@ -36,13 +37,13 @@ export function ProductGainsSection({
       )}
     >
       {urgentGains.length > 0 && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-5">
+        <div className="rounded-lg border border-[var(--danger)] bg-[var(--danger-bg)] p-5">
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🚨</span>
+            <TriangleAlert className="h-5 w-5 text-[var(--danger)]" />
             <h3 className="text-base font-bold text-foreground m-0">
               Actions prioritaires
             </h3>
-            <span className="px-2 py-1 bg-red-600 text-white rounded text-[11px] font-bold uppercase">
+            <span className="rounded bg-[var(--danger)] px-2 py-1 text-[11px] font-bold uppercase text-white">
               {urgentGains.length}
             </span>
           </div>

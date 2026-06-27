@@ -262,12 +262,11 @@ app.post('/api/v1/marketing/audits', marketingAuditLimiter, async (req, res) => 
     if (!emailRegex.test(String(email))) {
       return res.status(400).json({ message: 'Email invalide' });
     }
-    if (!trimmed.company) {
-      return res.status(400).json({ message: 'Entreprise requise pour generer l audit' });
-    }
-    if (!trimmed.firstName || !trimmed.lastName || !trimmed.jobTitle) {
-      return res.status(400).json({ message: 'Prenom, nom et fonction sont requis' });
-    }
+    // CRO : le formulaire d'audit a ete allege (le hook "audit gratuit" ne doit
+    // pas exiger d'infos lead avant de livrer de la valeur). Entreprise, nom et
+    // fonction sont desormais OPTIONNELS. On ne garde que les champs reellement
+    // necessaires pour generer l'audit : email + source (cmsUsed) + URL/merchantId.
+    // firstName a un fallback cote front (partie locale de l'email).
     if (!cmsUsed) {
       return res.status(400).json({ message: 'Le CMS ou la source utilisee est requis' });
     }

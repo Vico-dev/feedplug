@@ -22,6 +22,7 @@ type LPPageContentProps = {
 
 export function LPPageContent({ namespace }: LPPageContentProps) {
   const t = useTranslations(namespace);
+  const tNav = useTranslations("nav");
   const isGoogleShoppingPage = namespace === "lpGoogleShopping";
   const isAmazonPage = namespace === "lpAmazon";
 
@@ -94,9 +95,9 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           >
             {t("hero.subtitle")}
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
             <Link
-              href="/demo"
+              href="/audit-flux"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -110,11 +111,11 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 fontWeight: 600,
               }}
             >
-              {t("cta.button")}
+              {tNav("auditCta")}
               <ArrowRight style={{ width: 16, height: 16 }} />
             </Link>
             <Link
-              href="/docs"
+              href="/demo"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -129,9 +130,12 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
                 fontWeight: 600,
               }}
             >
-              {t("nav.docs")}
+              {t("cta.button")}
             </Link>
           </div>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}>
+            {tNav("reassurance")}
+          </p>
         </div>
         {isGoogleShoppingPage ? (
           <div style={{ display: "grid", gap: 16, maxWidth: 760, marginTop: 20 }}>
@@ -576,24 +580,46 @@ export function LPPageContent({ namespace }: LPPageContentProps) {
           >
             {t("cta.subtitle")}
           </p>
-          <Link
-            href="/demo"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "15px 24px",
-              backgroundColor: "#fff",
-              color: "var(--ink)",
-              textDecoration: "none",
-              fontSize: 15,
-              fontWeight: 600,
-              borderRadius: 12,
-            }}
-          >
-            {t("cta.button")}
-            <ArrowRight style={{ width: 18, height: 18 }} />
-          </Link>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", alignItems: "center" }}>
+            <Link
+              href="/audit-flux"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "15px 24px",
+                backgroundColor: "#fff",
+                color: "var(--ink)",
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 12,
+              }}
+            >
+              {tNav("auditCta")}
+              <ArrowRight style={{ width: 18, height: 18 }} />
+            </Link>
+            <Link
+              href="/demo"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "15px 20px",
+                border: "1px solid rgba(255,255,255,0.3)",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 12,
+              }}
+            >
+              {t("cta.button")}
+            </Link>
+          </div>
+          <p style={{ margin: "16px 0 0", fontSize: 13, fontWeight: 600, color: "var(--line-strong)" }}>
+            {tNav("reassurance")}
+          </p>
         </div>
       </section>
 

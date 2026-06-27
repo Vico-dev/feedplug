@@ -7,5 +7,5 @@ export default async function ProductFeedToolsComparisonPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  return <ComparisonLanding copy={getComparisonCopy("tools", locale)} />;
+  return <ComparisonLanding copy={getComparisonCopy("tools", locale)} locale={locale} />;
 }

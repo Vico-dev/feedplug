@@ -46,6 +46,7 @@ function OnboardingPageContent() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showBillingDetails, setShowBillingDetails] = useState(false);
+  const [autoProvisioning, setAutoProvisioning] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -99,6 +100,46 @@ function OnboardingPageContent() {
   useEffect(() => {
     if (user?.email && !billingEmail) setBillingEmail(user.email);
   }, [user?.email, billingEmail]);
+
+  // P0-6 — Le nom d'entreprise / de compte est déjà collecté à l'inscription
+  // (accountName). On évite de le redemander dans un 2e formulaire : si l'info
+  // de société n'est pas encore marquée comme complétée mais qu'on dispose d'un
+  // nom de compte, on la pré-provisionne en arrière-plan pour sauter cet écran
+  // et passer directement à la connexion de source. Reste un fallback : si le
+  // PUT échoue, le formulaire s'affiche normalement.
+  useEffect(() => {
+    if (companyInfoLoading || autoProvisioning) return;
+    if (!companyInfo || companyInfo.hasCompletedCompanyInfo) return;
+    const inferredName = (user?.account?.name || "").trim();
+    if (!inferredName) return;
+    let cancelled = false;
+    (async () => {
+      setAutoProvisioning(true);
+      try {
+        await apiClient.put("/account/company-info", { companyName: inferredName });
+        if (cancelled) return;
+        const provisioned: CompanyInfo = {
+          companyName: inferredName,
+          phoneE164: "",
+          billingEmail: companyInfo.billingEmail || (user?.email ?? ""),
+          hasCompletedCompanyInfo: true,
+          vatNumber: companyInfo.vatNumber ?? null,
+          siren: companyInfo.siren ?? null,
+        };
+        setCompanyInfo(provisioned);
+        writeSessionApiCache(SESSION_API_CACHE_KEYS.companyInfo, provisioned);
+        writeSessionApiCache(SESSION_API_CACHE_KEYS.companyInfoStatus, {
+          hasCompletedCompanyInfo: true,
+        });
+      } catch {
+        // Fallback : on laisse le formulaire s'afficher (pré-rempli ci-dessous).
+        if (!cancelled) setCompanyName(inferredName);
+      } finally {
+        if (!cancelled) setAutoProvisioning(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [companyInfoLoading, companyInfo, autoProvisioning, user?.account?.name, user?.email]);
 
   const handleSubmitCompanyInfo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,10 +233,13 @@ function OnboardingPageContent() {
     router.push(appendShopifyEmbeddedParams(path, searchParams));
   };
 
-  const handleConnectSource = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/sources", localePrefix));
+  // P0-6 — On ouvre directement le catalogue de connecteurs (modal) plutôt que
+  // d'atterrir sur une page Sources vide : ?connect=1 déclenche l'ouverture côté
+  // /sources.
+  const handleConnectSource = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/sources?connect=1", localePrefix));
   const handleStartTour = () => saveOnboardingProgressAndGoTo(buildLocalizedPath("/dashboard?startTour=1", localePrefix));
 
-  if (!mounted || isLoading || !isAuthenticated) {
+  if (!mounted || isLoading || !isAuthenticated || companyInfoLoading || autoProvisioning) {
     return (
       <div
         style={{
@@ -224,7 +268,12 @@ function OnboardingPageContent() {
     );
   }
 
-  const showCompanyForm = companyInfoLoading === false && !companyInfo?.hasCompletedCompanyInfo;
+  // On masque le formulaire société tant qu'on tente le pré-provisionnement
+  // automatique (P0-6) : il ne s'affiche qu'en fallback si l'info reste absente.
+  const showCompanyForm =
+    companyInfoLoading === false &&
+    !autoProvisioning &&
+    !companyInfo?.hasCompletedCompanyInfo;
 
   if (showCompanyForm) {
     const inputStyle = {
@@ -525,7 +574,7 @@ function OnboardingPageContent() {
           ))}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <button
             type="button"
             onClick={handleConnectSource}
@@ -548,23 +597,25 @@ function OnboardingPageContent() {
             Connecter ma première source
             <ArrowRight style={{ width: "18px", height: "18px" }} />
           </button>
-          <button
-            type="button"
-            onClick={handleStartTour}
-            style={{
-              width: "100%",
-              padding: "12px 24px",
-              backgroundColor: "transparent",
-              color: "var(--ink-3)",
-              border: "1px solid var(--line)",
-              borderRadius: "8px",
-              fontSize: "15px",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            Faire la visite guidée (2 min)
-          </button>
+          {/* P1 — La visite guidée passe au rang d'option secondaire (lien discret)
+              pour ne pas concurrencer l'action d'activation principale. */}
+          <div style={{ textAlign: "center" }}>
+            <button
+              type="button"
+              onClick={handleStartTour}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "4px 8px",
+                fontSize: "13px",
+                color: "var(--ink-4)",
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              Ou faire d&apos;abord la visite guidée (2 min)
+            </button>
+          </div>
         </div>
       </div>
     </div>

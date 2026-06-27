@@ -32,6 +32,58 @@ function formatEur(amount: number): string {
 
 const CHOOSE_PLAN_DRAFT_KEY = "feedplug_choose_plan_draft_v1";
 
+/** Configuration mise en avant (« Recommandé ») — équivalent au plan Pro Shopify. */
+const RECOMMENDED_CONFIG = { productTier: 1000 as ProductTier, channelCount: 2 as ChannelCount };
+
+/**
+ * Cartes packagées lisibles pour ancrer le choix. Le configurateur reste
+ * disponible en dessous (« Affiner ma configuration ») sans casser le flux Stripe.
+ */
+const PLAN_PRESETS: {
+  key: string;
+  name: string;
+  tagline: string;
+  productTier: ProductTier;
+  channelCount: ChannelCount;
+  addonIA: boolean;
+  recommended?: boolean;
+}[] = [
+  { key: "starter", name: "Starter", tagline: "Pour démarrer sur Google Shopping", productTier: 100, channelCount: 1, addonIA: false },
+  { key: "pro", name: "Pro", tagline: "La majorité des boutiques", productTier: 1000, channelCount: 2, addonIA: false, recommended: true },
+  { key: "business", name: "Business", tagline: "Catalogues larges + Pack IA", productTier: 10000, channelCount: 3, addonIA: true },
+  { key: "premium", name: "Premium", tagline: "Catalogues massifs, multi-canaux", productTier: 50000, channelCount: 5, addonIA: true },
+];
+
+/** Bandeau de réassurance — levier de conversion principal sur cette étape. */
+function ReassuranceBar() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px 16px",
+        padding: "12px 16px",
+        backgroundColor: "var(--paper-2)",
+        border: "1px solid var(--line)",
+        borderRadius: "8px",
+        marginBottom: "24px",
+        fontSize: "13px",
+        color: "var(--ink-3)",
+      }}
+    >
+      <span style={{ fontWeight: 600, color: "#0a0a0a" }}>14 jours d&apos;essai gratuit</span>
+      <span style={{ opacity: 0.5 }}>·</span>
+      <span>Sans engagement</span>
+      <span style={{ opacity: 0.5 }}>·</span>
+      <span>Résiliable en 1 clic depuis votre espace</span>
+      <span style={{ opacity: 0.5 }}>·</span>
+      <span>Sans carte bancaire</span>
+    </div>
+  );
+}
+
 type BillingFormState = {
   companyName: string;
   siret: string;
@@ -117,6 +169,17 @@ export default function ChoosePlanPage() {
     [totalPrice, billing.country]
   );
   const vatPercentLabel = taxEstimate ? `${Math.round(taxEstimate.rate * 100)} %` : "";
+
+  const isRecommendedConfig =
+    productTier === RECOMMENDED_CONFIG.productTier && channelCount === RECOMMENDED_CONFIG.channelCount;
+
+  /** Applique une carte packagée au configurateur (sans quitter le flux Stripe). */
+  const applyPreset = useCallback((preset: (typeof PLAN_PRESETS)[number]) => {
+    setProductTier(preset.productTier);
+    setChannelCount(preset.channelCount);
+    setAddonIA(preset.addonIA);
+    setError("");
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -314,7 +377,7 @@ export default function ChoosePlanPage() {
         </h1>
         <p style={{ fontSize: "15px", color: "var(--ink-3)", marginBottom: "24px" }}>
           {step === 1 && "Produits × canaux + option Pack IA — même grille que sur feedplug.com/tarifs."}
-          {step === 2 && "Renseignez les informations de votre entreprise pour la facturation."}
+          {step === 2 && "L'essentiel pour votre facture — Stripe collecte et corrige le reste au paiement."}
           {step === 3 && "Vous allez être redirigé vers Stripe pour payer par carte bancaire ou prélèvement SEPA."}
         </p>
 
@@ -353,6 +416,102 @@ export default function ChoosePlanPage() {
         {/* Étape 1 : Configurateur */}
         {step === 1 && (
           <>
+            {/* Cartes packagées — ancrage + lisibilité avant le configurateur fin */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: "12px",
+                marginBottom: "24px",
+              }}
+            >
+              {PLAN_PRESETS.map((preset) => {
+                const presetPrice = getPriceFromGrid(preset.productTier, preset.channelCount);
+                const presetTotal =
+                  presetPrice != null ? presetPrice + (preset.addonIA ? ADDON_IA_PRICE_EUR : 0) : null;
+                const selected =
+                  productTier === preset.productTier &&
+                  channelCount === preset.channelCount &&
+                  addonIA === preset.addonIA;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    style={{
+                      position: "relative",
+                      textAlign: "left",
+                      padding: "16px 14px",
+                      border: `2px solid ${selected ? "#0a0a0a" : preset.recommended ? "#0a0a0a" : "var(--line)"}`,
+                      borderRadius: "10px",
+                      backgroundColor: selected ? "#0a0a0a" : "#fff",
+                      color: selected ? "#fff" : "#0a0a0a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {preset.recommended && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-9px",
+                          left: "12px",
+                          padding: "1px 8px",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          borderRadius: "999px",
+                          backgroundColor: "#0a0a0a",
+                          color: "#fff",
+                        }}
+                      >
+                        Recommandé
+                      </span>
+                    )}
+                    <div style={{ fontSize: "14px", fontWeight: 700 }}>{preset.name}</div>
+                    <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "4px" }}>
+                      {presetTotal != null ? `${presetTotal} €` : "—"}
+                      <span style={{ fontSize: "11px", fontWeight: 400, opacity: 0.8 }}> HT/mois</span>
+                    </div>
+                    <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "6px", lineHeight: 1.3 }}>
+                      {preset.tagline}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Offre agence — capter le lead multi-comptes plutôt que le forcer dans un plan marchand */}
+            <a
+              href={buildLocalizedPath("/demo", localePrefix)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                padding: "14px 16px",
+                border: "1px dashed var(--line)",
+                borderRadius: "10px",
+                marginBottom: "28px",
+                textDecoration: "none",
+                color: "#0a0a0a",
+              }}
+            >
+              <span style={{ fontSize: "13px", lineHeight: 1.4 }}>
+                <strong>Agences &amp; multi-comptes ?</strong>
+                <br />
+                <span style={{ color: "var(--ink-3)" }}>Gérez plusieurs catalogues clients — parlons-en.</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                Nous contacter
+                <ArrowRight style={{ width: "15px", height: "15px" }} />
+              </span>
+            </a>
+
+            <details style={{ marginBottom: "24px" }}>
+              <summary style={{ cursor: "pointer", fontSize: "14px", fontWeight: 600, color: "#0a0a0a", marginBottom: "16px" }}>
+                Affiner ma configuration (produits × canaux × Pack IA)
+              </summary>
             <div style={{ marginBottom: "24px" }}>
               <div style={labelStyle}>Nombre de produits (tranche)</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -417,6 +576,7 @@ export default function ChoosePlanPage() {
                 </span>
               </label>
             </div>
+            </details>
             {isWithinGrid && (
               <div
                 style={{
@@ -427,7 +587,25 @@ export default function ChoosePlanPage() {
                   marginBottom: "24px",
                 }}
               >
-                <div style={{ fontSize: "13px", opacity: 0.85, marginBottom: "4px" }}>Votre forfait</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "13px", opacity: 0.85 }}>Votre forfait</div>
+                  {isRecommendedConfig && (
+                    <span
+                      style={{
+                        padding: "1px 8px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        borderRadius: "999px",
+                        backgroundColor: "#fff",
+                        color: "#0a0a0a",
+                      }}
+                    >
+                      Recommandé
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: "28px", fontWeight: "700" }}>
                   {totalPrice} € <span style={{ fontSize: "14px", fontWeight: "400", opacity: 0.9 }}>HT / mois</span>
                 </div>
@@ -445,6 +623,7 @@ export default function ChoosePlanPage() {
                 </div>
               </div>
             )}
+            <ReassuranceBar />
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
                 type="button"
@@ -478,27 +657,13 @@ export default function ChoosePlanPage() {
                 <label style={labelStyle}>Raison sociale *</label>
                 <input type="text" required value={billing.companyName} onChange={(e) => setBilling((p) => ({ ...p, companyName: e.target.value }))} style={inputStyle} placeholder="Société Example SARL" />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>SIRET</label>
-                  <input type="text" value={billing.siret} onChange={(e) => setBilling((p) => ({ ...p, siret: e.target.value }))} style={inputStyle} placeholder="12345678900012" />
-                </div>
-                <div>
-                  <label style={labelStyle}>SIREN</label>
-                  <input type="text" value={billing.siren} onChange={(e) => setBilling((p) => ({ ...p, siren: e.target.value }))} style={inputStyle} placeholder="123456789" />
-                </div>
-              </div>
               <div>
-                <label style={labelStyle}>N° TVA intracommunautaire</label>
-                <input type="text" value={billing.vatNumber} onChange={(e) => setBilling((p) => ({ ...p, vatNumber: e.target.value }))} style={inputStyle} placeholder="FR12345678901" />
+                <label style={labelStyle}>Email de facturation *</label>
+                <input type="email" required value={billing.billingEmail} onChange={(e) => setBilling((p) => ({ ...p, billingEmail: e.target.value }))} style={inputStyle} placeholder="facturation@entreprise.com" />
               </div>
               <div>
                 <label style={labelStyle}>Adresse (ligne 1) *</label>
                 <input type="text" required value={billing.addressLine1} onChange={(e) => setBilling((p) => ({ ...p, addressLine1: e.target.value }))} style={inputStyle} placeholder="10 rue de la Paix" />
-              </div>
-              <div>
-                <label style={labelStyle}>Adresse (ligne 2)</label>
-                <input type="text" value={billing.addressLine2} onChange={(e) => setBilling((p) => ({ ...p, addressLine2: e.target.value }))} style={inputStyle} placeholder="Bâtiment B" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
                 <div>
@@ -510,10 +675,37 @@ export default function ChoosePlanPage() {
                   <input type="text" required value={billing.city} onChange={(e) => setBilling((p) => ({ ...p, city: e.target.value }))} style={inputStyle} placeholder="Paris" />
                 </div>
               </div>
-              <div>
-                <label style={labelStyle}>Email de facturation *</label>
-                <input type="email" required value={billing.billingEmail} onChange={(e) => setBilling((p) => ({ ...p, billingEmail: e.target.value }))} style={inputStyle} placeholder="facturation@entreprise.com" />
-              </div>
+
+              {/* Champs secondaires repliés : on ne demande que l'essentiel par défaut.
+                  Le détail (TVA, SIRET, complément d'adresse) reste corrigeable sur Stripe au paiement. */}
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "var(--ink-3)" }}>
+                  Ajouter mes informations fiscales (optionnel)
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
+                  <div>
+                    <label style={labelStyle}>Adresse (ligne 2)</label>
+                    <input type="text" value={billing.addressLine2} onChange={(e) => setBilling((p) => ({ ...p, addressLine2: e.target.value }))} style={inputStyle} placeholder="Bâtiment B" />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={labelStyle}>SIRET</label>
+                      <input type="text" value={billing.siret} onChange={(e) => setBilling((p) => ({ ...p, siret: e.target.value }))} style={inputStyle} placeholder="12345678900012" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>SIREN</label>
+                      <input type="text" value={billing.siren} onChange={(e) => setBilling((p) => ({ ...p, siren: e.target.value }))} style={inputStyle} placeholder="123456789" />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>N° TVA intracommunautaire</label>
+                    <input type="text" value={billing.vatNumber} onChange={(e) => setBilling((p) => ({ ...p, vatNumber: e.target.value }))} style={inputStyle} placeholder="FR12345678901" />
+                    <p style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "6px", marginBottom: 0 }}>
+                      Vous pourrez aussi le saisir ou le corriger directement sur la page de paiement Stripe.
+                    </p>
+                  </div>
+                </div>
+              </details>
             </div>
             <div style={{ marginTop: "24px", display: "flex", justifyContent: "space-between" }}>
               <button type="button" onClick={() => setStep(1)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
@@ -549,6 +741,7 @@ export default function ChoosePlanPage() {
                 En cas de prélèvement SEPA, l&apos;accès reste ouvert pendant 10 jours le temps de confirmer l&apos;encaissement.
               </div>
             </div>
+            <ReassuranceBar />
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <button type="button" onClick={() => setStep(2)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 24px", backgroundColor: "transparent", color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}>
                 <ArrowLeft style={{ width: "16px", height: "16px" }} />

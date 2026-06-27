@@ -136,7 +136,7 @@ export function ProductQualityDetailsSection({
                           : "text-amber-500"
                       )}
                     >
-                      Score &quot;vendeuse&quot;: {quality.sellingScore}/100
+                      Qualité de l&apos;image : {quality.sellingScore}/100
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       Qualité globale: {qualityScore}%
@@ -148,7 +148,7 @@ export function ProductQualityDetailsSection({
                     <div className="p-2.5 bg-background border border-border rounded">
                       <div className="flex justify-between items-center mb-1.5">
                         <span className="text-[13px] font-semibold text-foreground">
-                          📸 Qualité technique
+                          Qualité technique
                         </span>
                         <span
                           className={cn(

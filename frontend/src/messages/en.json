@@ -36,12 +36,12 @@
       ]
     },
     "useCase": {
-      "title": "Real-world example",
-      "intro": "A fashion e-merchant with 2,500 SKUs on Shopify had 18% of products rejected by Google Merchant Center. After importing into FeedPlug:",
+      "title": "What FeedPlug helps you target",
+      "intro": "On a typical Shopping catalog, here are the levers FeedPlug puts at your disposal to get your products back in distribution:",
       "results": [
-        "Average score improved from 52 to 78 in 3 weeks thanks to AI enrichment",
-        "Google rejections reduced to under 2% after compliance field corrections",
-        "Automatic sync set up — no more manual files"
+        "Raise your quality score through AI enrichment of titles and descriptions",
+        "Cut Google rejections by fixing the blocking compliance fields first",
+        "Set up automatic sync — no more files to re-export by hand"
       ]
     },
     "faq": {
@@ -109,12 +109,12 @@
       ]
     },
     "useCase": {
-      "title": "Real-world example",
-      "intro": "A beauty seller on Amazon had 200 SKUs in error for missing attributes. With FeedPlug:",
+      "title": "What FeedPlug helps you target",
+      "intro": "On a typical Amazon catalog, here are the levers FeedPlug puts at your disposal to unblock your Seller Central listings:",
       "results": [
-        "AI enrichment of bullet points on 180 products in 2h",
-        "EAN and category corrections via compliance score",
-        "Automatic sync with source store set up"
+        "Enrich bullet points with AI across your entire catalog, with no manual entry",
+        "Fix missing EANs and categories first through the compliance score",
+        "Set up automatic sync with your source store"
       ]
     },
     "faq": {
@@ -182,12 +182,12 @@
       ]
     },
     "useCase": {
-      "title": "Real-world example",
-      "intro": "A lifestyle seller had repeated rejections on Rakuten. With FeedPlug:",
+      "title": "What FeedPlug helps you target",
+      "intro": "On a typical Rakuten catalog, here are the levers FeedPlug puts at your disposal to reduce rejections:",
       "results": [
-        "Catalog compliance reached 100% after correcting mandatory fields",
-        "Description enrichment for Rakuten ranking",
-        "Automatic sync with Shopify source"
+        "Bring your catalog compliance up to standard by fixing missing mandatory fields",
+        "Enrich descriptions for Rakuten ranking",
+        "Sync automatically with your Shopify source"
       ]
     },
     "faq": {
@@ -255,12 +255,12 @@
       ]
     },
     "useCase": {
-      "title": "Real-world example",
-      "intro": "A high-tech seller faced rejections on Cdiscount Pro. With FeedPlug:",
+      "title": "What FeedPlug helps you target",
+      "intro": "On a typical Cdiscount catalog, here are the levers FeedPlug puts at your disposal to unblock your Pro Seller listings:",
       "results": [
-        "Cdiscount reference and category corrections in 1 day",
-        "Listing enrichment for Cdiscount ranking",
-        "Automatic export to Pro Seller with no development"
+        "Fix missing Cdiscount references and categories first",
+        "Enrich listings for Cdiscount ranking",
+        "Export automatically to Pro Seller, with no development"
       ]
     },
     "faq": {
@@ -456,12 +456,12 @@
   },
   "hero": {
     "eyebrow": "For e-commerce managers and acquisition teams",
-    "title": "Your product feeds are costing you",
-    "titleHighlight": "time, sales",
-    "titleEnd": "and visibility",
-    "description": "FeedPlug centralizes your catalog, fixes errors, and distributes compliant feeds to Google Shopping, Amazon, Meta, and 10+ marketplaces in a few clicks.",
+    "title": "Your products are",
+    "titleHighlight": "rejected by Google Merchant Center",
+    "titleEnd": "and invisible on Shopping",
+    "description": "FeedPlug spots blocked listings, fixes compliance errors, and publishes a clean feed to Google Shopping, Amazon, Meta and 10+ marketplaces — to get your products back in front of shoppers, not to waste your time.",
     "ctaButton": "Start my free trial",
-    "ctaSub": "30-day free trial · No credit card required",
+    "ctaSub": "14-day free trial · No credit card required",
     "logosLabel": "Compatible with your sales channels",
     "channels": "Google Shopping · Amazon · Meta · Cdiscount · Rakuten · Fnac · Mirakl · ChatGPT"
   },
@@ -505,6 +505,8 @@
     "contact": "Contact",
     "documentation": "Documentation",
     "clientAccess": "Client access",
+    "auditCta": "Audit my feed for free",
+    "reassurance": "No credit card · No commitment · 5 min",
     "closeMenu": "Close menu",
     "openMenu": "Open menu",
     "menuLabel": "Navigation menu",
@@ -530,7 +532,7 @@
     "subtitle": "Choose your product and channel count. Your plan adapts — and you stay in control.",
     "badge1": "Save time on feed preparation",
     "badge2": "GMC, Meta, Amazon compliance",
-    "badge3": "30-day trial, no credit card",
+    "badge3": "14-day trial, no credit card",
     "configureTitle": "Configure your plan",
     "mostPopular": "Most popular",
     "productCountLabel": "Number of products",
@@ -561,7 +563,7 @@
     "viewGridSummary": "View price grid (excl. VAT / month)",
     "products": "Products",
     "addonGridNote": "AI Pack add-on (titles + images): +€49 excl. VAT/month. All prices in EUR excl. VAT.",
-    "trialNote": "30-day free trial, no credit card. Billing by transfer or proforma."
+    "trialNote": "14-day free trial, no credit card. Billing by transfer or proforma."
   },
   "integrations": {
     "title": "Integrations and channels",
@@ -631,7 +633,7 @@
       },
       {
         "q": "Is there a free trial?",
-        "a": "Yes, 30-day free trial with no credit card required. You can test all features: import, scoring, AI enrichment, and multi-channel export."
+        "a": "Yes, 14-day free trial with no credit card required. You can test all features: import, scoring, AI enrichment, and multi-channel export."
       }
     ]
   },
@@ -1051,7 +1053,7 @@
     ]
   },
   "socialProof": {
-    "title": "Real results",
+    "title": "What FeedPlug helps you target",
     "metrics": [
       {
         "value": "-80%",
@@ -1097,13 +1099,13 @@
   },
   "midCta": {
     "title": "Ready to simplify your product feeds?",
-    "trust": "30-day free trial · No credit card · Setup in 5 min"
+    "trust": "14-day free trial · No credit card · Setup in 5 min"
   },
   "finalCta": {
     "title": "Your competitors are already optimizing their feeds.",
     "titleHighlight": "Are you?",
     "subtitle": "Every day without FeedPlug means rejected products, missed sales, and wasted time.",
     "button": "Start my free trial",
-    "trust": "Setup in 5 min · 30-day free trial · No credit card"
+    "trust": "Setup in 5 min · 14-day free trial · No credit card"
   }
 }

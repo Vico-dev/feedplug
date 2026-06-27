@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import { createFaqJsonLd } from "@/lib/lp-metadata";
+import { getAuditCta } from "@/lib/audit-cta";
 import { Link } from "@/i18n/routing";
 
 type Locale = "fr" | "en" | "es";
@@ -438,6 +439,7 @@ export default async function AmazonShopifyFeedPage({
 }) {
   const { locale } = await params;
   const copy = getCopy(locale);
+  const auditCta = getAuditCta(locale);
   const screenCopy = getScreenCopy(locale);
   const faqCopy = getFaqCopy(locale);
 
@@ -612,8 +614,8 @@ export default async function AmazonShopifyFeedPage({
                 className="amazon-shopify-fade amazon-shopify-delay-3"
                 style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}
               >
-                <Link href="/demo?source=use_case_demo" style={primaryHeroCtaStyle}>
-                  {copy.primaryCta}
+                <Link href={auditCta.href} style={primaryHeroCtaStyle}>
+                  {auditCta.label}
                   <ArrowRight style={{ width: 16, height: 16 }} />
                 </Link>
                 <Link href="/optimiser-flux-amazon" style={secondaryHeroCtaStyle}>
@@ -983,8 +985,8 @@ export default async function AmazonShopifyFeedPage({
             </p>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <Link href="/demo?source=use_case_demo" style={primaryDarkCtaStyle}>
-                {copy.primaryCta}
+              <Link href={auditCta.href} style={primaryDarkCtaStyle}>
+                {auditCta.label}
                 <ArrowRight style={{ width: 16, height: 16 }} />
               </Link>
               <Link href="/optimiser-flux-amazon" style={secondaryDarkCtaStyle}>

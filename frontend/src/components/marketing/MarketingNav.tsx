@@ -60,6 +60,7 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
 
   const homeHref = `/${locale === "fr" ? "fr" : locale}`;
   const demoHref = `${locale === "fr" ? "" : `/${locale}`}/demo`;
+  const auditHref = `${locale === "fr" ? "" : `/${locale}`}/audit-flux`;
 
   // Fermer les dropdowns au clic extérieur (mobile + desktop)
   useEffect(() => {
@@ -407,7 +408,20 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
                 {t("documentation")}
               </Link>
             </div>
-            <a href="https://app.feedplug.com/login" className="marketing-nav-overlay-cta" onClick={() => setMobileOpen(false)}>
+            <Link
+              href={auditHref}
+              className="marketing-nav-overlay-cta"
+              style={{ background: "var(--accent, #2A6FE8)" }}
+              onClick={() => setMobileOpen(false)}
+            >
+              {t("auditCta")}
+            </Link>
+            <a
+              href="https://app.feedplug.com/login"
+              className="marketing-nav-overlay-cta"
+              style={{ marginTop: 12, background: "#0a0a0a" }}
+              onClick={() => setMobileOpen(false)}
+            >
               {t("clientAccess")}
             </a>
           </div>
@@ -515,6 +529,28 @@ export default function MarketingNav({ showHome = true, locale = "fr", dark = fa
         >
           {t("clientAccess")}
         </a>
+        <Link
+          href={auditHref}
+          className="marketing-nav-cta"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "10px 18px",
+            borderRadius: 12,
+            background: "var(--accent, #2A6FE8)",
+            color: "#ffffff",
+            fontSize: 14,
+            fontWeight: 600,
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+            transition: "opacity 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.9"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+        >
+          {t("auditCta")}
+        </Link>
       </div>
       </div>
     </>

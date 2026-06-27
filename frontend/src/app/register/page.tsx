@@ -67,12 +67,9 @@ function isGoogleConflictMessage(message: string): boolean {
 function RegisterPageContent() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
   const [companyWebsite, setCompanyWebsite] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
@@ -120,11 +117,6 @@ function RegisterPageContent() {
     setIsLoading(true);
     setError('');
 
-    if (password !== confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      setIsLoading(false);
-      return;
-    }
     const pwdCheck = validatePassword(password);
     if (!pwdCheck.ok) {
       setError(pwdCheck.message || 'Mot de passe invalide');
@@ -138,7 +130,7 @@ function RegisterPageContent() {
     }
 
     const { firstName, lastName } = parseName(name);
-    const accountName = company.trim() || `${firstName} ${lastName}`.trim() || 'Mon entreprise';
+    const accountName = `${firstName} ${lastName}`.trim() || 'Mon entreprise';
 
     try {
       await register({
@@ -356,35 +348,6 @@ function RegisterPageContent() {
           </div>
 
           <div>
-            <label htmlFor="register-company" style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#0a0a0a',
-              marginBottom: '8px'
-            }}>
-              Entreprise <span style={{ color: 'var(--ink-4)', fontWeight: '400' }}>(optionnel)</span>
-            </label>
-            <input
-              id="register-company"
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              autoComplete="organization"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid var(--line)',
-                borderRadius: '2px',
-                fontSize: '14px',
-                color: '#0a0a0a',
-                backgroundColor: '#ffffff'
-              }}
-              placeholder="Mon entreprise"
-            />
-          </div>
-
-          <div>
             <label htmlFor="register-password" style={{
               display: 'block',
               fontSize: '14px',
@@ -447,68 +410,6 @@ function RegisterPageContent() {
             <p style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '4px', marginBottom: 0 }}>
               Au moins {MIN_PASSWORD_LENGTH} caractères, une majuscule et un chiffre
             </p>
-          </div>
-
-          <div>
-            <label htmlFor="register-confirm-password" style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#0a0a0a',
-              marginBottom: '8px'
-            }}>
-              Confirmer le mot de passe
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '18px',
-                height: '18px',
-                color: 'var(--ink-4)'
-              }} />
-              <input
-                id="register-confirm-password"
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                autoComplete="new-password"
-                style={{
-                  width: '100%',
-                  padding: '10px 40px 10px 40px',
-                  border: '1px solid var(--line)',
-                  borderRadius: '2px',
-                  fontSize: '14px',
-                  color: '#0a0a0a',
-                  backgroundColor: '#ffffff'
-                }}
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px'
-                }}
-              >
-                {showConfirmPassword ? (
-                  <EyeOff style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
-                ) : (
-                  <Eye style={{ width: '18px', height: '18px', color: 'var(--ink-4)' }} />
-                )}
-              </button>
-            </div>
           </div>
 
           {captchaEnabled && (
