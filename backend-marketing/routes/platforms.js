@@ -65,6 +65,7 @@ function registerPlatformsRoutes(app, {
   revokeGoogleOAuthToken,
   saveGmcConnection,
   scheduleAutoGmcPush,
+  scheduleSyncGoogleAdsPerformance,
   storeOAuthEphemeralState,
   upsertPlatformConnection,
 }) {
@@ -622,6 +623,13 @@ app.get('/api/v1/platforms/google-ads/callback', async (req, res) => {
         status: 'active',
         metadata: {},
       });
+      // Reporting pré-launch : déclenche une sync perf Google Ads en background
+      // pour que la page Performance se remplisse dans la minute suivant la
+      // connexion (fire-and-forget, idempotent, dédup journalière).
+      if (typeof scheduleSyncGoogleAdsPerformance === 'function') {
+        Promise.resolve(scheduleSyncGoogleAdsPerformance(accountId, 'oauth_connect'))
+          .catch((err) => console.warn('⚠️ enqueue sync perf Google Ads (oauth) échoué:', err?.message || err));
+      }
     }
     if (embeddedSurface) {
       return res.redirect(await buildEmbeddedShopifyAdminRedirectUrl({

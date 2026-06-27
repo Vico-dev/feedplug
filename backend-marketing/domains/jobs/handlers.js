@@ -65,6 +65,22 @@ function createJobHandlers(deps) {
   } = deps;
 
   // ---------------------------------------------------------------------------
+  // Sync auto des performances régies (bloc reporting pré-launch).
+  // Dépendances de sync injectées (peuvent être absentes en tests legacy → on
+  // gère le cas avec un fenêtre de dédup journalière par accountId+plateforme).
+  const {
+    syncGoogleAdsPerformance,
+    syncMetaAdsPerformance,
+    syncAmazonAdsPerformance,
+    decryptSecret,
+    decryptPlatformConnection,
+    perfAdsConfig,
+  } = deps;
+  // Fenêtre de dédup d'1 jour (24 h) : un même compte/plateforme n'enqueue qu'une
+  // sync par jour côté Cloud Tasks (nom de tâche déterministe) ; idempotent au retry.
+  const PERF_SYNC_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  // ---------------------------------------------------------------------------
   // Sync LIA automatique (fire-and-forget, débouncée par compte) après les
   // ingestions Shopify. No-op si aucun emplacement n'est lié.
   // Sprint 2 : signature publique inchangée. Délègue à enqueueJob.
@@ -262,6 +278,128 @@ function createJobHandlers(deps) {
   }
 
   // ---------------------------------------------------------------------------
+  // Sync auto des performances régies. Schedulers (enqueue débouncé/idempotent par
+  // accountId+plateforme sur fenêtre journalière) + handlers idempotents qui
+  // résolvent les credentials depuis PlatformConnection puis appellent la fonction
+  // sync* correspondante. No-op silencieux si aucune connexion active ou config
+  // serveur incomplète : ne lèvent JAMAIS sur l'absence de connexion (un retour
+  // 500 du worker provoquerait un retry Cloud Tasks inutile).
+
+  // Enqueue générique d'une sync perf (un type par plateforme).
+  function schedulePerformanceSync(type, accountId, reason) {
+    if (!accountId) return Promise.resolve();
+    return enqueueBackgroundJob(
+      type,
+      { accountId, reason: reason || null },
+      { dedupKey: `${accountId}`, scheduleDelayMs: 0, dedupWindowMs: PERF_SYNC_DEDUP_WINDOW_MS }
+    ).catch((err) => console.warn(`⚠️ enqueue ${type} échoué (${reason}):`, err?.message || err));
+  }
+
+  function scheduleSyncGoogleAdsPerformance(accountId, reason) {
+    return schedulePerformanceSync(JOB_TYPES.SYNC_PERF_GOOGLE_ADS, accountId, reason);
+  }
+  function scheduleSyncMetaAdsPerformance(accountId, reason) {
+    return schedulePerformanceSync(JOB_TYPES.SYNC_PERF_META_ADS, accountId, reason);
+  }
+  function scheduleSyncAmazonAdsPerformance(accountId, reason) {
+    return schedulePerformanceSync(JOB_TYPES.SYNC_PERF_AMAZON_ADS, accountId, reason);
+  }
+
+  // Google Ads : récupère customerId + refreshToken depuis PlatformConnection
+  // (platform=google_ads, status=active), puis sync. Mêmes gates que la route
+  // POST /performance/sync/google-ads.
+  async function runSyncGoogleAdsPerformance({ accountId, reason } = {}) {
+    if (!accountId) return;
+    if (typeof syncGoogleAdsPerformance !== 'function') return;
+    const prisma = getPrisma();
+    if (!prisma) return;
+    const cfg = perfAdsConfig || {};
+    try {
+      const conns = await prisma.$queryRawUnsafe(
+        `SELECT merchantid, refreshtoken FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'google_ads' AND status = 'active' LIMIT 1`,
+        accountId
+      );
+      if (!conns || conns.length === 0) return; // pas de connexion → no-op silencieux
+      const customerId = conns[0].merchantid;
+      const refreshToken = typeof decryptSecret === 'function' ? decryptSecret(conns[0].refreshtoken) : conns[0].refreshtoken;
+      const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+      const clientId = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || cfg.googleAdsClientId;
+      const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || cfg.googleAdsClientSecret;
+      if (!customerId || !refreshToken || !developerToken || !clientId || !clientSecret) {
+        console.warn(`⚠️ Sync perf Google Ads (${reason}) ignorée pour ${accountId} : credentials/config incomplets`);
+        return;
+      }
+      const result = await syncGoogleAdsPerformance(prisma, {
+        accountId, feedId: null, customerId, refreshToken, clientId, clientSecret, developerToken,
+      });
+      console.log(`📊 Sync perf Google Ads auto (${reason}) account ${accountId} :`, result?.upserted ?? result?.rows ?? 'ok');
+      return result;
+    } catch (err) {
+      console.warn(`⚠️ Sync perf Google Ads auto (${reason}) échouée pour ${accountId}:`, err?.message || err);
+    }
+  }
+
+  // Meta Ads : adAccountId + accessToken depuis PlatformConnection (platform=meta).
+  async function runSyncMetaAdsPerformance({ accountId, reason } = {}) {
+    if (!accountId) return;
+    if (typeof syncMetaAdsPerformance !== 'function') return;
+    const prisma = getPrisma();
+    if (!prisma) return;
+    try {
+      const conns = await prisma.$queryRawUnsafe(
+        `SELECT merchantid, accesstoken FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'meta' AND status = 'active' LIMIT 1`,
+        accountId
+      );
+      if (!conns || conns.length === 0) return;
+      const adAccountId = conns[0].merchantid;
+      const accessToken = typeof decryptSecret === 'function' ? decryptSecret(conns[0].accesstoken) : conns[0].accesstoken;
+      if (!adAccountId || !accessToken) {
+        console.warn(`⚠️ Sync perf Meta Ads (${reason}) ignorée pour ${accountId} : credentials incomplets`);
+        return;
+      }
+      const result = await syncMetaAdsPerformance(prisma, { accountId, feedId: null, adAccountId, accessToken });
+      console.log(`📊 Sync perf Meta Ads auto (${reason}) account ${accountId} :`, result?.upserted ?? result?.rows ?? 'ok');
+      return result;
+    } catch (err) {
+      console.warn(`⚠️ Sync perf Meta Ads auto (${reason}) échouée pour ${accountId}:`, err?.message || err);
+    }
+  }
+
+  // Amazon Ads : profileId + refreshToken + clientId/clientSecret depuis
+  // PlatformConnection (platform=amazon_ads, metadata chiffrée).
+  async function runSyncAmazonAdsPerformance({ accountId, reason } = {}) {
+    if (!accountId) return;
+    if (typeof syncAmazonAdsPerformance !== 'function') return;
+    const prisma = getPrisma();
+    if (!prisma) return;
+    try {
+      const conns = await prisma.$queryRawUnsafe(
+        `SELECT merchantid, accesstoken, refreshtoken, metadata FROM "PlatformConnection" WHERE accountid = $1::text AND platform = 'amazon_ads' AND status = 'active' LIMIT 1`,
+        accountId
+      );
+      if (!conns || conns.length === 0) return;
+      const c = typeof decryptPlatformConnection === 'function' ? decryptPlatformConnection(conns[0]) : conns[0];
+      const profileId = c.merchantid;
+      const refreshToken = c.refreshtoken;
+      const meta = c.metadata || {};
+      const clientId = meta.clientId || process.env.AMAZON_ADS_CLIENT_ID;
+      const clientSecret = meta.clientSecret || process.env.AMAZON_ADS_CLIENT_SECRET;
+      const region = (meta.region === 'na' ? 'na' : 'eu');
+      if (!profileId || !refreshToken || !clientId || !clientSecret) {
+        console.warn(`⚠️ Sync perf Amazon Ads (${reason}) ignorée pour ${accountId} : credentials incomplets`);
+        return;
+      }
+      const result = await syncAmazonAdsPerformance(prisma, {
+        accountId, feedId: null, profileId, clientId, clientSecret, refreshToken, region,
+      });
+      console.log(`📊 Sync perf Amazon Ads auto (${reason}) account ${accountId} :`, result?.upserted ?? result?.rows ?? 'ok');
+      return result;
+    } catch (err) {
+      console.warn(`⚠️ Sync perf Amazon Ads auto (${reason}) échouée pour ${accountId}:`, err?.message || err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Routeur de jobs : appelé par le worker HTTP (/internal/jobs/run) ET par le
   // fallback in-process de lib/jobs.js. `runIngestionJob` n'est pas extrait (reste
   // dans server-minimal.js) ; il est injecté paresseusement via deps.runIngestionJob.
@@ -274,6 +412,12 @@ function createJobHandlers(deps) {
         return runAutoOptimization(payload);
       case JOB_TYPES.AUTO_LIA_SYNC:
         return runAutoLiaSync(payload);
+      case JOB_TYPES.SYNC_PERF_GOOGLE_ADS:
+        return runSyncGoogleAdsPerformance(payload);
+      case JOB_TYPES.SYNC_PERF_META_ADS:
+        return runSyncMetaAdsPerformance(payload);
+      case JOB_TYPES.SYNC_PERF_AMAZON_ADS:
+        return runSyncAmazonAdsPerformance(payload);
       case JOB_TYPES.INGESTION_RUN:
         if (typeof deps.runIngestionJob !== 'function') {
           throw new Error('[jobs] runIngestionJob non injecté');
@@ -291,6 +435,12 @@ function createJobHandlers(deps) {
     runAutoGmcPush,
     scheduleAutoOptimization,
     runAutoOptimization,
+    scheduleSyncGoogleAdsPerformance,
+    scheduleSyncMetaAdsPerformance,
+    scheduleSyncAmazonAdsPerformance,
+    runSyncGoogleAdsPerformance,
+    runSyncMetaAdsPerformance,
+    runSyncAmazonAdsPerformance,
     dispatchJob,
   };
 }

@@ -959,7 +959,11 @@
     },
     "rapports": {
       "title": "Rapports & Analytics",
-      "subtitle": "Analysez les performances de vos flux et optimisez vos campagnes"
+      "subtitle": "Analysez les performances de vos flux et optimisez vos campagnes",
+      "comingSoonBadge": "Bientôt disponible",
+      "comingSoonTitle": "Les rapports arrivent bientôt",
+      "comingSoonBody": "Les rapports consolidés et les tests A/B sont en cours de finalisation. En attendant, retrouvez vos métriques par canal en temps réel sur la page Performance.",
+      "comingSoonCta": "Voir la page Performance"
     },
     "notifications": {
       "title": "Notifications",
