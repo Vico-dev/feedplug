@@ -6213,45 +6213,34 @@ registerConnectorsRoutes(app, {
 
 
 
-app.get('/api/v1/marketing/audits/:shareToken/platforms/gmc/auth-url', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const rows = await prisma.$queryRawUnsafe(`
-      SELECT sharetoken, locale FROM marketing_audits WHERE sharetoken = $1::text LIMIT 1
-    `, shareToken);
-    if (!rows?.length) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-    const scopes = [
-      'https://www.googleapis.com/auth/content',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ];
-    const oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-    const stateId = crypto.randomUUID();
-    await storeOAuthEphemeralState({
-      id: stateId,
-      provider: OAUTH_EPHEMERAL_PROVIDER_GMC,
-      flow: OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
-      payload: { auditShareToken: shareToken, locale: rows[0].locale || 'fr', mode: 'marketing_audit_gmc' },
-      ttlMs: 10 * 60 * 1000,
-    });
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent select_account',
-      scope: scopes,
-      state: stateId,
-    });
-    res.json({ authUrl });
-  } catch (error) {
-    console.error('Marketing audit GMC auth-url error:', error);
-    res.status(500).json({ message: 'Erreur generation URL GMC' });
-  }
+// ====== MARKETING AUDITS — connect (4 routes /api/v1/marketing/audits/:shareToken/* extraites dans routes/marketing-audits.js) ======
+// Module frère de routes/marketing.js. Enregistrées ICI (position d'origine de la route gmc/auth-url).
+// Aucun chevauchement de chemin/méthode avec les routes /api/v1/marketing/audits/:shareToken(/pdf) de
+// routes/marketing.js (segments/méthodes distincts) -> ordre de matching préservé.
+const { registerMarketingAuditsConnectRoutes } = require('./routes/marketing-audits');
+registerMarketingAuditsConnectRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_REDIRECT_URI,
+  OAUTH_EPHEMERAL_FLOW_GMC_OAUTH_STATE,
+  OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE,
+  OAUTH_EPHEMERAL_PROVIDER_GMC,
+  OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
+  OAuth2Client,
+  SHOPIFY_API_KEY,
+  SHOPIFY_API_SECRET,
+  SHOPIFY_CALLBACK_URL,
+  SHOPIFY_OAUTH_STATE_TTL_MS,
+  SHOPIFY_SCOPES,
+  crypto,
+  decryptObjectSecrets,
+  fetchMarketingAuditFileItems,
+  fetchPrestashopProducts,
+  normalizeShopifyShop,
+  storeOAuthEphemeralState,
+  stringifyEncryptedJson,
 });
 
 
@@ -6999,157 +6988,7 @@ async function runAutoOptimization(payload) {
 // via registerConnectorsRoutes(app, {...}). Entrelacées d'origine avec /api/v1/marketing/audits/.../connectors/*
 // (préfixes distincts, aucun chevauchement) -> ordre de matching préservé. Helpers findShopify* restent inline.
 
-app.post('/api/v1/marketing/audits/:shareToken/connectors/shopify/connect', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    const { shop } = req.body || {};
-    if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
-      return res.status(500).json({ message: 'Clés Shopify non configurées côté serveur' });
-    }
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!shop) {
-      return res.status(400).json({ message: 'Paramètre shop requis' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const audits = await prisma.$queryRawUnsafe(`SELECT sharetoken, locale FROM marketing_audits WHERE sharetoken = $1::text LIMIT 1`, shareToken);
-    if (!audits?.length) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-    const normalizedShop = normalizeShopifyShop(shop);
-    if (!normalizedShop) {
-      return res.status(400).json({ message: 'Nom de boutique Shopify invalide' });
-    }
-    const state = crypto.randomUUID();
-    try {
-      await storeOAuthEphemeralState({
-        id: state,
-        provider: OAUTH_EPHEMERAL_PROVIDER_SHOPIFY,
-        flow: OAUTH_EPHEMERAL_FLOW_SHOPIFY_STATE,
-        payload: {
-          shop: normalizedShop,
-          guest: true,
-          auditShareToken: shareToken,
-          locale: audits[0].locale || 'fr',
-        },
-        ttlMs: SHOPIFY_OAUTH_STATE_TTL_MS,
-      });
-    } catch (error) {
-      console.error('Shopify marketing audit state persistence error:', error);
-      return res.status(503).json({ message: 'Connexion Shopify temporairement indisponible' });
-    }
-    const authUrl = `https://${normalizedShop}/admin/oauth/authorize?client_id=${encodeURIComponent(
-      SHOPIFY_API_KEY
-    )}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(
-      SHOPIFY_CALLBACK_URL
-    )}&state=${encodeURIComponent(state)}&grant_options[]=`;
-    res.json({ url: authUrl });
-  } catch (err) {
-    console.error('Shopify marketing audit connect error:', err);
-    res.status(500).json({ message: 'Erreur lors de l init OAuth Shopify' });
-  }
-});
-
-app.post('/api/v1/marketing/audits/:shareToken/connectors/prestashop/connect', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    const shopUrl = typeof req.body?.shopUrl === 'string' ? req.body.shopUrl.trim() : '';
-    const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!shopUrl || !apiKey) {
-      return res.status(400).json({ message: 'URL boutique et cle API PrestaShop requises' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const audits = await prisma.$queryRawUnsafe(`SELECT * FROM marketing_audits WHERE sharetoken = $1::text LIMIT 1`, shareToken);
-    if (!audits?.length) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-
-    const normalizedShopUrl = /^https?:\/\//i.test(shopUrl) ? shopUrl.replace(/\/+$/, '') : `https://${shopUrl.replace(/\/+$/, '')}`;
-    await fetchPrestashopProducts({ baseUrl: normalizedShopUrl, apiKey, limit: 20 });
-
-    const audit = audits[0];
-    const input = decryptObjectSecrets(typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {}));
-    input.prestashopConnection = {
-      shopUrl: normalizedShopUrl,
-      apiKey,
-      connectedAt: new Date().toISOString(),
-    };
-
-    await prisma.$executeRawUnsafe(`
-      UPDATE marketing_audits
-      SET shopurl = COALESCE($1::text, shopurl),
-          connectortype = 'PRESTASHOP',
-          inputjson = $2::jsonb,
-          status = 'source_connected',
-          "updatedAt" = NOW()
-      WHERE sharetoken = $3::text
-    `, normalizedShopUrl, stringifyEncryptedJson(input), shareToken);
-
-    return res.json({
-      success: true,
-      message: 'Source PrestaShop connectee',
-    });
-  } catch (error) {
-    console.error('Prestashop marketing audit connect error:', error);
-    return res.status(500).json({ message: error.message || 'Erreur lors de la connexion PrestaShop' });
-  }
-});
-
-app.post('/api/v1/marketing/audits/:shareToken/connectors/file/connect', async (req, res) => {
-  try {
-    const shareToken = String(req.params.shareToken || '').trim();
-    const feedUrl = typeof req.body?.feedUrl === 'string' ? req.body.feedUrl.trim() : '';
-    if (!shareToken) {
-      return res.status(400).json({ message: 'Token audit manquant' });
-    }
-    if (!feedUrl) {
-      return res.status(400).json({ message: 'URL de flux requise' });
-    }
-    if (!prismaReady || !prisma) {
-      return res.status(503).json({ message: 'Service indisponible' });
-    }
-    const audits = await prisma.$queryRawUnsafe(`SELECT * FROM marketing_audits WHERE sharetoken = $1::text LIMIT 1`, shareToken);
-    if (!audits?.length) {
-      return res.status(404).json({ message: 'Audit introuvable' });
-    }
-
-    const normalizedFeedUrl = /^https?:\/\//i.test(feedUrl) ? feedUrl.trim() : `https://${feedUrl.trim()}`;
-    await fetchMarketingAuditFileItems({ ...audits[0], shopurl: normalizedFeedUrl }, { csvConnection: { feedUrl: normalizedFeedUrl } });
-
-    const audit = audits[0];
-    const input = decryptObjectSecrets(typeof audit.inputjson === 'string' ? JSON.parse(audit.inputjson || '{}') : (audit.inputjson || {}));
-    input.csvConnection = {
-      feedUrl: normalizedFeedUrl,
-      connectedAt: new Date().toISOString(),
-    };
-
-    await prisma.$executeRawUnsafe(`
-      UPDATE marketing_audits
-      SET shopurl = COALESCE($1::text, shopurl),
-          connectortype = 'CSV',
-          inputjson = $2::jsonb,
-          status = 'source_connected',
-          "updatedAt" = NOW()
-      WHERE sharetoken = $3::text
-    `, normalizedFeedUrl, stringifyEncryptedJson(input), shareToken);
-
-    return res.json({
-      success: true,
-      message: 'Flux CSV/XML connecte',
-    });
-  } catch (error) {
-    console.error('File marketing audit connect error:', error);
-    return res.status(500).json({ message: error.message || 'Erreur lors de la connexion du flux' });
-  }
-});
+// (marketing-audits) /api/v1/marketing/audits/:shareToken/connectors/{shopify,prestashop,file}/connect -> routes/marketing-audits.js
 
 // Callback OAuth: échange code -> access_token, stockage en base
 // (connectors) /api/v1/connectors/shopify/callback -> routes/connectors.js
