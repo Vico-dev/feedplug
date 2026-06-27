@@ -16,10 +16,15 @@ ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ
 # Shopify App Bridge a besoin de la clé publique au build pour la baker dans le
 # bundle JS (lue par <ShopifyEmbeddedBridge /> et useAppBridge()).
 ARG NEXT_PUBLIC_SHOPIFY_API_KEY=
+# Sentry frontend : le DSN doit être baked au build (NEXT_PUBLIC inliné dans le
+# bundle), sinon sentry.client.config s'auto-désactive (enabled=!!DSN) → aucune
+# remontée d'erreur JS/SSR en prod.
+ARG NEXT_PUBLIC_SENTRY_DSN=
 ENV BACKEND_API_URL=$BACKEND_API_URL
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_SHOPIFY_API_KEY=$NEXT_PUBLIC_SHOPIFY_API_KEY
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 RUN npm run build
 
 FROM node:20-alpine AS runner
