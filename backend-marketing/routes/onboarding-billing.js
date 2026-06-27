@@ -257,6 +257,10 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
           currency: invoice.currency || null,
           amountDueCents: typeof invoice.amount_due === 'number' ? invoice.amount_due : null,
           amountPaidCents: typeof invoice.amount_paid === 'number' ? invoice.amount_paid : null,
+          // Montants HT / TVA / TTC tels que renvoyés par Stripe (Stripe Tax).
+          subtotalCents: typeof invoice.subtotal === 'number' ? invoice.subtotal : null,
+          taxCents: typeof invoice.tax === 'number' ? invoice.tax : null,
+          totalCents: typeof invoice.total === 'number' ? invoice.total : null,
           createdAt: invoice.created ? new Date(invoice.created * 1000).toISOString() : null,
           dueDate: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
           paidAt: invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : null,
@@ -277,6 +281,9 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
           upcomingInvoice = {
             currency: stripeUpcomingInvoice.currency || null,
             amountDueCents: typeof stripeUpcomingInvoice.amount_due === 'number' ? stripeUpcomingInvoice.amount_due : null,
+            subtotalCents: typeof stripeUpcomingInvoice.subtotal === 'number' ? stripeUpcomingInvoice.subtotal : null,
+            taxCents: typeof stripeUpcomingInvoice.tax === 'number' ? stripeUpcomingInvoice.tax : null,
+            totalCents: typeof stripeUpcomingInvoice.total === 'number' ? stripeUpcomingInvoice.total : null,
             dueDate: toIsoDate(
               stripeUpcomingInvoice.due_date
                 ? new Date(stripeUpcomingInvoice.due_date * 1000)
@@ -354,6 +361,14 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
           id: subscription.id,
           status: subscription.status || null,
           cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
+          // Date de fin effective programmée (annulation à échéance) et date
+          // d'annulation déjà actée — pour le bandeau "abonnement annulé".
+          cancelAt: subscription.cancel_at
+            ? new Date(subscription.cancel_at * 1000).toISOString()
+            : null,
+          canceledAt: subscription.canceled_at
+            ? new Date(subscription.canceled_at * 1000).toISOString()
+            : null,
           currentPeriodStart: subscription.current_period_start
             ? new Date(subscription.current_period_start * 1000).toISOString()
             : null,
@@ -448,24 +463,56 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
       `, accountId);
       const userEmail = user?.[0]?.email || req.user.email;
 
+      const customerAddress = billing ? {
+        line1: billing.addressline1,
+        line2: billing.addressline2,
+        city: billing.city,
+        postal_code: billing.postalcode,
+        country: billing.country || 'FR',
+      } : undefined;
+
       let customerId = billing?.stripe_customer_id;
       if (!customerId) {
         const customer = await stripe.customers.create({
           email: userEmail,
           name: billing?.companyname || user?.[0]?.accountname,
-          address: billing ? {
-            line1: billing.addressline1,
-            line2: billing.addressline2,
-            city: billing.city,
-            postal_code: billing.postalcode,
-            country: billing.country || 'FR',
-          } : undefined,
+          address: customerAddress,
           metadata: { accountId },
         });
         customerId = customer.id;
         await prisma.$executeRawUnsafe(`
           UPDATE "Billing" SET stripe_customer_id = $1, updatedat = NOW() WHERE accountid = $2
         `, customerId, accountId);
+      } else if (customerAddress) {
+        // Customer existant : on rafraîchit l'adresse (sert à Stripe Tax pour
+        // déterminer la juridiction et le taux de TVA applicable).
+        try {
+          await stripe.customers.update(customerId, { address: customerAddress });
+        } catch (e) {
+          console.warn('[BILLING] customer address update failed:', e?.message || e);
+        }
+      }
+
+      // Pousse le numéro de TVA intracommunautaire sur le customer Stripe.
+      // Nécessaire pour l'autoliquidation B2B intra-UE (reverse charge) via
+      // Stripe Tax. Idempotent : on n'ajoute le tax_id que s'il est absent.
+      if (billing?.vatnumber) {
+        try {
+          const existingTaxIds = await stripe.customers.listTaxIds(customerId, { limit: 100 });
+          const alreadyPresent = (existingTaxIds?.data || []).some(
+            (t) => String(t.value || '').replace(/\s/g, '').toUpperCase() === String(billing.vatnumber).replace(/\s/g, '').toUpperCase()
+          );
+          if (!alreadyPresent) {
+            await stripe.customers.createTaxId(customerId, {
+              type: 'eu_vat',
+              value: String(billing.vatnumber).replace(/\s/g, '').toUpperCase(),
+            });
+          }
+        } catch (e) {
+          // Un numéro de TVA invalide ne doit pas bloquer le checkout :
+          // Stripe Tax collectera/validera de toute façon côté Checkout.
+          console.warn('[BILLING] tax_id push failed (non bloquant):', e?.message || e);
+        }
       }
 
       let lineItems;
@@ -491,6 +538,8 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
             },
             unit_amount: priceResult.amountCents,
             recurring: { interval: 'month' },
+            // Les montants de la grille sont HT : Stripe Tax ajoute la TVA par-dessus.
+            tax_behavior: 'exclusive',
           },
           quantity: 1,
         }];
@@ -512,6 +561,15 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
         line_items: lineItems,
         success_url: successUrl || `${APP_URL}/dashboard?checkout=success`,
         cancel_url: cancelUrl || `${APP_URL}/choose-plan?checkout=cancelled`,
+        // Stripe Tax : calcule et applique automatiquement la TVA (TTC) selon
+        // l'adresse du client et son numéro de TVA (autoliquidation B2B intra-UE).
+        // Requiert l'activation de Stripe Tax dans le dashboard Stripe.
+        automatic_tax: { enabled: true },
+        // Permet au client de saisir/corriger son numéro de TVA pendant le checkout.
+        tax_id_collection: { enabled: true },
+        // automatic_tax exige une adresse client à jour : on autorise Stripe à
+        // mettre à jour name + address sur le customer depuis le formulaire Checkout.
+        customer_update: { address: 'auto', name: 'auto' },
         subscription_data: {
           metadata: subscriptionMetadata,
         },

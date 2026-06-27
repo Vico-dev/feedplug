@@ -129,3 +129,25 @@ Les premiers domaines extraits et couverts par tests sont :
 - Déploiement backend et migrations : `backend-marketing/DEPLOI_GCP.md`
 - Rollout chiffrement : `docs/P0_SECRET_ENCRYPTION_ROLLOUT.md`
 - Health / smoke / readiness : `docs/HEALTHCHECK.md`
+
+### Cloud Scheduler (jobs à configurer côté infra)
+
+| Job | Méthode + endpoint | Fréquence conseillée | Auth |
+| --- | --- | --- | --- |
+| Auto-push exports (existant) | `POST /api/v1/exports/scheduled-runs` | horaire | `SCHEDULER_SECRET` (header `X-Scheduler-Secret` ou `Authorization: Bearer`) |
+| **Sync performances régies (NOUVEAU)** | `POST /internal/sync/performance` | **quotidien** | `SCHEDULER_SECRET` (timing-safe) ou OIDC IAM Cloud Run |
+
+À créer : un job Cloud Scheduler quotidien ciblant `POST {BACKEND_URL}/internal/sync/performance`
+avec le header `X-Scheduler-Secret: $SCHEDULER_SECRET` (ou un token OIDC si l'ingress est
+interne). L'endpoint énumère les comptes ayant une connexion régie active
+(`google_ads` / `meta` / `amazon_ads`) et **enqueue** (via `enqueueJob` → Cloud Tasks
+en prod, fallback in-process en dev) une sync perf idempotente par compte+plateforme
+(dédup journalière). Les données alimentent `PerformanceChannel` lues par la page
+Performance. En complément, une sync est aussi enqueuée automatiquement après une
+connexion OAuth Google Ads réussie (apparition des données dans la minute).
+Types de jobs : `sync_performance_google_ads` / `_meta_ads` / `_amazon_ads`
+(routés par `domains/jobs/handlers.js`, worker `POST /internal/jobs/run`).
+
+> Reporting pré-launch — la page **Rapports** affiche un état "Bientôt disponible"
+> (le backend rapports/tests A/B n'est pas encore construit) ; aucune donnée fictive
+> n'est servie. Les vraies métriques par canal vivent sur la page Performance.

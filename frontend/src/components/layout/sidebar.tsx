@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useSidebar } from "@/components/layout/sidebar-provider";
 import { useAuth } from "@/hooks/use-auth";
@@ -158,7 +159,7 @@ export function Sidebar() {
             gap: 12,
           }}
         >
-          <a
+          <Link
             href={`${localePrefix}/dashboard`}
             onClick={closeMobile}
             style={{
@@ -188,7 +189,7 @@ export function Sidebar() {
                 FeedPlug
               </p>
             )}
-          </a>
+          </Link>
         </div>
 
         <nav
@@ -221,7 +222,7 @@ export function Sidebar() {
                   const isActive = isDashboardItemActive(normalizedPathname, item.href);
 
                   return (
-                    <a
+                    <Link
                       key={item.nameKey}
                       href={`${localePrefix}${item.href}`}
                       onClick={closeMobile}
@@ -304,7 +305,7 @@ export function Sidebar() {
                           {item.badge}
                         </span>
                       )}
-                    </a>
+                    </Link>
                   );
                 })}
               </div>

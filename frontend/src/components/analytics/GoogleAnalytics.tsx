@@ -1,12 +1,14 @@
 "use client";
 
 import Script from "next/script";
+import { usePathname } from "next/navigation";
 import { useState, useCallback } from "react";
 import CookieConsent from "./CookieConsent";
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-KTF5X89N";
 
 export default function GoogleAnalytics() {
+  const pathname = usePathname();
   const [consentGiven, setConsentGiven] = useState(false);
 
   const handleAccept = useCallback(() => {
@@ -16,6 +18,10 @@ export default function GoogleAnalytics() {
   const handleRefuse = useCallback(() => {
     setConsentGiven(false);
   }, []);
+
+  // Pas de GTM ni de bannière cookies dans l'iframe Shopify embarquée
+  // (contexte admin Shopify, consentement géré hors de notre périmètre).
+  if (pathname?.startsWith("/embedded")) return null;
 
   return (
     <>

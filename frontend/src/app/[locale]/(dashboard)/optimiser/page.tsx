@@ -294,6 +294,7 @@ export default function OptimiserPage() {
   const [creatingAbTest, setCreatingAbTest] = useState(false);
   const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [aiUsage, setAiUsage] = useState<{ used: number; softCap: number; percent: number } | null>(null);
 
   const previewMatches = useMemo(() => previewData?.preview.filter(item => item.matches) || [], [previewData]);
@@ -612,6 +613,7 @@ export default function OptimiserPage() {
   const loadPreviewProducts = async () => {
     if (abConfig.products.selectedIds.length === 0) return;
     setLoadingPreview(true);
+    setPreviewError(null);
     try {
       const res = await apiClient.get<{ items: Array<{ id: string; title?: string; description?: string; descriptiontext?: string; brand?: string; price?: string }> }>(`/ingestion/items?ids=${abConfig.products.selectedIds.slice(0, 10).join(',')}`);
       if (res.data?.items) {
@@ -623,12 +625,12 @@ export default function OptimiserPage() {
           price: item.price || ''
         })));
       }
-    } catch {
-      setPreviewProducts([
-        { id: '1', title: 'Air Max 90', description: 'Chaussure de running légère', brand: 'Nike', price: '124€' },
-        { id: '2', title: 'Ultraboost 22', description: 'Chaussure高性能', brand: 'Adidas', price: '180€' },
-        { id: '3', title: 'Classic Leather', description: 'Basket rétro', brand: 'Reebok', price: '89€' },
-      ]);
+    } catch (e) {
+      // C6 — ne JAMAIS afficher de faux produits sur erreur : on remonte une
+      // vraie erreur plutôt que des données fictives trompeuses.
+      console.error('loadPreviewProducts failed:', e);
+      setPreviewProducts([]);
+      setPreviewError("Impossible de charger l'aperçu des produits. Vérifiez les IDs saisis ou réessayez.");
     } finally {
       setLoadingPreview(false);
     }
@@ -1061,6 +1063,13 @@ export default function OptimiserPage() {
                     </div>
                   </div>
 
+                  {/* C6 — erreur de chargement de l'aperçu (jamais de mock) */}
+                  {previewError && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                      {previewError}
+                    </div>
+                  )}
+
                   {/* Preview */}
                   {previewProducts.length > 0 && (
                     <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
@@ -1186,7 +1195,10 @@ function IASuggestionsTab({ feeds, onRuleCreated }: IASuggestionsTabProps) {
       } else {
         setSuggestions(getDefaultSuggestions());
       }
-    } catch {
+    } catch (e) {
+      // C6 — fallback sur des suggestions génériques (pas de fausses données
+      // catalogue : affectedProducts=0), mais on loggue l'échec (plus silencieux).
+      console.error('fetchSuggestions failed:', e);
       setSuggestions(getDefaultSuggestions());
     } finally {
       setLoading(false);

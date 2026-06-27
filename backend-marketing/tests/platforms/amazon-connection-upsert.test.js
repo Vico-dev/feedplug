@@ -9,10 +9,16 @@ const path = require('node:path');
 // /connect où selling_partner_id / refresh_token manque écrase la
 // valeur stockée et casse les pushes suivants.
 //
-// Cf. server-minimal.js, blocs "5e. Callback Amazon OAuth" et
-// "5f. Connexion manuelle (refresh_token)".
+// Cf. routes/platforms.js, blocs "5c. Redirect URI (callback Amazon OAuth)" et
+// "5f. Connexion manuelle (refresh_token)" (extraits de server-minimal.js).
 
-const SERVER_FILE = path.join(__dirname, '..', '..', 'server-minimal.js');
+// Les routes Amazon ont été extraites de server-minimal.js vers routes/platforms.js
+// (refacto strangler, comportement préservé). On scanne les deux fichiers pour
+// rester robuste à l'emplacement exact du code.
+const SOURCE_FILES = [
+  path.join(__dirname, '..', '..', 'server-minimal.js'),
+  path.join(__dirname, '..', '..', 'routes', 'platforms.js'),
+];
 
 function extractAmazonUpdates(source) {
   const updateRegex = /UPDATE "PlatformConnection" SET[\s\S]*?WHERE accountid = \$6::text AND platform = 'amazon'/g;
@@ -20,7 +26,7 @@ function extractAmazonUpdates(source) {
 }
 
 test('les UPDATE PlatformConnection Amazon utilisent COALESCE sur merchantid et refreshtoken', () => {
-  const source = fs.readFileSync(SERVER_FILE, 'utf8');
+  const source = SOURCE_FILES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   const updates = extractAmazonUpdates(source);
 
   assert.equal(updates.length, 2, 'attendu 2 UPDATE Amazon (callback OAuth + POST /connect)');

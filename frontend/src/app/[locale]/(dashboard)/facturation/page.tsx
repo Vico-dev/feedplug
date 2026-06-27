@@ -4,17 +4,19 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { 
-  AlertTriangle, 
-  CheckCircle, 
-  CreditCard, 
-  Download, 
-  ExternalLink, 
-  Mail, 
+import {
+  AlertTriangle,
+  CheckCircle,
+  CreditCard,
+  Download,
+  ExternalLink,
+  Mail,
   Receipt,
   ShieldCheck,
   Clock,
-  XCircle
+  XCircle,
+  Ban,
+  RefreshCw
 } from "lucide-react";
 import {
   DashboardSection,
@@ -38,6 +40,7 @@ interface AccountInfo {
 
 interface BillingProfile {
   companyName: string | null;
+  vatNumber?: string | null;
   addressLine1: string | null;
   postalCode: string | null;
   city: string | null;
@@ -52,6 +55,9 @@ interface BillingInvoice {
   currency: string | null;
   amountDueCents: number | null;
   amountPaidCents: number | null;
+  subtotalCents?: number | null;
+  taxCents?: number | null;
+  totalCents?: number | null;
   createdAt: string | null;
   hostedInvoiceUrl: string | null;
   invoicePdf: string | null;
@@ -60,6 +66,9 @@ interface BillingInvoice {
 interface BillingSubscription {
   id: string;
   status: string | null;
+  cancelAtPeriodEnd?: boolean;
+  cancelAt?: string | null;
+  canceledAt?: string | null;
   currentPeriodEnd: string | null;
   amountCents: number | null;
   currency: string | null;
@@ -67,6 +76,14 @@ interface BillingSubscription {
     brand: string | null;
     last4: string | null;
   } | null;
+}
+
+interface BillingEvent {
+  id: string;
+  date: string | null;
+  title: string;
+  description: string;
+  tone: "success" | "warning" | "danger" | "neutral";
 }
 
 interface BillingSummaryResponse {
@@ -81,10 +98,15 @@ interface BillingSummaryResponse {
   subscription: BillingSubscription | null;
   invoices: BillingInvoice[];
   upcomingInvoice: {
+    currency?: string | null;
     amountDueCents: number | null;
+    subtotalCents?: number | null;
+    taxCents?: number | null;
+    totalCents?: number | null;
     dueDate: string | null;
     periodEnd: string | null;
   } | null;
+  events?: BillingEvent[];
 }
 
 function formatDate(dateValue: string | null | undefined) {
@@ -104,12 +126,15 @@ function formatAmount(amountCents: number | null | undefined, currency = "EUR") 
   }).format(amountCents / 100);
 }
 
-function formatInvoiceStatus(status: string | null | undefined) {
+function formatInvoiceStatus(
+  status: string | null | undefined,
+  t: (key: string) => string
+) {
   switch (String(status || "").toLowerCase()) {
-    case "paid": return "Payée";
-    case "open": return "Ouverte";
-    case "draft": return "Brouillon";
-    case "void": return "Annulée";
+    case "paid": return t("facturation.invoiceStatusPaid");
+    case "open": return t("facturation.invoiceStatusOpen");
+    case "draft": return t("facturation.invoiceStatusDraft");
+    case "void": return t("facturation.invoiceStatusVoid");
     default: return status || "—";
   }
 }
@@ -181,6 +206,13 @@ export default function FacturationPage() {
   const invoices = billingDetails?.invoices ?? [];
   const upcomingInvoice = billingDetails?.upcomingInvoice;
   const portalAvailable = !!billingDetails?.portalAvailable;
+  const events = billingDetails?.events ?? [];
+  const subStatus = String(subscription?.status || "").toLowerCase();
+  // Annulation : soit programmée à échéance (cancel_at_period_end), soit déjà actée.
+  const isCancelScheduled = !!subscription?.cancelAtPeriodEnd && subStatus !== "canceled";
+  const isCanceled = subStatus === "canceled" || (!!subscription?.canceledAt && subStatus !== "active" && !isCancelScheduled);
+  const cancelEffectiveDate = subscription?.cancelAt || subscription?.currentPeriodEnd || null;
+  const showRetry = portalAvailable && (billingStatus === "payment_failed" || billingStatus === "pending");
 
   const handleOpenPortal = async () => {
     setPortalError("");
@@ -194,7 +226,7 @@ export default function FacturationPage() {
         window.location.href = response.data.url;
       }
     } catch {
-      setPortalError("Impossible d'ouvrir le portail Stripe.");
+      setPortalError(t("facturation.portalError"));
     } finally {
       setPortalLoading(false);
     }
@@ -203,14 +235,14 @@ export default function FacturationPage() {
   if (loading) {
     return (
       <PageLayout>
-        <PageLoading message="Chargement..." style={{ minHeight: "40vh" }} />
+        <PageLoading message={t("facturation.loading")} style={{ minHeight: "40vh" }} />
       </PageLayout>
     );
   }
 
   return (
     <PageLayout>
-      <PageHeader title={t("facturation.title")} subtitle="Gérez votre abonnement et vos factures" />
+      <PageHeader title={t("facturation.title")} subtitle={t("facturation.subtitle")} />
 
       {/* Status Banner */}
       <div style={{
@@ -235,22 +267,44 @@ export default function FacturationPage() {
             )}
             <div>
               <div style={{ fontSize: 20, fontWeight: 600 }}>
-                {billingStatus === "active" && "Votre abonnement est actif"}
-                {billingStatus === "pending" && "Paiement en attente"}
-                {billingStatus === "payment_failed" && "Paiement à régulariser"}
-                {!["active", "pending", "payment_failed"].includes(billingStatus) && "Gérez votre abonnement"}
+                {billingStatus === "active" && t("facturation.subscriptionActive")}
+                {billingStatus === "pending" && t("facturation.paymentPending")}
+                {billingStatus === "payment_failed" && t("facturation.paymentFailed")}
+                {!["active", "pending", "payment_failed"].includes(billingStatus) && t("facturation.manageSubscription")}
               </div>
               <div style={{ fontSize: 14, opacity: 0.9, marginTop: 4 }}>
-                {billingStatus === "active" && "Accès complet à FeedPlug"}
-                {billingStatus === "pending" && "Votre paiement est en cours de validation"}
-                {billingStatus === "payment_failed" && "Régularisez pour conserver l'accès"}
-                {!["active", "pending", "payment_failed"].includes(billingStatus) && user?.trialEndsAt 
-                  ? `Essai gratuit jusqu'au ${formatDate(user.trialEndsAt)}`
-                  : "Choisissez votre plan pour commencer"}
+                {billingStatus === "active" && t("facturation.subscriptionActiveDesc")}
+                {billingStatus === "pending" && t("facturation.paymentPendingDesc")}
+                {billingStatus === "payment_failed" && t("facturation.paymentFailedDesc")}
+                {!["active", "pending", "payment_failed"].includes(billingStatus) && (user?.trialEndsAt
+                  ? `${t("facturation.choosePlanToStart")} · ${formatDate(user.trialEndsAt)}`
+                  : t("facturation.choosePlanToStart"))}
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {showRetry && (
+              <button
+                onClick={handleOpenPortal}
+                disabled={portalLoading}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "2px solid white",
+                  backgroundColor: "transparent",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: portalLoading ? "wait" : "pointer",
+                }}
+              >
+                <RefreshCw size={16} />
+                {t("facturation.retryPayment")}
+              </button>
+            )}
             {portalAvailable && (
               <button
                 onClick={handleOpenPortal}
@@ -270,7 +324,7 @@ export default function FacturationPage() {
                 }}
               >
                 <CreditCard size={16} />
-                {portalLoading ? "Chargement..." : "Gérer dans Stripe"}
+                {portalLoading ? t("facturation.loading") : t("facturation.manageInStripe")}
               </button>
             )}
             {!portalAvailable && (
@@ -289,13 +343,41 @@ export default function FacturationPage() {
                   cursor: "pointer",
                 }}>
                   <CreditCard size={16} />
-                  {billingStatus === "trial" ? "Choisir un plan" : "Voir les plans"}
+                  {billingStatus === "trial" ? t("facturation.choosePlan") : t("facturation.viewPlans")}
                 </button>
               </Link>
             )}
           </div>
         </div>
       </div>
+
+      {/* Bandeau annulation / fin d'abonnement */}
+      {(isCancelScheduled || isCanceled) && (
+        <div style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 14,
+          padding: "18px 22px",
+          borderRadius: 14,
+          backgroundColor: "var(--warning-bg)",
+          border: "1px solid var(--warning)",
+          marginBottom: 24,
+        }}>
+          <Ban size={22} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--warning)" }}>
+              {t("facturation.canceledBannerTitle")}
+              {isCancelScheduled && cancelEffectiveDate
+                ? ` — ${t("facturation.canceledBannerActiveUntil", { date: formatDate(cancelEffectiveDate) })}`
+                : ""}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+              {isCanceled ? t("facturation.canceledBannerEnded") + " " : ""}
+              {t("facturation.canceledBannerResume")}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div style={{
@@ -306,26 +388,34 @@ export default function FacturationPage() {
       }}>
         <StatCard
           icon={<CreditCard size={18} />}
-          label="Plan"
+          label={t("facturation.statLabelPlan")}
           value={account?.plan || "—"}
           color="var(--accent)"
         />
         <StatCard
           icon={<Receipt size={18} />}
-          label="Prochaine échéance"
+          label={t("facturation.statLabelNextDue")}
           value={subscription?.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : upcomingInvoice?.dueDate ? formatDate(upcomingInvoice.dueDate) : "—"}
-          subvalue={upcomingInvoice?.amountDueCents ? formatAmount(upcomingInvoice.amountDueCents) : undefined}
+          subvalue={
+            upcomingInvoice
+              ? (upcomingInvoice.totalCents != null
+                  ? `${formatAmount(upcomingInvoice.totalCents, upcomingInvoice.currency || "EUR")} ${t("facturation.vatIncluded")}`
+                  : upcomingInvoice.amountDueCents != null
+                    ? formatAmount(upcomingInvoice.amountDueCents)
+                    : undefined)
+              : undefined
+          }
           color="var(--accent)"
         />
         <StatCard
           icon={<CreditCard size={18} />}
-          label="Paiement"
-          value={subscription?.defaultPaymentMethod?.last4 
-            ? `•••• ${subscription.defaultPaymentMethod.last4}` 
-            : subscription?.amountCents 
-              ? formatAmount(subscription.amountCents) 
+          label={t("facturation.statLabelPayment")}
+          value={subscription?.defaultPaymentMethod?.last4
+            ? `•••• ${subscription.defaultPaymentMethod.last4}`
+            : subscription?.amountCents
+              ? `${formatAmount(subscription.amountCents)} ${t("facturation.vatExcluded")}`
               : "—"}
-          subvalue={subscription?.amountCents ? "/ mois" : undefined}
+          subvalue={subscription?.amountCents ? t("facturation.perMonth") : undefined}
           color="var(--success)"
         />
       </div>
@@ -345,8 +435,8 @@ export default function FacturationPage() {
 
       {/* Factures */}
       <DashboardSection
-        title="Dernières factures"
-        description={invoices.length > 0 ? `${invoices.length} facture${invoices.length > 1 ? "s" : ""}` : undefined}
+        title={t("facturation.invoicesTitle")}
+        description={invoices.length > 0 ? t("facturation.invoicesCount", { count: invoices.length }) : undefined}
       >
         {invoices.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -369,11 +459,26 @@ export default function FacturationPage() {
                     {invoice.number || `Facture ${invoice.id.slice(-8)}`}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-                    {formatDate(invoice.createdAt)} · {formatInvoiceStatus(invoice.status)}
+                    {formatDate(invoice.createdAt)} · {formatInvoiceStatus(invoice.status, t)}
                   </div>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>
-                  {formatAmount(invoice.amountPaidCents ?? invoice.amountDueCents, invoice.currency || "EUR")}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>
+                    {formatAmount(
+                      invoice.totalCents ?? invoice.amountPaidCents ?? invoice.amountDueCents,
+                      invoice.currency || "EUR"
+                    )}
+                    {invoice.totalCents != null && (
+                      <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", marginLeft: 4 }}>
+                        {t("facturation.vatIncluded")}
+                      </span>
+                    )}
+                  </div>
+                  {invoice.taxCents != null && invoice.taxCents > 0 && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                      {t("facturation.vatLine", { tax: formatAmount(invoice.taxCents, invoice.currency || "EUR") })}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {invoice.hostedInvoiceUrl && (
@@ -395,7 +500,7 @@ export default function FacturationPage() {
                       }}
                     >
                       <ExternalLink size={14} />
-                      Voir
+                      {t("facturation.invoiceView")}
                     </a>
                   )}
                   {invoice.invoicePdf && (
@@ -417,7 +522,7 @@ export default function FacturationPage() {
                       }}
                     >
                       <Download size={14} />
-                      PDF
+                      {t("facturation.invoicePdf")}
                     </a>
                   )}
                 </div>
@@ -433,14 +538,53 @@ export default function FacturationPage() {
             borderRadius: 12,
           }}>
             <Receipt size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
-            <div>Aucune facture pour le moment</div>
+            <div>{t("facturation.noInvoices")}</div>
           </div>
         )}
       </DashboardSection>
 
+      {/* Timeline des évènements de facturation */}
+      {events.length > 0 && (
+        <DashboardSection title={t("facturation.timelineTitle")}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {events.map((event, index) => {
+              const toneColor =
+                event.tone === "success" ? "var(--success)"
+                : event.tone === "warning" ? "var(--warning)"
+                : event.tone === "danger" ? "var(--danger)"
+                : "var(--accent)";
+              return (
+                <div key={event.id} style={{ display: "flex", gap: 14, position: "relative" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      backgroundColor: toneColor,
+                      flexShrink: 0,
+                      marginTop: 4,
+                    }} />
+                    {index < events.length - 1 && (
+                      <div style={{ width: 2, flex: 1, backgroundColor: "var(--border-subtle)", minHeight: 24 }} />
+                    )}
+                  </div>
+                  <div style={{ paddingBottom: index < events.length - 1 ? 20 : 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{event.title}</span>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{formatDate(event.date)}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{event.description}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DashboardSection>
+      )}
+
       {/* Profil de facturation */}
       {billingDetails?.billing && (
-        <DashboardSection title="Profil de facturation">
+        <DashboardSection title={t("facturation.billingProfileTitle")}>
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
@@ -452,17 +596,23 @@ export default function FacturationPage() {
           }}>
             {billingDetails.billing.companyName && (
               <div>
-                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>Société</div>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>{t("facturation.fieldCompany")}</div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{billingDetails.billing.companyName}</div>
               </div>
             )}
             <div>
-              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>Email</div>
+              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>{t("facturation.fieldEmail")}</div>
               <div style={{ fontSize: 14, fontWeight: 500 }}>{billingDetails.billing.billingEmail || BILLING_EMAIL}</div>
             </div>
+            {billingDetails.billing.vatNumber && (
+              <div>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>{t("facturation.fieldVat")}</div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{billingDetails.billing.vatNumber}</div>
+              </div>
+            )}
             {billingDetails.billing.addressLine1 && (
               <div>
-                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>Adresse</div>
+                <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", marginBottom: 4 }}>{t("facturation.fieldAddress")}</div>
                 <div style={{ fontSize: 14 }}>
                   {billingDetails.billing.addressLine1}
                   {billingDetails.billing.postalCode && `, ${billingDetails.billing.postalCode}`}
@@ -499,8 +649,8 @@ export default function FacturationPage() {
             <Mail size={18} />
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>Question sur votre facture ?</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Notre équipe billing vous répond sous 24h</div>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{t("facturation.contactQuestion")}</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{t("facturation.contactReply")}</div>
           </div>
         </div>
         <a 

@@ -7,6 +7,7 @@ import { NotificationCenter } from "@/components/notifications/notification-cent
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { getLocalePrefixFromPathname } from "@/lib/locale-navigation";
 
 const HEADER_MOBILE_BREAKPOINT = 768;
@@ -260,7 +261,7 @@ export function Header() {
                   { href: "/parametres", label: "Parametres", icon: Settings },
                   { href: "/facturation", label: "Facturation", icon: CreditCard },
                 ].map((item) => (
-                  <a
+                  <Link
                     key={item.href}
                     href={`${localePrefix}${item.href}`}
                     onClick={() => setShowUserMenu(false)}
@@ -279,7 +280,7 @@ export function Header() {
                   >
                     <item.icon style={{ width: 16, height: 16, color: "var(--ink-3)" }} />
                     {item.label}
-                  </a>
+                  </Link>
                 ))}
 
                 <button

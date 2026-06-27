@@ -15,9 +15,20 @@ import {
   ADDON_IA_PRICE_EUR,
   getPriceFromGrid,
   getProductTierLabel,
+  estimateTtc,
   type ProductTier,
   type ChannelCount,
 } from "@/config/pricing-grid-v2";
+
+/** Formate un montant EUR (avec décimales si non entier). */
+function formatEur(amount: number): string {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 const CHOOSE_PLAN_DRAFT_KEY = "feedplug_choose_plan_draft_v1";
 
@@ -100,6 +111,12 @@ export default function ChoosePlanPage() {
   const basePrice = useMemo(() => getPriceFromGrid(productTier, channelCount), [productTier, channelCount]);
   const totalPrice = basePrice != null ? basePrice + (addonIA ? ADDON_IA_PRICE_EUR : 0) : null;
   const isWithinGrid = totalPrice != null;
+  // Estimation TTC indicative selon le pays de facturation (Stripe Tax fait foi).
+  const taxEstimate = useMemo(
+    () => (totalPrice != null ? estimateTtc(totalPrice, billing.country) : null),
+    [totalPrice, billing.country]
+  );
+  const vatPercentLabel = taxEstimate ? `${Math.round(taxEstimate.rate * 100)} %` : "";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -414,9 +431,17 @@ export default function ChoosePlanPage() {
                 <div style={{ fontSize: "28px", fontWeight: "700" }}>
                   {totalPrice} € <span style={{ fontSize: "14px", fontWeight: "400", opacity: 0.9 }}>HT / mois</span>
                 </div>
+                {taxEstimate && (
+                  <div style={{ fontSize: "13px", opacity: 0.9, marginTop: "4px" }}>
+                    Soit {formatEur(taxEstimate.ttcEur)} TTC / mois ({formatEur(taxEstimate.vatEur)} de TVA {vatPercentLabel})
+                  </div>
+                )}
                 <div style={{ fontSize: "13px", opacity: 0.85, marginTop: "4px" }}>
                   Jusqu&apos;à {getProductTierLabel(productTier)} produits · {channelCount} canal{channelCount > 1 ? "aux" : ""}
                   {addonIA && " · Pack IA inclus"}
+                </div>
+                <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "6px" }}>
+                  TVA estimée pour la France. Le montant exact (autoliquidation B2B intra-UE incluse) est calculé par Stripe au paiement.
                 </div>
               </div>
             )}
@@ -511,6 +536,14 @@ export default function ChoosePlanPage() {
                 {totalPrice} € HT / mois — Jusqu&apos;à {getProductTierLabel(productTier)} produits · {channelCount} canal{channelCount > 1 ? "aux" : ""}
                 {addonIA && " · Pack IA"}
               </div>
+              {taxEstimate && (
+                <div style={{ fontSize: "14px", color: "#0a0a0a", marginBottom: "4px" }}>
+                  Soit {formatEur(taxEstimate.ttcEur)} TTC / mois{" "}
+                  <span style={{ color: "var(--ink-3)" }}>
+                    (TVA {vatPercentLabel} estimée — montant exact calculé par Stripe au paiement)
+                  </span>
+                </div>
+              )}
               <div style={{ fontSize: "14px", color: "var(--ink-3)" }}>Paiement sécurisé par carte bancaire ou prélèvement SEPA via Stripe</div>
               <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "8px" }}>
                 En cas de prélèvement SEPA, l&apos;accès reste ouvert pendant 10 jours le temps de confirmer l&apos;encaissement.
