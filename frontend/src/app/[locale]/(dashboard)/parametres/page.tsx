@@ -3,12 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback } from "react";
 import {
-  Settings,
   User,
-  Bell,
   Shield,
   Key,
-  Database,
   MapPin,
   Save,
   Edit,
@@ -16,7 +13,11 @@ import {
   Users,
   Mail,
   UserPlus,
+  AlertTriangle,
+  Trash2,
+  Download,
 } from "lucide-react";
+import { useRouter } from "@/i18n/routing";
 import { StoreLocationsPanel } from "@/components/lia/store-locations-panel";
 import { LocalInventoryPanel } from "@/components/lia/local-inventory-panel";
 import { FeedUrlPanel } from "@/components/lia/feed-url-panel";
@@ -33,7 +34,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api";
 
-type TabId = "profile" | "notifications" | "security" | "integrations" | "billing" | "team" | "stores";
+type TabId = "profile" | "security" | "team" | "stores" | "danger";
 
 interface Account {
   id: string;
@@ -93,7 +94,8 @@ const panelStyle: React.CSSProperties = {
 
 export default function ParametresPage() {
   const t = useTranslations("dashboard");
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [account, setAccount] = useState<Account | null>(null);
   const [users, setUsers] = useState<AccountUser[]>([]);
@@ -118,6 +120,11 @@ export default function ParametresPage() {
   const [changePasswordForm, setChangePasswordForm] = useState({ current: "", new: "", confirm: "" });
   const [changePasswordSending, setChangePasswordSending] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [dangerError, setDangerError] = useState<string | null>(null);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+  const [deleteSending, setDeleteSending] = useState(false);
 
   const loadAccount = useCallback(async () => {
     try {
@@ -291,14 +298,56 @@ export default function ParametresPage() {
     }
   };
 
+  const isOwner = user?.role === "OWNER";
+  const deleteConfirmWord = t("parametres.deleteAccountConfirmWord");
+
+  const handleExportData = async () => {
+    setExporting(true);
+    setDangerError(null);
+    try {
+      const res = await apiClient.get<unknown>("/accounts/export");
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `feedplug-export-${account?.id || "account"}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setDangerError(getErrorMessage(e, t("parametres.exportError")));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmInput.trim() !== deleteConfirmWord) return;
+    setDeleteSending(true);
+    setDangerError(null);
+    try {
+      await apiClient.delete("/accounts");
+      // Le backend a déjà révoqué le token. On nettoie l'auth locale puis on
+      // redirige vers /login (logout() s'en charge ; fallback router au cas où).
+      try {
+        await logout();
+      } catch {
+        router.replace("/login");
+      }
+    } catch (e: unknown) {
+      setDangerError(getErrorMessage(e, t("parametres.deleteAccountError")));
+      setDeleteSending(false);
+    }
+  };
+
   const tabs: { id: TabId; labelKey: string; icon: typeof User }[] = [
     { id: "profile", labelKey: "parametres.tabProfile", icon: User },
-    { id: "notifications", labelKey: "parametres.tabNotifications", icon: Bell },
     { id: "security", labelKey: "parametres.tabSecurity", icon: Shield },
-    { id: "integrations", labelKey: "parametres.tabIntegrations", icon: Database },
-    { id: "billing", labelKey: "parametres.tabBilling", icon: Settings },
     { id: "team", labelKey: "parametres.tabTeam", icon: Users },
     { id: "stores", labelKey: "parametres.tabStores", icon: MapPin },
+    // Onglet « Zone de danger » réservé au propriétaire (suppression de compte).
+    ...(isOwner ? [{ id: "danger" as TabId, labelKey: "parametres.tabDanger", icon: AlertTriangle }] : []),
   ];
   const ROLE_LABELS: Record<string, string> = {
     OWNER: t("parametres.owner"),
@@ -726,9 +775,79 @@ export default function ParametresPage() {
             </div>
           )}
 
-          {(activeTab === "notifications" || activeTab === "integrations" || activeTab === "billing") && (
-            <div style={{ ...panelStyle, padding: "48px", textAlign: "center", color: "var(--ink-3)" }}>
-              <p style={{ margin: 0 }}>Cette section sera bientôt disponible.</p>
+          {activeTab === "danger" && isOwner && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              <div style={panelStyle}>
+                <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#0a0a0a", margin: "0 0 8px 0" }}>
+                  {t("parametres.exportData")}
+                </h2>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 16px 0" }}>
+                  {t("parametres.exportDataDescription")}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExportData}
+                  disabled={exporting}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 16px",
+                    backgroundColor: "transparent",
+                    color: "var(--ink-2)",
+                    border: "1px solid var(--app-border)",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: exporting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Download style={{ width: "16px", height: "16px" }} />
+                  {exporting ? t("parametres.exporting") : t("parametres.exportData")}
+                </button>
+              </div>
+
+              <div style={{ ...panelStyle, border: "1px solid var(--danger)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <AlertTriangle style={{ width: "20px", height: "20px", color: "var(--danger)" }} />
+                  <h2 style={{ fontSize: "18px", fontWeight: "600", color: "var(--danger)", margin: 0 }}>
+                    {t("parametres.dangerZoneTitle")}
+                  </h2>
+                </div>
+                <p style={{ fontSize: "14px", color: "var(--ink-3)", margin: "0 0 4px 0" }}>
+                  {t("parametres.dangerZoneDescription")}
+                </p>
+                <p style={{ fontSize: "14px", color: "var(--ink-2)", margin: "12px 0 16px 0" }}>
+                  {t("parametres.deleteAccountDescription")}
+                </p>
+                {dangerError && (
+                  <p style={{ color: "var(--danger)", fontSize: "13px", margin: "0 0 12px 0" }}>{dangerError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmInput("");
+                    setDangerError(null);
+                    setDeleteAccountOpen(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 16px",
+                    backgroundColor: "var(--danger)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 style={{ width: "16px", height: "16px" }} />
+                  {t("parametres.deleteAccount")}
+                </button>
+              </div>
             </div>
           )}
 
@@ -930,6 +1049,87 @@ export default function ParametresPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Supprimer le compte (double confirmation : taper le mot-clé) */}
+          {deleteAccountOpen && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 50,
+              }}
+              onClick={() => !deleteSending && setDeleteAccountOpen(false)}
+            >
+              <div
+                style={{
+                  backgroundColor: "white",
+                  padding: "24px",
+                  borderRadius: "8px",
+                  maxWidth: "440px",
+                  width: "100%",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                  border: "1px solid var(--danger)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <AlertTriangle style={{ width: "20px", height: "20px", color: "var(--danger)" }} />
+                  <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "600", color: "var(--danger)" }}>
+                    {t("parametres.deleteAccountModalTitle")}
+                  </h3>
+                </div>
+                <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "var(--ink-2)" }}>
+                  {t("parametres.deleteAccountModalBody", { confirmWord: deleteConfirmWord })}
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder={t("parametres.deleteAccountConfirmPlaceholder")}
+                  autoFocus
+                  disabled={deleteSending}
+                  style={baseInputStyle}
+                />
+                {dangerError && (
+                  <p style={{ color: "var(--danger)", fontSize: "13px", margin: "12px 0 0 0" }}>{dangerError}</p>
+                )}
+                <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteAccountOpen(false)}
+                    disabled={deleteSending}
+                    style={{ padding: "8px 16px", border: "1px solid var(--line)", borderRadius: "2px", cursor: "pointer" }}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteSending || deleteConfirmInput.trim() !== deleteConfirmWord}
+                    onClick={handleDeleteAccount}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "8px 16px",
+                      backgroundColor: "var(--danger)",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "2px",
+                      opacity: deleteSending || deleteConfirmInput.trim() !== deleteConfirmWord ? 0.5 : 1,
+                      cursor: deleteSending || deleteConfirmInput.trim() !== deleteConfirmWord ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <Trash2 style={{ width: "16px", height: "16px" }} />
+                    {deleteSending ? t("parametres.deleting") : t("parametres.deleteAccountConfirmButton")}
+                  </button>
+                </div>
               </div>
             </div>
           )}
