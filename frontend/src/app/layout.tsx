@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import { AuthProviderWrapper } from "./auth-provider-wrapper";
 import { ShopifyEmbeddedBridge } from "@/components/shopify/shopify-embedded-bridge";
+import GoogleAnalytics from "@/components/analytics/GoogleAnalytics";
 
 const SHOPIFY_API_KEY = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || "";
 
@@ -99,6 +100,12 @@ export default async function RootLayout({
         <AuthProviderWrapper>
           <Suspense fallback={null}>
             <ShopifyEmbeddedBridge />
+          </Suspense>
+          {/* GTM + bannière cookies montés globalement : couvre tout le funnel
+              (register, choose-plan, dashboard…), pas seulement le marketing.
+              Exclut /embedded via un garde interne. GTM ne charge qu'après consentement. */}
+          <Suspense fallback={null}>
+            <GoogleAnalytics />
           </Suspense>
           {children}
         </AuthProviderWrapper>

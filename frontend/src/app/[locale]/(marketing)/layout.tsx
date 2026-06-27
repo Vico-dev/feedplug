@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { routing } from "@/i18n/routing";
 import { isActiveLocale } from "@/i18n/locales";
 import { seo } from "@/lib/seo";
-import GoogleAnalytics from "@/components/analytics/GoogleAnalytics";
 
 const titles: Record<string, string> = {
   fr: "FeedPlug — Gestion flux produits simple | Google Shopping, Amazon, marketplaces",
@@ -191,7 +190,7 @@ export default async function MarketingLocaleLayout({
   return (
     <>
       <JsonLdHome locale={locale} />
-      <GoogleAnalytics />
+      {/* GoogleAnalytics est désormais monté globalement dans le root layout. */}
       {children}
     </>
   );

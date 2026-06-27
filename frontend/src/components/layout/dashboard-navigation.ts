@@ -44,7 +44,7 @@ export const dashboardNavigation: DashboardNavigationItem[] = [
 
   { nameKey: "sources", href: "/sources", icon: Database, group: "data", description: "Connexions, imports et qualite des donnees source." },
   { nameKey: "catalogue", href: "/catalogue", icon: Package, group: "data", description: "Pilotage du catalogue produit et actions en masse." },
-  { nameKey: "flux", href: "/flux", icon: FileText, badge: "3", group: "data", description: "Parametrage et suivi des flux de diffusion." },
+  { nameKey: "flux", href: "/flux", icon: FileText, group: "data", description: "Parametrage et suivi des flux de diffusion." },
 
   { nameKey: "optimiser", href: "/optimiser", icon: Filter, group: "preparation", description: "Priorisation des correctifs et opportunites de gain." },
 
@@ -56,7 +56,7 @@ export const dashboardNavigation: DashboardNavigationItem[] = [
   { nameKey: "scoringChannels", href: "/scoring-canaux", icon: Sliders, group: "analysis", description: "Comparaison des scores de diffusion par canal." },
 
   { nameKey: "billing", href: "/facturation", icon: CreditCard, group: "account", description: "Abonnement, factures et statut de paiement." },
-  { nameKey: "notifications", href: "/notifications", icon: Bell, badge: "3", group: "account", description: "Alertes produit, diffusion et systeme." },
+  { nameKey: "notifications", href: "/notifications", icon: Bell, group: "account", description: "Alertes produit, diffusion et systeme." },
   { nameKey: "settings", href: "/parametres", icon: Settings, group: "account", description: "Preferences du compte et configuration generale." },
 
   { nameKey: "accounts", href: "/admin/accounts", icon: Building2, adminOnly: true, group: "admin", description: "Administration des comptes clients." },

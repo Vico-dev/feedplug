@@ -52,6 +52,11 @@ function shouldBootstrapAuthSession(pathname: string | null): boolean {
   return typeof firstSegment === 'string' && SESSION_AWARE_SEGMENTS.has(firstSegment);
 }
 
+// C9 — une seule tentative de refresh partagée entre toutes les requêtes 401
+// concurrentes (sinon chaque 401 déclenche un refresh, et la rotation du refresh
+// token invalide les suivants → déconnexion intempestive à l'expiration).
+let inFlightRefresh: Promise<boolean> | null = null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
@@ -60,14 +65,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sur 401, tenter un refresh puis retry (évite déconnexion à l'expiration du token)
   useEffect(() => {
     apiClient.setOn401(async () => {
-      try {
-        await authService.refreshToken();
-        const currentUser = await authService.getCurrentUser(true);
-        if (currentUser) setUser(currentUser);
-        return true;
-      } catch {
-        return false;
+      // Dédup : si un refresh est déjà en vol, toutes les requêtes 401
+      // concurrentes attendent la MÊME promesse au lieu d'en lancer chacune un.
+      if (!inFlightRefresh) {
+        inFlightRefresh = (async () => {
+          try {
+            await authService.refreshToken();
+            const currentUser = await authService.getCurrentUser(true);
+            if (currentUser) setUser(currentUser);
+            return true;
+          } catch {
+            return false;
+          } finally {
+            inFlightRefresh = null;
+          }
+        })();
       }
+      return inFlightRefresh;
     });
   }, []);
 
