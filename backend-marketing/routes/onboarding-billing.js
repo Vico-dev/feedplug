@@ -569,15 +569,16 @@ function registerOnboardingBillingRoutes(app, { getPrisma, getPrismaReady, authe
         line_items: lineItems,
         success_url: successUrl || `${APP_URL}/dashboard?checkout=success`,
         cancel_url: cancelUrl || `${APP_URL}/choose-plan?checkout=cancelled`,
-        // Stripe Tax : calcule et applique automatiquement la TVA (TTC) selon
-        // l'adresse du client et son numéro de TVA (autoliquidation B2B intra-UE).
-        // Requiert l'activation de Stripe Tax dans le dashboard Stripe.
-        automatic_tax: { enabled: true },
-        // Permet au client de saisir/corriger son numéro de TVA pendant le checkout.
-        tax_id_collection: { enabled: true },
-        // automatic_tax exige une adresse client à jour : on autorise Stripe à
-        // mettre à jour name + address sur le customer depuis le formulaire Checkout.
-        customer_update: { address: 'auto', name: 'auto' },
+        // Stripe Tax (TVA/TTC) — GATÉ par l'env STRIPE_TAX_ENABLED. Tant que Stripe
+        // Tax n'est PAS activé dans le dashboard Stripe, on n'envoie PAS automatic_tax
+        // (sinon le checkout casse : "Tax is not active"). OFF (défaut) = comportement
+        // d'avant (HT, sans TVA). Mettre STRIPE_TAX_ENABLED=true UNE FOIS Stripe Tax
+        // activé dans le dashboard → collecte TVA + numéro de TVA + adresse.
+        ...(process.env.STRIPE_TAX_ENABLED === 'true' ? {
+          automatic_tax: { enabled: true },
+          tax_id_collection: { enabled: true },
+          customer_update: { address: 'auto', name: 'auto' },
+        } : {}),
         subscription_data: {
           metadata: subscriptionMetadata,
         },
