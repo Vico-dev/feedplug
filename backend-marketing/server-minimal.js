@@ -6211,6 +6211,13 @@ registerIngestionRoutes(app, {
 // definis plus bas dans run(); a ce point ils sont hoistes (function declarations).
 // La route /api/v1/marketing/audits/:shareToken/platforms/gmc/auth-url (non-platforms) reste
 // dans server-minimal.js -> ordre de matching preserve.
+const { registerComparatorRoutes } = require('./routes/comparator');
+registerComparatorRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  ingestCsvFromUrl,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

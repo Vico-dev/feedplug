@@ -568,6 +568,40 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 			console.warn('⚠️  avg_score_after non mis à jour:', avgErr.message?.substring(0, 80));
 		}
 
+		// Comparateur CSS : réconcilier les offres avec leur produit canonique (ProductGroup).
+		// Gardé par compte « comparator » (env COMPARATOR_ACCOUNT_ID) → no-op pour l'ingestion client.
+		try {
+			const comparatorAccountId = process.env.COMPARATOR_ACCOUNT_ID;
+			if (comparatorAccountId) {
+				const metaRows = await prisma.$queryRawUnsafe(`
+					SELECT f.accountid AS accountid, fs.approvalstatus AS approvalstatus
+					FROM "Feed" f JOIN "FeedSource" fs ON fs.id = f.sourceid
+					WHERE f.id = $1::text
+				`, feed.id);
+				const meta = metaRows?.[0];
+				if (meta && meta.accountid === comparatorAccountId) {
+					if (meta.approvalstatus === 'approved') {
+						const { reconcileFeed } = require('../domains/comparator/matching');
+						const res = await reconcileFeed(prisma, feed.id, comparatorAccountId);
+						console.log(`🔗 Matching comparateur: ${res.matched}/${res.total} offres rattachées à un produit canonique`);
+					} else {
+						// Gating AWIN : source non approuvée (pending/rejected/revoked) → offres masquées.
+						const { detachFeed } = require('../domains/comparator/matching');
+						const det = await detachFeed(prisma, feed.id);
+						console.log(`⛔ Source comparateur non approuvée (${meta.approvalstatus}) — ${det.detached} groupe(s) rafraîchi(s), offres masquées`);
+					}
+
+					// Historique de prix : fige le prix le plus bas par produit/pays pour aujourd'hui (UPSERT idempotent).
+					const { snapshotGroupPrices } = require('../domains/comparator/price-history');
+					const snap = await snapshotGroupPrices(prisma, comparatorAccountId);
+					console.log(`📈 Historique prix comparateur: ${snap.rows} produits snapshotés (${snap.capturedOn})`);
+				}
+			}
+		} catch (matchErr) {
+			console.warn('⚠️  Matching comparateur après ingestion échoué:', matchErr.message);
+			// Ne pas faire échouer l'ingestion si le matching échoue.
+		}
+
 		// Message explicite si tout a été ignoré
 		if (totalInserted + totalUpdated === 0 && totalSkipped > 0 && !diagnostic.skipReasonMessage) {
 			diagnostic.skipReason = 'all_skipped';

@@ -96,6 +96,8 @@ model FeedSource {
   defaultFreq    Frequency     @default(DAILY) @map("defaultfreq")
   status         FeedStatus    @default(ACTIVE)
   lastRunAt      DateTime?     @map("lastrunat")
+  countryCode    String?       @map("countrycode") // pays de livraison du flux (comparateur AWIN)
+  approvalStatus String        @default("pending") @map("approvalstatus") // AWIN : pending|approved|rejected|revoked
   accountId      String        @default("default-account") @map("accountid")
   createdAt      DateTime      @default(now()) @map("createdat")
   updatedAt      DateTime      @updatedAt @map("updatedat")
@@ -177,12 +179,71 @@ model FeedItem {
   condition       String?
   customFields    Json?      @map("customfields")
 
+  // Comparateur CSS : rattachement à un produit canonique (chaque FeedItem = une offre marchand).
+  groupId         String?       @map("groupid")
+  matchStrategy   String?       @map("matchstrategy")   // 'gtin' | 'mpn_brand' | 'fuzzy_title'
+  matchConfidence Int?          @map("matchconfidence") // 0..100
+  group           ProductGroup? @relation(fields: [groupId], references: [id])
+
   revisions       FeedItemRevision[]
 
   @@unique([feedId, originId])
   @@index([feedId])
   @@index([sku])
   @@index([contentHash])
+  @@index([gtin])
+  @@index([groupId])
+}
+
+// Produit canonique du comparateur : regroupe les offres (FeedItem) d'un même produit
+// chez plusieurs marchands. Rattaché au compte interne "comparator".
+model ProductGroup {
+  id              String     @id @default(cuid())
+  accountId       String     @map("accountid")
+  gtin            String?                                // clé de matching forte (NULL si fuzzy)
+  canonicalTitle  String     @map("canonicaltitle")
+  normTitle       String?    @map("normtitle")           // titre normalisé (matching fuzzy symétrique)
+  brand           String?
+  imageUrl        String?    @map("imageurl")
+  category        String?
+  offerCount      Int        @default(0) @map("offercount")
+  createdAt       DateTime   @default(now()) @map("createdat")
+  updatedAt       DateTime   @updatedAt @map("updatedat")
+
+  offers          FeedItem[]
+  countryPrices   ProductGroupCountryPrice[]
+
+  @@unique([accountId, gtin])
+  @@index([accountId])
+}
+
+// Historique du prix le plus bas d'un produit canonique, par pays et par jour.
+// Alimente les signaux « bon plan » du comparateur (au plus bas 90 j, % vs 30 j, sparkline).
+model ProductGroupPriceHistory {
+  groupId     String   @map("groupid")
+  countryCode String   @default("") @map("countrycode")
+  capturedOn  DateTime @map("capturedon") @db.Date
+  lowestPrice Float    @map("lowestprice")
+  currency    String?
+
+  @@id([groupId, countryCode, capturedOn])
+  @@index([groupId, capturedOn])
+}
+
+// Prix le plus bas « live » d'un produit canonique par pays (devises non mélangées).
+// Remplace les scalaires lowestPrice/currency de ProductGroup (multi-pays correct).
+model ProductGroupCountryPrice {
+  groupId     String   @map("groupid")
+  countryCode String   @default("") @map("countrycode")
+  lowestPrice Float    @map("lowestprice")
+  currency    String?
+  offerCount  Int      @default(0) @map("offercount")
+  updatedAt   DateTime @default(now()) @map("updatedat")
+
+  group       ProductGroup @relation(fields: [groupId], references: [id])
+
+  @@id([groupId, countryCode])
+  @@index([groupId])
 }
 
 model IngestionRun {
