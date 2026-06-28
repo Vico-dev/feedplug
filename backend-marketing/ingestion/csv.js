@@ -592,6 +592,11 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 						const { reconcileFeed } = require('../domains/comparator/matching');
 						const res = await reconcileFeed(prisma, feed.id, comparatorAccountId);
 						console.log(`🔗 Matching comparateur: ${res.matched}/${res.total} offres rattachées à un produit canonique`);
+						// Classement taxonomie (catégorie principale) des produits touchés par ce flux.
+						const { categorizeGroups } = require('../domains/comparator/categorization');
+						const gidRows = await prisma.$queryRawUnsafe(`SELECT DISTINCT groupid FROM "FeedItem" WHERE feedid = $1::text AND groupid IS NOT NULL`, feed.id);
+						const cat = await categorizeGroups(prisma, { groupIds: gidRows.map((r) => r.groupid) });
+						console.log(`🏷️  Catégorisation comparateur: ${cat.classified}/${cat.total} produits classés`);
 					} else {
 						// Gating AWIN : source non approuvée (pending/rejected/revoked) → offres masquées.
 						const { detachFeed } = require('../domains/comparator/matching');

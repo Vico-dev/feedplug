@@ -143,6 +143,20 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
     return prisma;
   }
 
+  // GET /api/v1/comparator/categories — taxonomie publique (onboarding intérêts + navigation).
+  app.get('/api/v1/comparator/categories', async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT id, slug, labelfr, labelen, icon FROM "ComparatorCategory" WHERE active = true ORDER BY position ASC`,
+      );
+      res.json({ categories: rows });
+    } catch (e) {
+      console.error('Comparator categories error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
   // GET /api/v1/comparator/products/search?q=&country=FR&brand=&sort=&limit=&offset=
   // Ne renvoie que les produits à >= 2 marchands approuvés dans le pays (conformité Google).
   app.get('/api/v1/comparator/products/search', async (req, res) => {
