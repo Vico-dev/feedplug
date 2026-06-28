@@ -21,6 +21,7 @@ import { useRouter } from "@/i18n/routing";
 import { StoreLocationsPanel } from "@/components/lia/store-locations-panel";
 import { LocalInventoryPanel } from "@/components/lia/local-inventory-panel";
 import { FeedUrlPanel } from "@/components/lia/feed-url-panel";
+import { ComparatorOptInPanel } from "@/components/comparateur/comparator-optin-panel";
 import {
   DashboardStatGrid,
   DashboardStatCard,
@@ -772,6 +773,7 @@ export default function ParametresPage() {
               <StoreLocationsPanel />
               <LocalInventoryPanel />
               <FeedUrlPanel />
+              <ComparatorOptInPanel />
             </div>
           )}
 

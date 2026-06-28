@@ -123,6 +123,37 @@ app.get('/api/v1/account/company-info', authenticateToken, async (req, res) => {
   }
 });
 
+// Consentement comparateur CSS : le client choisit de diffuser (ou non) ses produits
+// dans le comparateur public. Opt-in strict (défaut false) — rien sans accord.
+app.get('/api/v1/account/comparator-optin', authenticateToken, async (req, res) => {
+      const prisma = getPrisma(); const prismaReady = getPrismaReady();
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    const accountId = req.user.accountId || req.accountId;
+    if (!accountId) return res.status(403).json({ message: 'Compte non associé' });
+    const rows = await prisma.$queryRawUnsafe(`SELECT comparatoroptin FROM "Account" WHERE id = $1::text LIMIT 1`, accountId);
+    res.json({ optedIn: rows?.[0]?.comparatoroptin === true });
+  } catch (e) {
+    console.error('comparator-optin get error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
+app.put('/api/v1/account/comparator-optin', authenticateToken, async (req, res) => {
+      const prisma = getPrisma(); const prismaReady = getPrismaReady();
+  try {
+    if (!prismaReady || !prisma) return res.status(503).json({ message: 'Service non disponible' });
+    const accountId = req.user.accountId || req.accountId;
+    if (!accountId) return res.status(403).json({ message: 'Compte non associé' });
+    const optedIn = (req.body && req.body.optedIn) === true;
+    await prisma.$executeRawUnsafe(`UPDATE "Account" SET comparatoroptin = $1::boolean, updatedat = NOW() WHERE id = $2::text`, optedIn, accountId);
+    res.json({ optedIn });
+  } catch (e) {
+    console.error('comparator-optin put error:', e);
+    res.status(500).json({ message: 'Erreur' });
+  }
+});
+
 app.put('/api/v1/account/company-info', authenticateToken, async (req, res) => {
       const prisma = getPrisma(); const prismaReady = getPrismaReady();
   try {
