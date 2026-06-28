@@ -7,6 +7,7 @@ import {
   formatPrice,
   type PriceHistoryPoint,
 } from "@/lib/comparator-api";
+import CountrySelector from "@/components/comparateur/country-selector";
 
 export const revalidate = 600;
 
@@ -95,6 +96,11 @@ export default async function ComparatorProductPage({
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
+      <div className="mb-4 flex items-center justify-between">
+        <a href="/comparateur" className="text-sm text-gray-500 hover:text-gray-900">&larr; Comparateur</a>
+        <CountrySelector country={country} />
+      </div>
 
       <div className="flex items-start gap-5 rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50">

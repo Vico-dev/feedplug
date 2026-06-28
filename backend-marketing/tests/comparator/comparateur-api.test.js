@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseCountry, parsePaging, parseSort, hashIp, SORTS } = require('../../routes/comparateur');
+const {
+  parseCountry, parsePaging, parseSort, hashIp, markBestValue,
+  parseAiJson, pickFallbackRecommendation, SORTS,
+} = require('../../routes/comparateur');
 
 test('parseCountry normalise un ISO-2 ou retombe sur FR', () => {
   assert.equal(parseCountry('gb'), 'GB');
@@ -31,4 +34,37 @@ test('hashIp est déterministe, salé, et ne contient jamais l’IP en clair', (
   assert.equal(h.length, 64);
   assert.ok(!h.includes('1.2.3.4'));
   assert.equal(hashIp(null, 'sel'), null);
+});
+
+test('markBestValue : la moins chère EN STOCK (offres triées par prix)', () => {
+  const r = markBestValue([
+    { price: 100, inStock: false },
+    { price: 110, inStock: true },
+    { price: 120, inStock: true },
+  ]);
+  assert.deepEqual(r.map((o) => o.bestValue), [false, true, false]);
+});
+
+test('markBestValue : si rien en stock, prend la moins chère ; [] -> []', () => {
+  const r = markBestValue([{ price: 50, inStock: false }, { price: 60, inStock: false }]);
+  assert.deepEqual(r.map((o) => o.bestValue), [true, false]);
+  assert.deepEqual(markBestValue([]), []);
+});
+
+test('parseAiJson extrait un objet JSON même entouré de texte ou de fences', () => {
+  assert.deepEqual(parseAiJson('```json\n{"recommendedId":"x","reasoning":"ok"}\n```'), { recommendedId: 'x', reasoning: 'ok' });
+  assert.deepEqual(parseAiJson('Voici la réponse: {"a":1} (fin)'), { a: 1 });
+  assert.equal(parseAiJson('pas de json ici'), null);
+  assert.equal(parseAiJson(''), null);
+  assert.equal(parseAiJson(null), null);
+});
+
+test('pickFallbackRecommendation : moins cher, départage par nb de marchands', () => {
+  const c = [
+    { id: 'a', lowestPrice: 120, merchantCount: 2 },
+    { id: 'b', lowestPrice: 100, merchantCount: 3 },
+    { id: 'c', lowestPrice: 100, merchantCount: 5 },
+  ];
+  assert.equal(pickFallbackRecommendation(c).id, 'c');
+  assert.equal(pickFallbackRecommendation([]), null);
 });

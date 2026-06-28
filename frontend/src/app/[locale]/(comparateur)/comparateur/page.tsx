@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { searchProducts, formatPrice } from "@/lib/comparator-api";
+import CountrySelector from "@/components/comparateur/country-selector";
 
 export const revalidate = 300;
 
@@ -25,7 +26,10 @@ export default async function ComparatorSearchPage({ searchParams }: { searchPar
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="text-xl font-medium text-gray-900">Comparateur de prix</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-medium text-gray-900">Comparateur de prix</h1>
+        <CountrySelector country={country} />
+      </div>
       <p className="mt-1 text-sm text-gray-500">Le meilleur prix de chaque produit, chez plusieurs marchands.</p>
 
       <form action="/comparateur" method="get" className="mt-4 flex gap-2">

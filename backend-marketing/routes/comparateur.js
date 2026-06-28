@@ -50,6 +50,80 @@ function hashIp(ip, salt) {
   return crypto.createHash('sha256').update(String(ip) + (salt || '')).digest('hex');
 }
 
+/**
+ * Marque l'offre « meilleur rapport » : la moins chère EN STOCK (sinon la moins chère).
+ * `offers` est déjà trié par prix croissant. PUR. Ranking v1 ; les critères livraison/
+ * fiabilité s'ajouteront quand le flux les porte.
+ */
+function markBestValue(offers) {
+  if (!Array.isArray(offers) || offers.length === 0) return [];
+  let idx = offers.findIndex((o) => o.inStock);
+  if (idx < 0) idx = 0;
+  return offers.map((o, i) => ({ ...o, bestValue: i === idx }));
+}
+
+/** Recherche de produits canoniques (>= 2 marchands approuvés, prix par pays). Réutilisé par /search et /assist. */
+async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort, limit, offset }) {
+  const rows = await prisma.$queryRawUnsafe(`
+    WITH agg AS (
+      SELECT fi.groupid,
+             min(fi.price) AS lowestprice,
+             count(DISTINCT f.sourceid) AS merchant_count,
+             (array_agg(fi.currency ORDER BY fi.price ASC NULLS LAST) FILTER (WHERE fi.currency IS NOT NULL))[1] AS currency
+      FROM "FeedItem" fi
+      JOIN "Feed" f        ON f.id = fi.feedid
+      JOIN "FeedSource" fs ON fs.id = f.sourceid
+      WHERE f.accountid = $1::text
+        AND fi.groupid IS NOT NULL
+        AND fi.price > 0
+        AND fs.approvalstatus = 'approved'
+        AND COALESCE(fs.countrycode, '') = $2::text
+      GROUP BY fi.groupid
+      HAVING count(DISTINCT f.sourceid) >= 2
+    )
+    SELECT pg.id, pg.canonicaltitle, pg.brand, pg.imageurl,
+           a.lowestprice, a.currency, a.merchant_count::int AS merchant_count,
+           count(*) OVER()::int AS total
+    FROM "ProductGroup" pg
+    JOIN agg a ON a.groupid = pg.id
+    WHERE pg.accountid = $1::text
+      AND ($3::text = '' OR pg.normtitle % $3::text OR lower(pg.canonicaltitle) LIKE '%' || $3::text || '%')
+      AND ($4::text IS NULL OR lower(coalesce(pg.brand, '')) = lower($4::text))
+    ORDER BY
+      CASE WHEN $5 = 'price_asc'  THEN a.lowestprice END ASC  NULLS LAST,
+      CASE WHEN $5 = 'price_desc' THEN a.lowestprice END DESC NULLS LAST,
+      CASE WHEN $5 = 'relevance' AND $3::text <> '' THEN similarity(pg.normtitle, $3::text) END DESC NULLS LAST,
+      pg.updatedat DESC
+    LIMIT $6::int OFFSET $7::int
+  `, accountId, country, qNorm, brand, sort, limit, offset);
+  const total = rows[0]?.total ?? 0;
+  const items = rows.map((r) => ({
+    id: r.id, title: r.canonicaltitle, brand: r.brand, imageUrl: r.imageurl,
+    lowestPrice: r.lowestprice != null ? Number(r.lowestprice) : null,
+    currency: r.currency, merchantCount: r.merchant_count,
+  }));
+  return { items, total };
+}
+
+/** Extrait un objet JSON d'une réponse LLM (gère les fences ```json). PUR. */
+function parseAiJson(text) {
+  if (!text) return null;
+  try {
+    const m = String(text).match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Recommandation déterministe (fallback sans IA) : meilleur compromis prix / nb de marchands. PUR. */
+function pickFallbackRecommendation(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  return [...candidates].sort((a, b) =>
+    (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity) || (b.merchantCount ?? 0) - (a.merchantCount ?? 0)
+  )[0];
+}
+
 function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
   const COMPARATOR_ACCOUNT_ID =
     (typeof process.env.COMPARATOR_ACCOUNT_ID === 'string' && process.env.COMPARATOR_ACCOUNT_ID.trim())
@@ -77,49 +151,7 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       const qNorm = normalizeTitle(req.query.q || '');
       const brand = (req.query.brand && String(req.query.brand).trim()) || null;
 
-      const rows = await prisma.$queryRawUnsafe(`
-        WITH agg AS (
-          SELECT fi.groupid,
-                 min(fi.price) AS lowestprice,
-                 count(DISTINCT f.sourceid) AS merchant_count,
-                 (array_agg(fi.currency ORDER BY fi.price ASC NULLS LAST) FILTER (WHERE fi.currency IS NOT NULL))[1] AS currency
-          FROM "FeedItem" fi
-          JOIN "Feed" f        ON f.id = fi.feedid
-          JOIN "FeedSource" fs ON fs.id = f.sourceid
-          WHERE f.accountid = $1::text
-            AND fi.groupid IS NOT NULL
-            AND fi.price > 0
-            AND fs.approvalstatus = 'approved'
-            AND COALESCE(fs.countrycode, '') = $2::text
-          GROUP BY fi.groupid
-          HAVING count(DISTINCT f.sourceid) >= 2
-        )
-        SELECT pg.id, pg.canonicaltitle, pg.brand, pg.imageurl,
-               a.lowestprice, a.currency, a.merchant_count::int AS merchant_count,
-               count(*) OVER()::int AS total
-        FROM "ProductGroup" pg
-        JOIN agg a ON a.groupid = pg.id
-        WHERE pg.accountid = $1::text
-          AND ($3::text = '' OR pg.normtitle % $3::text OR lower(pg.canonicaltitle) LIKE '%' || $3::text || '%')
-          AND ($4::text IS NULL OR lower(coalesce(pg.brand, '')) = lower($4::text))
-        ORDER BY
-          CASE WHEN $5 = 'price_asc'  THEN a.lowestprice END ASC  NULLS LAST,
-          CASE WHEN $5 = 'price_desc' THEN a.lowestprice END DESC NULLS LAST,
-          CASE WHEN $5 = 'relevance' AND $3::text <> '' THEN similarity(pg.normtitle, $3::text) END DESC NULLS LAST,
-          pg.updatedat DESC
-        LIMIT $6::int OFFSET $7::int
-      `, COMPARATOR_ACCOUNT_ID, country, qNorm, brand, sort, limit, offset);
-
-      const total = rows[0]?.total ?? 0;
-      const items = rows.map((r) => ({
-        id: r.id,
-        title: r.canonicaltitle,
-        brand: r.brand,
-        imageUrl: r.imageurl,
-        lowestPrice: r.lowestprice != null ? Number(r.lowestprice) : null,
-        currency: r.currency,
-        merchantCount: r.merchant_count,
-      }));
+      const { items, total } = await runProductSearch(prisma, COMPARATOR_ACCOUNT_ID, { country, qNorm, brand, sort, limit, offset });
       res.json({ items, total, limit, offset, country });
     } catch (e) {
       console.error('comparator search error:', e);
@@ -154,15 +186,14 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       `, req.params.id, COMPARATOR_ACCOUNT_ID, country);
 
       const signals = await getPriceSignals(prisma, req.params.id, country);
-      const mappedOffers = offers.map((o, i) => ({
+      const mappedOffers = markBestValue(offers.map((o) => ({
         offerId: o.offerid,
         merchant: o.merchant,
         price: o.price != null ? Number(o.price) : null,
         currency: o.currency,
         inStock: o.inventory == null || Number(o.inventory) > 0,
         visitUrl: `/api/v1/comparator/visit/${o.offerid}?country=${country}`,
-        bestValue: i === 0, // v1 : l'offre la moins chère ; ranking multi-critères à venir
-      }));
+      })));
 
       res.json({
         product: {
@@ -234,6 +265,60 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       res.status(500).json({ message: 'Erreur redirection' });
     }
   });
+
+  // POST /api/v1/comparator/assist — choix assisté « vecteur de choix ».
+  // IA Gemini si GEMINI_API_KEY, sinon fallback déterministe (meilleur rapport).
+  app.post('/api/v1/comparator/assist', async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const country = parseCountry(req.body && req.body.country);
+      const query = ((req.body && req.body.query) || '').toString().trim().slice(0, 200);
+      if (!query) return res.status(400).json({ message: 'query requis' });
+
+      const { items: candidates } = await runProductSearch(prisma, COMPARATOR_ACCOUNT_ID, {
+        country, qNorm: normalizeTitle(query), brand: null, sort: 'relevance', limit: 6, offset: 0,
+      });
+      if (candidates.length === 0) {
+        return res.json({ recommendation: null, candidates: [], reasoning: 'Aucun produit ne correspond à ta recherche.', source: 'none' });
+      }
+
+      let recId = null;
+      let reasoning = null;
+      let source = 'rule';
+
+      if (process.env.GEMINI_API_KEY) {
+        try {
+          const { callAIWithCache } = require('../ai/ai-wrapper');
+          const systemPrompt = "Tu es un assistant d'achat neutre. Choisis UN produit de la liste selon le besoin, sur le rapport qualité/prix et la disponibilité. Réponds en JSON STRICT : {\"recommendedId\":\"<id>\",\"reasoning\":\"<1 phrase en français>\"}.";
+          const userPrompt = `Besoin: ${query}\nPays: ${country}\nProduits:\n` +
+            candidates.map((c) => `- id=${c.id} | ${c.title} | dès ${c.lowestPrice} ${c.currency || ''} | ${c.merchantCount} marchands`).join('\n');
+          const ai = await callAIWithCache(prisma, 'comparator_assist',
+            { query, country, ids: candidates.map((c) => c.id) }, systemPrompt, userPrompt, null);
+          const parsed = parseAiJson(ai && ai.text);
+          if (parsed && candidates.some((c) => c.id === parsed.recommendedId)) {
+            recId = parsed.recommendedId;
+            reasoning = String(parsed.reasoning || '').slice(0, 400);
+            source = 'ai';
+          }
+        } catch (aiErr) {
+          console.warn('assist IA échoué, fallback déterministe:', aiErr.message);
+        }
+      }
+
+      if (!recId) {
+        const fb = pickFallbackRecommendation(candidates);
+        recId = fb.id;
+        reasoning = `Meilleur rapport : ${fb.title} à partir de ${fb.lowestPrice} ${fb.currency || ''} chez ${fb.merchantCount} marchands.`;
+        source = 'rule';
+      }
+
+      const recommendation = candidates.find((c) => c.id === recId) || null;
+      res.json({ recommendation, reasoning, source, candidates });
+    } catch (e) {
+      console.error('comparator assist error:', e);
+      res.status(500).json({ message: 'Erreur assistant' });
+    }
+  });
 }
 
 module.exports = {
@@ -243,5 +328,8 @@ module.exports = {
   parsePaging,
   parseSort,
   hashIp,
+  markBestValue,
+  parseAiJson,
+  pickFallbackRecommendation,
   SORTS,
 };
