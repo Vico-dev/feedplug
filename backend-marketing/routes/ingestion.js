@@ -12,6 +12,17 @@
  * (middlewares d'acces, helpers metier, normalizers, schedulers, services) sont
  * injectees via `deps`. AUCUN changement de comportement.
  */
+
+// Scoring qualite avance — utilise par les handlers de score/audit de catalogue.
+// Fix post-extraction : ces fonctions (scope run() dans server-minimal.js) n'avaient
+// ete ni injectees ni importees -> ReferenceError au runtime sur /ingestion/catalogue/score.
+const {
+  calculateAdvancedQualityScore,
+  updateAdvancedQualityScore,
+  getAdvancedQualityScore,
+  ensureProductScoreHistoryTable,
+} = require('../scoring/quality-advanced');
+
 function registerIngestionRoutes(app, {
   getPrisma,
   getPrismaReady,
