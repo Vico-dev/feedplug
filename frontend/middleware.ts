@@ -223,6 +223,17 @@ export function middleware(request: NextRequest) {
       pathnameWithoutLocale.startsWith('/oauth/');
 
     if (isAppAuthRouteWithoutLocale) {
+      // Les pages auth (login/register/onboarding/…) vivent sous app/ HORS du
+      // segment [locale], mais relisent la locale depuis usePathname() pour
+      // construire leurs liens (/en/dashboard, …). Une URL préfixée comme
+      // /en/login n'a donc AUCUNE route physique → 404. On REWRITE (l'URL
+      // visible reste /en/login, la page reste localisée) vers le path non
+      // préfixé pour servir app/login/page.tsx. Sans préfixe (fr), next() suffit.
+      if (localePrefix) {
+        const url = request.nextUrl.clone();
+        url.pathname = pathnameWithoutLocale;
+        return applyFrameHeaders(NextResponse.rewrite(url), false);
+      }
       return applyFrameHeaders(NextResponse.next(), false);
     }
 
