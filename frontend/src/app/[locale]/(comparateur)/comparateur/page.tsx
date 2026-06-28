@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { searchProducts, formatPrice } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
+import AssistPanel from "@/components/comparateur/assist-panel";
 
 export const revalidate = 300;
 
@@ -45,6 +46,8 @@ export default async function ComparatorSearchPage({ searchParams }: { searchPar
           Rechercher
         </button>
       </form>
+
+      <AssistPanel country={country} />
 
       {q && (
         <p className="mt-4 text-sm text-gray-500">
