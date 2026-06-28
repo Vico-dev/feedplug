@@ -580,13 +580,15 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 			const comparatorAccountId = process.env.COMPARATOR_ACCOUNT_ID;
 			if (comparatorAccountId) {
 				const metaRows = await prisma.$queryRawUnsafe(`
-					SELECT f.accountid AS accountid, fs.approvalstatus AS approvalstatus
-					FROM "Feed" f JOIN "FeedSource" fs ON fs.id = f.sourceid
+					SELECT f.accountid AS accountid, fs.approvalstatus AS approvalstatus, a.comparatoroptin AS optin
+					FROM "Feed" f JOIN "FeedSource" fs ON fs.id = f.sourceid JOIN "Account" a ON a.id = f.accountid
 					WHERE f.id = $1::text
 				`, feed.id);
 				const meta = metaRows?.[0];
-				if (meta && meta.accountid === comparatorAccountId) {
-					if (meta.approvalstatus === 'approved') {
+					const isComparator = meta && meta.accountid === comparatorAccountId;
+					const isOptedInClient = meta && meta.optin === true && !isComparator;
+				if (isComparator || isOptedInClient) {
+					if (isOptedInClient || (isComparator && meta.approvalstatus === 'approved')) {
 						const { reconcileFeed } = require('../domains/comparator/matching');
 						const res = await reconcileFeed(prisma, feed.id, comparatorAccountId);
 						console.log(`🔗 Matching comparateur: ${res.matched}/${res.total} offres rattachées à un produit canonique`);

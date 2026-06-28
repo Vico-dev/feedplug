@@ -73,10 +73,10 @@ async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort
       FROM "FeedItem" fi
       JOIN "Feed" f        ON f.id = fi.feedid
       JOIN "FeedSource" fs ON fs.id = f.sourceid
-      WHERE f.accountid = $1::text
-        AND fi.groupid IS NOT NULL
+      JOIN "Account" a     ON a.id = f.accountid
+      WHERE fi.groupid IS NOT NULL
         AND fi.price > 0
-        AND fs.approvalstatus = 'approved'
+        AND ((f.accountid = $1::text AND fs.approvalstatus = 'approved') OR a.comparatoroptin = true)
         AND COALESCE(fs.countrycode, '') = $2::text
       GROUP BY fi.groupid
       HAVING count(DISTINCT COALESCE(fi.customfields->>'merchant_id', f.sourceid)) >= $8::int
@@ -176,14 +176,14 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
 
       const offers = await prisma.$queryRawUnsafe(`
         SELECT fi.id AS offerid, fi.price, fi.currency, fi.inventory,
-               fs.id AS sourceid, COALESCE(fi.customfields->>'merchant_name', fs.name, fs.id) AS merchant, fs.countrycode
+               fs.id AS sourceid, COALESCE(fi.customfields->>'merchant_name', a.companyname, fs.name, fs.id) AS merchant, fs.countrycode
         FROM "FeedItem" fi
         JOIN "Feed" f        ON f.id = fi.feedid
         JOIN "FeedSource" fs ON fs.id = f.sourceid
+        JOIN "Account" a     ON a.id = f.accountid
         WHERE fi.groupid = $1::text
-          AND f.accountid = $2::text
           AND fi.price > 0
-          AND fs.approvalstatus = 'approved'
+          AND ((f.accountid = $2::text AND fs.approvalstatus = 'approved') OR a.comparatoroptin = true)
           AND COALESCE(fs.countrycode, '') = $3::text
         ORDER BY fi.price ASC NULLS LAST
       `, req.params.id, COMPARATOR_ACCOUNT_ID, country);
@@ -243,7 +243,8 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
         FROM "FeedItem" fi
         JOIN "Feed" f        ON f.id = fi.feedid
         JOIN "FeedSource" fs ON fs.id = f.sourceid
-        WHERE fi.id = $1::text AND f.accountid = $2::text AND fs.approvalstatus = 'approved'
+        JOIN "Account" a     ON a.id = f.accountid
+        WHERE fi.id = $1::text AND ((f.accountid = $2::text AND fs.approvalstatus = 'approved') OR a.comparatoroptin = true)
         LIMIT 1
       `, req.params.offerId, COMPARATOR_ACCOUNT_ID);
       const offer = rows[0];

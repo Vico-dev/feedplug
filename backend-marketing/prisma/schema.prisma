@@ -306,6 +306,7 @@ model Account {
   billingStatus String?  @map("billingstatus")
   paymentGraceUntil DateTime? @map("paymentgraceuntil")
   addonIA      Boolean   @default(false) @map("addonia")
+  comparatorOptIn Boolean @default(false) @map("comparatoroptin") // consentement : diffuser ses produits dans le comparateur CSS
   maxChannels  Int?      @default(5) @map("max_channels") @db.SmallInt
   companyName  String?   @map("companyname")
   phoneE164    String?   @map("phonee164")

@@ -84,7 +84,8 @@ async function snapshotGroupPrices(prisma, accountId, opts = {}) {
     FROM "FeedItem" fi
     JOIN "Feed" f ON f.id = fi.feedid
     JOIN "FeedSource" fs ON fs.id = f.sourceid
-    WHERE f.accountid = $1::text
+    JOIN "Account" a ON a.id = f.accountid
+    WHERE (f.accountid = $1::text OR a.comparatoroptin = true)
       AND fi.groupid IS NOT NULL
       AND fi.price > 0
     GROUP BY fi.groupid, COALESCE(fs.countrycode, '')
