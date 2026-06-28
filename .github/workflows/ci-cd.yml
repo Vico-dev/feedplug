@@ -84,6 +84,12 @@ jobs:
       - name: Check backend syntax
         run: npm run check:syntax
 
+      # Gate no-undef : attrape les symboles non déclarés dans les modules de
+      # routes/domaines extraits (refs runtime dans les handlers, invisibles au
+      # route-inventory). Voir backend-marketing/eslint.no-undef.mjs.
+      - name: Lint backend routes (no-undef)
+        run: npx --yes eslint@9 --no-config-lookup --config eslint.no-undef.mjs "routes/*.js" "domains/*/*.js" "scoring/*.js"
+
       - name: Run backend domain tests
         run: npm run test:domain
 
