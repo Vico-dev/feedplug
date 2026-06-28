@@ -30,10 +30,10 @@ function run(host: string, path: string, query = "") {
 
 describe("rehoming host-routing", () => {
   // ── APEX feedplug.com ─────────────────────────────────────────────────────
-  it("apex / → rewrite interne vers /comparateur (FR)", () => {
+  it("apex / → rewrite interne vers /fr/comparateur (FR : segment locale explicite)", () => {
     const r = run("feedplug.com", "/");
     expect(r.rewrite).toBeTruthy();
-    expect(new URL(r.rewrite!).pathname).toBe("/comparateur");
+    expect(new URL(r.rewrite!).pathname).toBe("/fr/comparateur");
     expect(r.location).toBeFalsy(); // pas de redirect
   });
 
@@ -50,7 +50,7 @@ describe("rehoming host-routing", () => {
   it("apex / préserve la query ?q=&country=", () => {
     const r = run("feedplug.com", "/", "q=acer&country=FR");
     const u = new URL(r.rewrite!);
-    expect(u.pathname).toBe("/comparateur");
+    expect(u.pathname).toBe("/fr/comparateur");
     expect(u.searchParams.get("q")).toBe("acer");
     expect(u.searchParams.get("country")).toBe("FR");
   });

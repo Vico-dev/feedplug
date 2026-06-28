@@ -269,7 +269,11 @@ export function middleware(request: NextRequest) {
     //    (?q=, ?country=, …) via le clone de nextUrl.
     if (pathnameWithoutLocale === '/' && !isAppRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = `${localePrefix}/comparateur`;
+      // Les routes vivent sous app/[locale]/… : le rewrite DOIT porter le segment
+      // de locale explicite (même pour le FR par défaut, non préfixé côté URL),
+      // sinon Next ne résout pas la route et renvoie 404. L'URL affichée reste / (rewrite).
+      const locale = localePrefix ? localePrefix.slice(1) : 'fr';
+      url.pathname = `/${locale}/comparateur`;
       return applyFrameHeaders(NextResponse.rewrite(url), false);
     }
 
