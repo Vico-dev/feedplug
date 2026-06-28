@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
+import { Laptop, Gamepad2, ShoppingBag, Sparkles, Search, ArrowRight } from "lucide-react";
 import { searchProducts, formatPrice, type SearchItem } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
 import AssistPanel from "@/components/comparateur/assist-panel";
@@ -18,12 +19,12 @@ function merchantLabel(count: number): string {
   return count <= 1 ? "1 marchand" : `${count} marchands`;
 }
 
-const POPULAR: { label: string; q: string }[] = [
-  { label: "Acer", q: "acer" },
-  { label: "Ordinateur portable", q: "ordinateur" },
-  { label: "Nintendo Switch", q: "switch" },
-  { label: "Jeux vidéo", q: "jeu" },
-  { label: "Sacs", q: "sac" },
+type Cat = { label: string; q: string; Icon: typeof Laptop };
+const CATEGORIES: Cat[] = [
+  { label: "Informatique", q: "acer", Icon: Laptop },
+  { label: "Jeux vidéo", q: "jeu", Icon: Gamepad2 },
+  { label: "Maroquinerie", q: "sac", Icon: ShoppingBag },
+  { label: "Parfums", q: "parfum", Icon: Sparkles },
 ];
 
 export const metadata: Metadata = {
@@ -43,7 +44,6 @@ const eyebrowStyle: CSSProperties = {
   textTransform: "uppercase",
   color: "var(--ink-3)",
 };
-
 const dotStyle: CSSProperties = {
   width: "7px",
   height: "7px",
@@ -52,12 +52,19 @@ const dotStyle: CSSProperties = {
   boxShadow: "0 0 0 4px var(--accent-bg)",
   display: "inline-block",
 };
-
 const clamp2: CSSProperties = {
   display: "-webkit-box",
   WebkitLineClamp: 2,
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
+};
+const sectionTitle: CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontSize: "clamp(22px, 2.6vw, 28px)",
+  fontWeight: 700,
+  letterSpacing: "-0.03em",
+  color: "var(--ink)",
+  margin: 0,
 };
 
 function ProductCard({ item, country }: { item: SearchItem; country: string }) {
@@ -106,9 +113,6 @@ function ProductCard({ item, country }: { item: SearchItem; country: string }) {
               position: "absolute",
               left: "12px",
               top: "12px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
               padding: "4px 10px",
               borderRadius: "var(--r-pill)",
               background: "var(--success-bg)",
@@ -153,7 +157,6 @@ function ProductCard({ item, country }: { item: SearchItem; country: string }) {
         >
           {item.title}
         </p>
-
         <div style={{ marginTop: "auto", paddingTop: "16px" }}>
           <p style={{ margin: 0, fontSize: "12px", color: "var(--ink-3)" }}>à partir de</p>
           <p
@@ -177,6 +180,47 @@ function ProductCard({ item, country }: { item: SearchItem; country: string }) {
   );
 }
 
+function CategoryTile({ cat, country }: { cat: Cat; country: string }) {
+  const { Icon } = cat;
+  return (
+    <Link
+      href={`/comparateur?q=${encodeURIComponent(cat.q)}&country=${country}`}
+      className="card-hover"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        padding: "18px 20px",
+        background: "var(--surface)",
+        borderRadius: "var(--r-xl)",
+        boxShadow: "var(--sh-xs)",
+        textDecoration: "none",
+        color: "inherit",
+      }}
+    >
+      <span
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "var(--r-lg)",
+          background: "var(--accent-bg)",
+          color: "var(--accent-2)",
+          flexShrink: 0,
+        }}
+      >
+        <Icon style={{ width: "21px", height: "21px" }} aria-hidden="true" />
+      </span>
+      <span style={{ fontFamily: "var(--font-sans)", fontSize: "16px", fontWeight: 600, color: "var(--ink)" }}>
+        {cat.label}
+      </span>
+      <ArrowRight style={{ width: "16px", height: "16px", color: "var(--ink-4)", marginLeft: "auto" }} aria-hidden="true" />
+    </Link>
+  );
+}
+
 export default async function ComparatorSearchPage({
   searchParams,
 }: {
@@ -186,20 +230,32 @@ export default async function ComparatorSearchPage({
   const q = (sp.q || "").trim();
   const country = normCountry(sp.country);
   const sort = sp.sort || "relevance";
+
   const data = q ? await searchProducts({ q, country, sort, limit: 24 }) : null;
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
+  // Page d'accueil : rangées de produits réelles par catégorie (n'affiche que celles qui ont des résultats).
+  const featured = q
+    ? []
+    : (
+        await Promise.all(
+          CATEGORIES.map((c) =>
+            searchProducts({ q: c.q, country, limit: 4 }).then((r) => ({
+              cat: c,
+              items: r?.items ?? [],
+              total: r?.total ?? 0,
+            })),
+          ),
+        )
+      )
+        .filter((r) => r.items.length > 0)
+        .slice(0, 4);
+
   return (
-    <main
-      style={{
-        maxWidth: "1080px",
-        margin: "0 auto",
-        padding: "56px var(--page-padding-x) 80px",
-      }}
-    >
+    <main style={{ maxWidth: "1120px", margin: "0 auto", padding: "0 var(--page-padding-x) 96px" }}>
       {/* Hero */}
-      <header style={{ marginBottom: "44px" }}>
+      <header style={{ paddingTop: "56px", marginBottom: "40px" }}>
         <div
           style={{
             display: "flex",
@@ -220,17 +276,17 @@ export default async function ComparatorSearchPage({
           className="hero-h"
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "clamp(40px, 5vw, 64px)",
+            fontSize: "clamp(40px, 5.4vw, 68px)",
             fontWeight: 700,
             letterSpacing: "-0.035em",
             lineHeight: 0.98,
             color: "var(--ink)",
             margin: "22px 0 0",
-            maxWidth: "720px",
+            maxWidth: "760px",
             textWrap: "balance",
           }}
         >
-          Comparez les prix,{" "}
+          Le bon prix,{" "}
           <em
             style={{
               fontFamily: "var(--font-serif)",
@@ -240,7 +296,7 @@ export default async function ComparatorSearchPage({
               letterSpacing: "-0.02em",
             }}
           >
-            achetez au bon moment.
+            au bon moment.
           </em>
         </h1>
 
@@ -255,17 +311,16 @@ export default async function ComparatorSearchPage({
             maxWidth: "620px",
           }}
         >
-          Des milliers de produits comparés chez plusieurs marchands, avec l&apos;historique des
+          Comparez des milliers de produits chez plusieurs marchands et suivez l&apos;historique des
           prix. Indépendant et gratuit.
         </p>
 
-        {/* Recherche */}
         <form
           action="/comparateur"
           method="get"
           role="search"
           className="hero-f"
-          style={{ maxWidth: "620px", margin: "28px 0 0" }}
+          style={{ maxWidth: "640px", margin: "28px 0 0" }}
         >
           <input type="hidden" name="country" value={country} />
           <div
@@ -281,24 +336,10 @@ export default async function ComparatorSearchPage({
             }}
           >
             <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center" }}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+              <Search
                 aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  left: "14px",
-                  width: "18px",
-                  height: "18px",
-                  color: "var(--ink-4)",
-                  pointerEvents: "none",
-                }}
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
+                style={{ position: "absolute", left: "14px", width: "18px", height: "18px", color: "var(--ink-4)", pointerEvents: "none" }}
+              />
               <input
                 name="q"
                 defaultValue={q}
@@ -322,6 +363,9 @@ export default async function ComparatorSearchPage({
               type="submit"
               className="cta-btn"
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
                 padding: "14px 22px",
                 fontFamily: "var(--font-sans)",
                 fontSize: "15px",
@@ -332,149 +376,128 @@ export default async function ComparatorSearchPage({
               }}
             >
               Rechercher
+              <ArrowRight style={{ width: "15px", height: "15px" }} aria-hidden="true" />
             </button>
           </div>
         </form>
 
-        {/* Recherches populaires */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "8px",
-            margin: "16px 0 0",
-          }}
-        >
-          <span style={{ fontSize: "13px", color: "var(--ink-3)" }}>Populaires&nbsp;:</span>
-          {POPULAR.map((p) => (
-            <Link
-              key={p.q}
-              href={`/comparateur?q=${encodeURIComponent(p.q)}&country=${country}`}
-              style={{
-                padding: "5px 12px",
-                borderRadius: "var(--r-pill)",
-                border: "1px solid var(--line)",
-                background: "var(--surface)",
-                fontSize: "13px",
-                color: "var(--ink-2)",
-                textDecoration: "none",
-              }}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
-
-        <AssistPanel country={country} />
+        {q && <AssistPanel country={country} />}
       </header>
 
-      {/* Compteur résultats */}
+      {/* ───────── Mode recherche ───────── */}
       {q && (
-        <p style={{ margin: "0 0 20px", fontSize: "14px", color: "var(--ink-3)" }}>
-          <span style={{ fontWeight: 600, color: "var(--ink)" }}>{total}</span> résultat
-          {total > 1 ? "s" : ""} pour «&nbsp;{q}&nbsp;»
-        </p>
-      )}
-
-      {items.length > 0 && (
-        <div
-          className="rg4"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "16px",
-          }}
-        >
-          {items.map((it) => (
-            <ProductCard key={it.id} item={it} country={country} />
-          ))}
-        </div>
-      )}
-
-      {/* Recherche sans résultat */}
-      {q && items.length === 0 && (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "64px 24px",
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r-2xl)",
-            boxShadow: "var(--sh-xs)",
-          }}
-        >
-          <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
-            Aucun produit trouvé
+        <>
+          <p style={{ margin: "0 0 20px", fontSize: "14px", color: "var(--ink-3)" }}>
+            <span style={{ fontWeight: 600, color: "var(--ink)" }}>{total}</span> résultat
+            {total > 1 ? "s" : ""} pour «&nbsp;{q}&nbsp;»
           </p>
-          <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--ink-3)" }}>
-            Essayez un autre terme ou une marque pour «&nbsp;{q}&nbsp;».
-          </p>
-        </div>
+
+          {items.length > 0 ? (
+            <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+              {items.map((it) => (
+                <ProductCard key={it.id} item={it} country={country} />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "64px 24px",
+                background: "var(--surface)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-2xl)",
+                boxShadow: "var(--sh-xs)",
+              }}
+            >
+              <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
+                Aucun produit trouvé
+              </p>
+              <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--ink-3)" }}>
+                Essayez un autre terme ou une marque pour «&nbsp;{q}&nbsp;».
+              </p>
+            </div>
+          )}
+        </>
       )}
 
-      {/* État initial : valeur + catégories */}
+      {/* ───────── Page d'accueil ───────── */}
       {!q && (
         <>
-          <div
-            className="rg3"
+          {/* Catégories */}
+          <section style={{ marginBottom: "56px" }}>
+            <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+              {CATEGORIES.map((c) => (
+                <CategoryTile key={c.q} cat={c} country={country} />
+              ))}
+            </div>
+          </section>
+
+          {/* Rangées de produits réelles */}
+          {featured.map(({ cat, items: rowItems, total: rowTotal }) => (
+            <section key={cat.q} style={{ marginBottom: "56px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
+                <h2 style={sectionTitle}>{cat.label}</h2>
+                <Link
+                  href={`/comparateur?q=${encodeURIComponent(cat.q)}&country=${country}`}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: 600, color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}
+                >
+                  Tout voir ({rowTotal}) <ArrowRight style={{ width: "15px", height: "15px" }} aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+                {rowItems.map((it) => (
+                  <ProductCard key={it.id} item={it} country={country} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {/* Comment ça marche */}
+          <section style={{ marginBottom: "56px" }}>
+            <h2 style={{ ...sectionTitle, marginBottom: "24px" }}>Comment ça marche</h2>
+            <div className="rg3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
+              {[
+                { n: "01", t: "Recherchez", s: "Tapez un produit ou une marque. On rassemble les offres de plusieurs marchands." },
+                { n: "02", t: "Comparez", s: "Prix, marchands et historique sur 90 jours, côte à côte, sans tri sponsorisé." },
+                { n: "03", t: "Achetez malin", s: "Partez chez le marchand au meilleur prix, au moment où le prix est bas." },
+              ].map((step) => (
+                <div key={step.n} style={{ padding: "24px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xs)" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 500, color: "var(--accent)", letterSpacing: "0.1em" }}>
+                    {step.n}
+                  </span>
+                  <p style={{ margin: "12px 0 0", fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>
+                    {step.t}
+                  </p>
+                  <p style={{ margin: "8px 0 0", fontSize: "14px", lineHeight: 1.55, color: "var(--ink-3)" }}>{step.s}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Confiance */}
+          <section
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: "1px",
-              background: "var(--line)",
-              border: "1px solid var(--line)",
+              padding: "36px",
+              background: "var(--ink)",
               borderRadius: "var(--r-2xl)",
-              overflow: "hidden",
+              color: "var(--paper)",
             }}
           >
-            {[
-              { t: "Plusieurs marchands", s: "Le même produit comparé d'un marchand à l'autre." },
-              { t: "Historique des prix", s: "Voyez si c'est le bon moment pour acheter." },
-              { t: "Indépendant", s: "Gratuit, sans tri sponsorisé. Vous d'abord." },
-            ].map((f) => (
-              <div key={f.t} style={{ background: "var(--surface)", padding: "24px" }}>
-                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)" }}>
-                  {f.t}
-                </p>
-                <p style={{ margin: "6px 0 0", fontSize: "14px", lineHeight: 1.5, color: "var(--ink-3)" }}>
-                  {f.s}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <p style={{ margin: "36px 0 14px", fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
-            Commencez par une catégorie
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {POPULAR.map((p) => (
-              <Link
-                key={p.q}
-                href={`/comparateur?q=${encodeURIComponent(p.q)}&country=${country}`}
-                className="card-hover"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "12px 18px",
-                  background: "var(--surface)",
-                  borderRadius: "var(--r-lg)",
-                  boxShadow: "var(--sh-xs)",
-                  fontFamily: "var(--font-sans)",
-                  fontSize: "15px",
-                  fontWeight: 500,
-                  color: "var(--ink)",
-                  textDecoration: "none",
-                }}
-              >
-                {p.label}
-                <span aria-hidden="true" style={{ color: "var(--ink-4)" }}>
-                  &rarr;
-                </span>
-              </Link>
-            ))}
-          </div>
+            <div className="rg3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "28px" }}>
+              {[
+                { t: "Plusieurs marchands", s: "Le même produit comparé d'un marchand à l'autre, en un coup d'œil." },
+                { t: "Historique des prix", s: "Voyez si le prix est au plus bas avant d'acheter." },
+                { t: "100% indépendant", s: "Gratuit, sans classement payé. Votre intérêt d'abord." },
+              ].map((f) => (
+                <div key={f.t}>
+                  <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "17px", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--paper)" }}>
+                    {f.t}
+                  </p>
+                  <p style={{ margin: "8px 0 0", fontSize: "14px", lineHeight: 1.55, color: "var(--ink-4)" }}>{f.s}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         </>
       )}
     </main>
