@@ -6224,6 +6224,15 @@ registerComparateurRoutes(app, {
   getPrismaReady: () => prismaReady,
 });
 
+// Auth CONSO du comparateur (magic-link) — population séparée du B2B.
+const { registerComparatorAccountRoutes } = require('./routes/comparator-account');
+const { sendComparatorMagicLinkEmail: sendComparatorMagicLink } = require('./email/email-service');
+registerComparatorAccountRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  sendMagicLinkEmail: sendComparatorMagicLink,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

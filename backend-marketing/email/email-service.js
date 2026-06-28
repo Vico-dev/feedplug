@@ -757,6 +757,41 @@ async function sendPasswordResetEmail(email, resetToken, locale = DEFAULT_EMAIL_
   });
 }
 
+// Magic-link de connexion au COMPARATEUR conso (servi sur feedplug.com → SITE_URL).
+async function sendComparatorMagicLinkEmail(email, token, locale = DEFAULT_EMAIL_LOCALE) {
+  const loc = getEmailLocale(locale);
+  const isEn = loc === 'en';
+  const prefix = loc === 'fr' ? '' : `/${loc}`;
+  const url = `${SITE_URL}${prefix}/compte/verifier?token=${encodeURIComponent(token)}`;
+  const title = isEn ? 'Your sign-in link' : 'Votre lien de connexion';
+  const intro = isEn
+    ? 'Click below to sign in to the price comparator. This link expires in 15 minutes and can be used once.'
+    : 'Cliquez ci-dessous pour vous connecter au comparateur. Ce lien expire dans 15 minutes et ne fonctionne qu’une seule fois.';
+  const cta = isEn ? 'Sign in' : 'Me connecter';
+  const ignore = isEn
+    ? 'If you did not request this, you can safely ignore this email.'
+    : 'Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.';
+
+  const html = baseTemplate(`
+    <h1>${title}</h1>
+    <p>${intro}</p>
+    <p style="margin: 24px 0;">
+      <a href="${escapeHtml(url)}" class="btn">${escapeHtml(cta)}</a>
+    </p>
+    <p style="font-size: 12px; color: #9ca3af;">${escapeHtml(ignore)}</p>
+  `, {
+    locale: loc,
+    previewText: isEn ? 'Your secure sign-in link.' : 'Votre lien de connexion sécurisé.',
+  });
+
+  return dispatchEmail({
+    to: email,
+    subject: title,
+    html,
+    tags: [{ name: 'category', value: 'comparator_magic_link' }],
+  });
+}
+
 async function sendInvitationEmail(email, firstName, inviterName, invitationToken, locale = DEFAULT_EMAIL_LOCALE) {
   const loc = getEmailLocale(locale);
   const isEn = loc === 'en';
@@ -1580,6 +1615,7 @@ module.exports = {
   sendExportCompleteEmail,
   sendErrorEmail,
   sendPasswordResetEmail,
+  sendComparatorMagicLinkEmail,
   sendInvitationEmail,
   sendMarketingNurtureEmail,
   sendMarketingAuditNurtureEmail,
