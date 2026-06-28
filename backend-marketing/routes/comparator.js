@@ -66,11 +66,15 @@ function defaultAwinMapping(overrides) {
     imageUrl: 'merchant_image_url',
     price: 'search_price',
     currency: 'currency',
-    gtin: 'ean',
+    gtin: 'product_GTIN',
     mpn: 'mpn',
     brand: 'brand_name',
     sku: 'merchant_product_id',
     inventory: 'in_stock',
+    // Identité marchand (flux AWIN combiné = N marchands dans un fichier) -> customfields,
+    // sert à compter les marchands par produit dans le comparateur.
+    merchant_id: 'merchant_id',
+    merchant_name: 'merchant_name',
   };
   if (overrides && typeof overrides === 'object') {
     return { ...base, ...overrides };

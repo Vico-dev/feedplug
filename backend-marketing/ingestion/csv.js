@@ -31,7 +31,13 @@ function buildIngestionSnapshot(item, finalCustomFields, priceValue) {
 async function fetchText(url, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
 	const res = await fetchWithTimeout(url, { method: 'GET', timeoutMs });
 	if (!res.ok) throw new Error(`Fetch CSV failed: ${res.status}`);
-	return await res.text();
+	const buf = Buffer.from(await res.arrayBuffer());
+	// Flux gzip (ex. AWIN /compression/gzip/, redirige vers legacydatafeeds) :
+	// décompresser si l'entête magic gzip (1f 8b) est présente. Sinon UTF-8 brut.
+	if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+		return require('zlib').gunzipSync(buf).toString('utf8');
+	}
+	return buf.toString('utf8');
 }
 
 function computeHash(obj) {

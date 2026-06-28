@@ -63,12 +63,12 @@ function markBestValue(offers) {
 }
 
 /** Recherche de produits canoniques (>= 2 marchands approuvés, prix par pays). Réutilisé par /search et /assist. */
-async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort, limit, offset }) {
+async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort, limit, offset, minMerchants = 1 }) {
   const rows = await prisma.$queryRawUnsafe(`
     WITH agg AS (
       SELECT fi.groupid,
              min(fi.price) AS lowestprice,
-             count(DISTINCT f.sourceid) AS merchant_count,
+             count(DISTINCT COALESCE(fi.customfields->>'merchant_id', f.sourceid)) AS merchant_count,
              (array_agg(fi.currency ORDER BY fi.price ASC NULLS LAST) FILTER (WHERE fi.currency IS NOT NULL))[1] AS currency
       FROM "FeedItem" fi
       JOIN "Feed" f        ON f.id = fi.feedid
@@ -79,7 +79,7 @@ async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort
         AND fs.approvalstatus = 'approved'
         AND COALESCE(fs.countrycode, '') = $2::text
       GROUP BY fi.groupid
-      HAVING count(DISTINCT f.sourceid) >= 2
+      HAVING count(DISTINCT COALESCE(fi.customfields->>'merchant_id', f.sourceid)) >= $8::int
     )
     SELECT pg.id, pg.canonicaltitle, pg.brand, pg.imageurl,
            a.lowestprice, a.currency, a.merchant_count::int AS merchant_count,
@@ -95,7 +95,7 @@ async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort
       CASE WHEN $5 = 'relevance' AND $3::text <> '' THEN similarity(pg.normtitle, $3::text) END DESC NULLS LAST,
       pg.updatedat DESC
     LIMIT $6::int OFFSET $7::int
-  `, accountId, country, qNorm, brand, sort, limit, offset);
+  `, accountId, country, qNorm, brand, sort, limit, offset, minMerchants);
   const total = rows[0]?.total ?? 0;
   const items = rows.map((r) => ({
     id: r.id, title: r.canonicaltitle, brand: r.brand, imageUrl: r.imageurl,
@@ -130,6 +130,9 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       ? process.env.COMPARATOR_ACCOUNT_ID.trim()
       : 'comparator';
   const CLICK_SALT = process.env.COMPARATOR_CLICK_SALT || 'feedplug-comparator';
+  // Seuil de marchands par fiche. 1 au lancement (afficher les produits mono-marchand,
+  // le comparateur s'enrichit au fil des marchands) ; passer à 2 pour la conformité Google CSS.
+  const MIN_MERCHANTS = Number(process.env.COMPARATOR_MIN_MERCHANTS) || 1;
 
   function ready(res) {
     const prisma = getPrisma();
@@ -151,7 +154,7 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       const qNorm = normalizeTitle(req.query.q || '');
       const brand = (req.query.brand && String(req.query.brand).trim()) || null;
 
-      const { items, total } = await runProductSearch(prisma, COMPARATOR_ACCOUNT_ID, { country, qNorm, brand, sort, limit, offset });
+      const { items, total } = await runProductSearch(prisma, COMPARATOR_ACCOUNT_ID, { country, qNorm, brand, sort, limit, offset, minMerchants: MIN_MERCHANTS });
       res.json({ items, total, limit, offset, country });
     } catch (e) {
       console.error('comparator search error:', e);
@@ -173,7 +176,7 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
 
       const offers = await prisma.$queryRawUnsafe(`
         SELECT fi.id AS offerid, fi.price, fi.currency, fi.inventory,
-               fs.id AS sourceid, COALESCE(fs.name, fs.id) AS merchant, fs.countrycode
+               fs.id AS sourceid, COALESCE(fi.customfields->>'merchant_name', fs.name, fs.id) AS merchant, fs.countrycode
         FROM "FeedItem" fi
         JOIN "Feed" f        ON f.id = fi.feedid
         JOIN "FeedSource" fs ON fs.id = f.sourceid
@@ -276,7 +279,7 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       if (!query) return res.status(400).json({ message: 'query requis' });
 
       const { items: candidates } = await runProductSearch(prisma, COMPARATOR_ACCOUNT_ID, {
-        country, qNorm: normalizeTitle(query), brand: null, sort: 'relevance', limit: 6, offset: 0,
+        country, qNorm: normalizeTitle(query), brand: null, sort: 'relevance', limit: 6, offset: 0, minMerchants: MIN_MERCHANTS,
       });
       if (candidates.length === 0) {
         return res.json({ recommendation: null, candidates: [], reasoning: 'Aucun produit ne correspond à ta recherche.', source: 'none' });
