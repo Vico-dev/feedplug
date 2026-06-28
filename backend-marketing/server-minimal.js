@@ -6218,6 +6218,12 @@ registerComparatorRoutes(app, {
   ingestCsvFromUrl,
 });
 
+const { registerComparateurRoutes } = require('./routes/comparateur');
+registerComparateurRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

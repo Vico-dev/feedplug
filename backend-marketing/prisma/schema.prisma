@@ -246,6 +246,23 @@ model ProductGroupCountryPrice {
   @@index([groupId])
 }
 
+// Journal des clics sortants du comparateur (liens marchands trackés). ipHash = pas d'IP en clair.
+model ClickEvent {
+  id          String   @id @default(cuid())
+  offerId     String   @map("offerid")
+  groupId     String?  @map("groupid")
+  countryCode String?  @map("countrycode")
+  ipHash      String?  @map("iphash")
+  userAgent   String?  @map("useragent")
+  referer     String?
+  targetUrl   String   @map("targeturl")
+  createdAt   DateTime @default(now()) @map("createdat")
+
+  @@index([offerId])
+  @@index([groupId])
+  @@index([createdAt])
+}
+
 model IngestionRun {
   id            String           @id @default(cuid())
   feed          Feed             @relation(fields: [feedId], references: [id])
