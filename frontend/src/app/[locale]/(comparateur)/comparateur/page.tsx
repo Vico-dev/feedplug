@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { searchProducts, formatPrice, type SearchItem } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
 import AssistPanel from "@/components/comparateur/assist-panel";
@@ -32,74 +32,145 @@ export const metadata: Metadata = {
     "Comparez les prix de milliers de produits chez plusieurs marchands, avec l'historique des prix. Indépendant et gratuit.",
 };
 
-function TrustItem({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-steel-soft text-steel">
-        {icon}
-      </span>
-      <div>
-        <p className="text-fs-14 font-semibold text-ink">{title}</p>
-        <p className="text-fs-13 text-ink-3">{sub}</p>
-      </div>
-    </div>
-  );
-}
+const eyebrowStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "9px",
+  fontFamily: "var(--font-mono)",
+  fontSize: "12px",
+  fontWeight: 500,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "var(--ink-3)",
+};
+
+const dotStyle: CSSProperties = {
+  width: "7px",
+  height: "7px",
+  borderRadius: "999px",
+  backgroundColor: "var(--accent)",
+  boxShadow: "0 0 0 4px var(--accent-bg)",
+  display: "inline-block",
+};
+
+const clamp2: CSSProperties = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
 
 function ProductCard({ item, country }: { item: SearchItem; country: string }) {
   const multi = item.merchantCount > 1;
   return (
     <Link
       href={`/comparateur/produit/${item.id}?country=${country}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition duration-base ease-ds hover:-translate-y-1 hover:border-steel/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel focus-visible:ring-offset-2"
+      className="card-hover"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        background: "var(--surface)",
+        borderRadius: "var(--r-xl)",
+        boxShadow: "var(--sh-sm)",
+        textDecoration: "none",
+        color: "inherit",
+      }}
     >
-      <div className="relative flex h-44 items-center justify-center overflow-hidden bg-paper-2">
+      <div
+        style={{
+          position: "relative",
+          height: "176px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--paper-2)",
+        }}
+      >
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={item.imageUrl}
             alt={item.title}
-            className="h-full w-full object-contain p-4 transition-transform duration-slow ease-ds group-hover:scale-105"
             loading="lazy"
+            style={{ height: "100%", width: "100%", objectFit: "contain", padding: "16px" }}
           />
         ) : (
-          <span className="font-mono text-fs-12 uppercase tracking-wider text-ink-4">
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--ink-4)" }}>
             sans visuel
           </span>
         )}
         {multi && (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-pill bg-success-soft px-2.5 py-1 text-fs-12 font-semibold text-success">
-            <span className="h-1.5 w-1.5 rounded-pill bg-success" />
+          <span
+            style={{
+              position: "absolute",
+              left: "12px",
+              top: "12px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 10px",
+              borderRadius: "var(--r-pill)",
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              fontSize: "12px",
+              fontWeight: 600,
+            }}
+          >
             {item.merchantCount} offres
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col p-4">
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}>
         {item.brand && (
-          <p className="truncate font-mono text-fs-12 uppercase tracking-wider text-ink-4">
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-mono)",
+              fontSize: "12px",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "var(--ink-4)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
             {item.brand}
           </p>
         )}
-        <p className="mt-1.5 line-clamp-2 text-fs-15 font-medium leading-snug text-ink">
+        <p
+          style={{
+            ...clamp2,
+            margin: "6px 0 0",
+            fontFamily: "var(--font-sans)",
+            fontSize: "15px",
+            fontWeight: 500,
+            lineHeight: 1.35,
+            color: "var(--ink)",
+          }}
+        >
           {item.title}
         </p>
 
-        <div className="mt-auto flex items-end justify-between pt-4">
-          <div>
-            <p className="text-fs-12 text-ink-3">à partir de</p>
-            <p className="font-display text-fs-24 font-bold leading-none tracking-tight text-ink">
-              {formatPrice(item.lowestPrice, item.currency)}
-            </p>
-            <p className="mt-1 text-fs-12 text-ink-3">
-              {multi ? `chez ${merchantLabel(item.merchantCount)}` : "Vendu par 1 marchand"}
-            </p>
-          </div>
-          <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-paper-2 text-ink-3 transition duration-base ease-ds group-hover:bg-steel group-hover:text-surface">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </span>
+        <div style={{ marginTop: "auto", paddingTop: "16px" }}>
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--ink-3)" }}>à partir de</p>
+          <p
+            style={{
+              margin: "2px 0 0",
+              fontFamily: "var(--font-display)",
+              fontSize: "24px",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              color: "var(--ink)",
+            }}
+          >
+            {formatPrice(item.lowestPrice, item.currency)}
+          </p>
+          <p style={{ margin: "3px 0 0", fontSize: "12px", color: "var(--ink-3)" }}>
+            {multi ? `chez ${merchantLabel(item.merchantCount)}` : "Vendu par 1 marchand"}
+          </p>
         </div>
       </div>
     </Link>
@@ -120,42 +191,110 @@ export default async function ComparatorSearchPage({
   const total = data?.total ?? 0;
 
   return (
-    <main className="w-full">
-      {/* Hero — bandeau teinté */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-steel-soft to-transparent">
-        <div className="mx-auto w-full max-w-5xl px-5 pb-10 pt-12 sm:px-8 sm:pt-16">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <span className="inline-flex items-center gap-2 rounded-pill border border-steel/20 bg-surface px-3 py-1.5 font-mono text-fs-12 font-medium uppercase tracking-[0.14em] text-steel-hover">
-              <span className="h-1.5 w-1.5 rounded-pill bg-steel" />
-              Comparateur de prix
-            </span>
-            <CountrySelector country={country} />
+    <main
+      style={{
+        maxWidth: "1080px",
+        margin: "0 auto",
+        padding: "56px var(--page-padding-x) 80px",
+      }}
+    >
+      {/* Hero */}
+      <header style={{ marginBottom: "44px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "16px",
+          }}
+        >
+          <div style={eyebrowStyle}>
+            <span style={dotStyle} />
+            Comparateur de prix
           </div>
+          <CountrySelector country={country} />
+        </div>
 
-          <h1 className="mt-5 max-w-2xl font-display text-fs-36 font-bold leading-[1.03] tracking-tight text-ink sm:text-fs-44">
-            Comparez les prix,<br className="hidden sm:block" /> achetez au bon moment.
-          </h1>
-          <p className="mt-4 max-w-xl text-fs-16 leading-relaxed text-ink-2">
-            Des milliers de produits comparés chez plusieurs marchands, avec l&apos;historique des
-            prix. Indépendant et gratuit.
-          </p>
-
-          {/* Barre de recherche */}
-          <form
-            action="/comparateur"
-            method="get"
-            className="mt-7 flex flex-col gap-2.5 sm:flex-row"
-            role="search"
+        <h1
+          className="hero-h"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "clamp(40px, 5vw, 64px)",
+            fontWeight: 700,
+            letterSpacing: "-0.035em",
+            lineHeight: 0.98,
+            color: "var(--ink)",
+            margin: "22px 0 0",
+            maxWidth: "720px",
+            textWrap: "balance",
+          }}
+        >
+          Comparez les prix,{" "}
+          <em
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontStyle: "italic",
+              fontWeight: 400,
+              color: "var(--ink-2)",
+              letterSpacing: "-0.02em",
+            }}
           >
-            <input type="hidden" name="country" value={country} />
-            <div className="relative flex-1">
+            achetez au bon moment.
+          </em>
+        </h1>
+
+        <p
+          className="hero-p"
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "19px",
+            lineHeight: 1.55,
+            color: "var(--ink-2)",
+            margin: "20px 0 0",
+            maxWidth: "620px",
+          }}
+        >
+          Des milliers de produits comparés chez plusieurs marchands, avec l&apos;historique des
+          prix. Indépendant et gratuit.
+        </p>
+
+        {/* Recherche */}
+        <form
+          action="/comparateur"
+          method="get"
+          role="search"
+          className="hero-f"
+          style={{ maxWidth: "620px", margin: "28px 0 0" }}
+        >
+          <input type="hidden" name="country" value={country} />
+          <div
+            className="rform"
+            style={{
+              display: "flex",
+              gap: "8px",
+              padding: "6px",
+              border: "1px solid var(--line)",
+              background: "var(--surface)",
+              borderRadius: "var(--r-xl)",
+              boxShadow: "var(--sh-sm)",
+            }}
+          >
+            <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center" }}>
               <svg
-                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-4"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  left: "14px",
+                  width: "18px",
+                  height: "18px",
+                  color: "var(--ink-4)",
+                  pointerEvents: "none",
+                }}
               >
                 <circle cx="11" cy="11" r="7" />
                 <path d="m21 21-4.3-4.3" />
@@ -165,123 +304,179 @@ export default async function ComparatorSearchPage({
                 defaultValue={q}
                 placeholder="Rechercher un produit, une marque…"
                 aria-label="Rechercher un produit"
-                className="h-14 w-full rounded-xl border border-line bg-surface pl-12 pr-4 text-fs-16 text-ink shadow-sm outline-none transition duration-base ease-ds placeholder:text-ink-4 focus:border-steel focus:ring-4 focus:ring-steel/15"
+                className="input-field"
+                style={{
+                  flex: 1,
+                  padding: "14px 16px 14px 42px",
+                  border: "none",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "16px",
+                  outline: "none",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  borderRadius: "var(--r-md)",
+                }}
               />
             </div>
             <button
               type="submit"
-              className="inline-flex h-14 items-center justify-center rounded-xl bg-ink px-7 text-fs-16 font-semibold text-paper shadow-sm transition duration-base ease-ds hover:bg-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              className="cta-btn"
+              style={{
+                padding: "14px 22px",
+                fontFamily: "var(--font-sans)",
+                fontSize: "15px",
+                fontWeight: 600,
+                borderRadius: "var(--r-md)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
             >
               Rechercher
             </button>
-          </form>
+          </div>
+        </form>
 
-          {/* Recherches populaires */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-fs-13 text-ink-3">Populaires&nbsp;:</span>
+        {/* Recherches populaires */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "8px",
+            margin: "16px 0 0",
+          }}
+        >
+          <span style={{ fontSize: "13px", color: "var(--ink-3)" }}>Populaires&nbsp;:</span>
+          {POPULAR.map((p) => (
+            <Link
+              key={p.q}
+              href={`/comparateur?q=${encodeURIComponent(p.q)}&country=${country}`}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "var(--r-pill)",
+                border: "1px solid var(--line)",
+                background: "var(--surface)",
+                fontSize: "13px",
+                color: "var(--ink-2)",
+                textDecoration: "none",
+              }}
+            >
+              {p.label}
+            </Link>
+          ))}
+        </div>
+
+        <AssistPanel country={country} />
+      </header>
+
+      {/* Compteur résultats */}
+      {q && (
+        <p style={{ margin: "0 0 20px", fontSize: "14px", color: "var(--ink-3)" }}>
+          <span style={{ fontWeight: 600, color: "var(--ink)" }}>{total}</span> résultat
+          {total > 1 ? "s" : ""} pour «&nbsp;{q}&nbsp;»
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <div
+          className="rg4"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {items.map((it) => (
+            <ProductCard key={it.id} item={it} country={country} />
+          ))}
+        </div>
+      )}
+
+      {/* Recherche sans résultat */}
+      {q && items.length === 0 && (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "64px 24px",
+            background: "var(--surface)",
+            border: "1px solid var(--line)",
+            borderRadius: "var(--r-2xl)",
+            boxShadow: "var(--sh-xs)",
+          }}
+        >
+          <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
+            Aucun produit trouvé
+          </p>
+          <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--ink-3)" }}>
+            Essayez un autre terme ou une marque pour «&nbsp;{q}&nbsp;».
+          </p>
+        </div>
+      )}
+
+      {/* État initial : valeur + catégories */}
+      {!q && (
+        <>
+          <div
+            className="rg3"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "1px",
+              background: "var(--line)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--r-2xl)",
+              overflow: "hidden",
+            }}
+          >
+            {[
+              { t: "Plusieurs marchands", s: "Le même produit comparé d'un marchand à l'autre." },
+              { t: "Historique des prix", s: "Voyez si c'est le bon moment pour acheter." },
+              { t: "Indépendant", s: "Gratuit, sans tri sponsorisé. Vous d'abord." },
+            ].map((f) => (
+              <div key={f.t} style={{ background: "var(--surface)", padding: "24px" }}>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--ink)" }}>
+                  {f.t}
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: "14px", lineHeight: 1.5, color: "var(--ink-3)" }}>
+                  {f.s}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p style={{ margin: "36px 0 14px", fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
+            Commencez par une catégorie
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
             {POPULAR.map((p) => (
               <Link
                 key={p.q}
                 href={`/comparateur?q=${encodeURIComponent(p.q)}&country=${country}`}
-                className="rounded-pill border border-line bg-surface px-3 py-1 text-fs-13 text-ink-2 transition duration-base ease-ds hover:border-steel/40 hover:bg-steel-soft hover:text-steel-hover"
+                className="card-hover"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "12px 18px",
+                  background: "var(--surface)",
+                  borderRadius: "var(--r-lg)",
+                  boxShadow: "var(--sh-xs)",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "15px",
+                  fontWeight: 500,
+                  color: "var(--ink)",
+                  textDecoration: "none",
+                }}
               >
                 {p.label}
+                <span aria-hidden="true" style={{ color: "var(--ink-4)" }}>
+                  &rarr;
+                </span>
               </Link>
             ))}
           </div>
-        </div>
-      </section>
-
-      <div className="mx-auto w-full max-w-5xl px-5 sm:px-8">
-        <AssistPanel country={country} />
-
-        {/* Résultats */}
-        {q && (
-          <p className="mb-5 mt-8 text-fs-14 text-ink-3">
-            <span className="font-semibold text-ink">{total}</span> résultat
-            {total > 1 ? "s" : ""} pour «&nbsp;{q}&nbsp;»
-          </p>
-        )}
-
-        {items.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 pb-4 sm:grid-cols-3 lg:grid-cols-4">
-            {items.map((it) => (
-              <ProductCard key={it.id} item={it} country={country} />
-            ))}
-          </div>
-        )}
-
-        {/* État vide : recherche sans résultat */}
-        {q && items.length === 0 && (
-          <div className="rounded-2xl border border-line bg-surface px-6 py-16 text-center shadow-xs">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-pill bg-paper-2 text-ink-4">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-            </div>
-            <p className="font-display text-fs-18 font-semibold text-ink">Aucun produit trouvé</p>
-            <p className="mt-1 text-fs-14 text-ink-3">
-              Essayez un autre terme ou une marque pour «&nbsp;{q}&nbsp;».
-            </p>
-          </div>
-        )}
-
-        {/* État initial : pas de recherche → valeur + entrées populaires */}
-        {!q && (
-          <>
-            <div className="mt-10 grid gap-6 rounded-2xl border border-line bg-surface p-6 shadow-xs sm:grid-cols-3 sm:p-8">
-              <TrustItem
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-                  </svg>
-                }
-                title="Plusieurs marchands"
-                sub="Le même produit comparé d'un marchand à l'autre."
-              />
-              <TrustItem
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
-                    <path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" />
-                  </svg>
-                }
-                title="Historique des prix"
-                sub="Voyez si c'est le bon moment pour acheter."
-              />
-              <TrustItem
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
-                    <path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" />
-                  </svg>
-                }
-                title="Indépendant"
-                sub="Gratuit, sans tri sponsorisé. Vous d'abord."
-              />
-            </div>
-
-            <div className="mt-8 mb-2">
-              <p className="mb-3 font-display text-fs-18 font-semibold text-ink">
-                Commencez par une catégorie
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {POPULAR.map((p) => (
-                  <Link
-                    key={p.q}
-                    href={`/comparateur?q=${encodeURIComponent(p.q)}&country=${country}`}
-                    className="group inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-fs-15 font-medium text-ink shadow-xs transition duration-base ease-ds hover:-translate-y-0.5 hover:border-steel/40 hover:shadow-md"
-                  >
-                    {p.label}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 text-ink-4 transition group-hover:translate-x-0.5 group-hover:text-steel" aria-hidden="true">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+        </>
+      )}
     </main>
   );
 }
