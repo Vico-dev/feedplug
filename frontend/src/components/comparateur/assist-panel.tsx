@@ -39,15 +39,21 @@ export default function AssistPanel({ country }: { country: string }) {
   }
 
   const rec = result?.recommendation;
+  const recMerchants = rec ? (rec.merchantCount <= 1 ? "1 marchand" : `${rec.merchantCount} marchands`) : "";
 
   return (
-    <section className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-      <div className="flex items-center gap-2">
-        <span className="text-base font-medium text-blue-800">Aide-moi à choisir</span>
-        <span className="text-xs text-blue-700">décris ton besoin et ton budget</span>
+    <section className="mt-4 rounded-xl border border-steel/20 bg-steel-soft p-4 sm:p-5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="inline-flex items-center gap-2 font-display text-fs-15 font-semibold text-steel-hover">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+            <path d="M12 3v2m0 14v2M5.6 5.6l1.4 1.4m10 10 1.4 1.4M3 12h2m14 0h2M5.6 18.4l1.4-1.4m10-10 1.4-1.4" />
+          </svg>
+          Aide-moi à choisir
+        </span>
+        <span className="text-fs-12 text-steel-hover/70">décris ton besoin et ton budget</span>
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -55,45 +61,47 @@ export default function AssistPanel({ country }: { country: string }) {
             if (e.key === "Enter") ask();
           }}
           placeholder="ex : une cafetière à grains autour de 230 € pour deux"
-          className="h-10 flex-1 rounded-lg border border-blue-200 bg-white px-3 text-sm"
+          className="h-11 flex-1 rounded-lg border border-steel/25 bg-surface px-3.5 text-fs-14 text-ink shadow-xs outline-none transition duration-base ease-ds placeholder:text-ink-4 focus:border-steel focus:ring-2 focus:ring-steel/30"
           aria-label="Décris ton besoin"
         />
         <button
           type="button"
           onClick={ask}
           disabled={loading || !query.trim()}
-          className="h-10 whitespace-nowrap rounded-lg border border-blue-300 bg-white px-4 text-sm text-blue-800 hover:bg-blue-100 disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-steel px-5 text-fs-14 font-semibold text-white transition duration-base ease-ds hover:bg-steel-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel focus-visible:ring-offset-2"
         >
           {loading ? "…" : "Recommander"}
         </button>
       </div>
 
-      {error && <p className="mt-3 text-sm text-gray-500">Désolé, je n&apos;ai pas pu répondre. Réessaie.</p>}
-
-      {result && !rec && (
-        <p className="mt-3 text-sm text-gray-600">{result.reasoning}</p>
+      {error && (
+        <p className="mt-3 text-fs-13 text-ink-3">Désolé, je n&apos;ai pas pu répondre. Réessaie.</p>
       )}
+
+      {result && !rec && <p className="mt-3 text-fs-14 text-ink-2">{result.reasoning}</p>}
 
       {rec && (
         <Link
           href={`/comparateur/produit/${rec.id}?country=${country}`}
-          className="mt-3 flex items-center gap-3 rounded-lg border border-blue-200 bg-white p-3 hover:border-blue-300"
+          className="mt-3 flex items-center gap-3 rounded-lg border border-steel/20 bg-surface p-3 shadow-xs transition duration-base ease-ds hover:border-steel/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel focus-visible:ring-offset-2"
         >
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-gray-50">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-paper-2">
             {rec.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={rec.imageUrl} alt={rec.title} className="h-full w-full object-contain" />
+              <img src={rec.imageUrl} alt={rec.title} className="h-full w-full object-contain p-1" />
             ) : (
-              <span className="text-gray-300">—</span>
+              <span className="font-mono text-fs-12 text-ink-4">—</span>
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="line-clamp-1 text-sm font-medium text-gray-900">{rec.title}</p>
-            <p className="line-clamp-2 text-xs text-gray-600">{result?.reasoning}</p>
+            <p className="line-clamp-1 text-fs-14 font-semibold text-ink">{rec.title}</p>
+            <p className="line-clamp-2 text-fs-12 text-ink-3">{result?.reasoning}</p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-sm font-medium text-gray-900">{formatPrice(rec.lowestPrice, rec.currency)}</p>
-            <p className="text-xs text-gray-500">{rec.merchantCount} marchands</p>
+            <p className="font-display text-fs-15 font-bold text-ink">
+              {formatPrice(rec.lowestPrice, rec.currency)}
+            </p>
+            <p className="text-fs-12 text-ink-3">{recMerchants}</p>
           </div>
         </Link>
       )}

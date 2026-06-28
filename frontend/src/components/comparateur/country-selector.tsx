@@ -21,12 +21,12 @@ export default function CountrySelector({ country }: { country: string }) {
   }
 
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-gray-600">
-      <span>Pays</span>
+    <label className="inline-flex items-center gap-2 text-fs-13 text-ink-3">
+      <span className="font-mono text-fs-12 uppercase tracking-wider text-ink-4">Pays</span>
       <select
         value={country}
         onChange={onChange}
-        className="h-9 rounded-lg border border-gray-300 px-2 text-sm"
+        className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-fs-14 text-ink shadow-xs outline-none transition duration-base ease-ds hover:border-line-strong focus:border-steel focus:ring-2 focus:ring-steel/30"
         aria-label="Choisir le pays de livraison"
       >
         {COUNTRIES.map((c) => (
