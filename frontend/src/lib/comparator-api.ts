@@ -111,3 +111,148 @@ export function formatPrice(value: number | null, currency: string | null): stri
   const sym = currency ? CURRENCY_SYMBOL[currency] ?? currency : "";
   return `${value.toLocaleString("fr-FR")} ${sym}`.trim();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compte CONSO (magic-link) — fetches AUTHENTIFIÉS côté client.
+// Cookie cmp_session (HttpOnly) posé par le backend : tout passe par `credentials:'include'`
+// et vise directement l'origine backend (le proxy /feedplug-api est dédié à l'auth B2B
+// bearer et ne relaie pas ce cookie). En cross-origin prod, le cookie doit être
+// SameSite=None;Secure (voir cookieOptions backend) ; en local (même host, ports
+// différents) SameSite=Lax suffit.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ComparatorAccount {
+  id: string;
+  email: string;
+  countryCode: string;
+  locale: string;
+  marketingOptIn?: boolean;
+}
+
+export interface ComparatorCategory {
+  id: string;
+  slug: string;
+  labelfr: string;
+  labelen: string | null;
+  icon: string | null;
+}
+
+export interface WatchlistItem {
+  id: string;
+  groupId: string;
+  country: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string | null;
+  priceAtAdd: number | null;
+  currentPrice: number | null;
+  currency: string | null;
+  dropPct: number | null;
+  addedAt: string;
+}
+
+export interface PersonalFeedItem {
+  id: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string | null;
+  categoryId: string;
+  lowestPrice: number | null;
+  currency: string | null;
+  merchantCount: number;
+  pctVs30d: number | null;
+  rrpDropPct: number | null;
+  dropScore: number;
+}
+
+function accountUrl(path: string): string {
+  return `${getConfiguredBackendOrigin()}/api/v1/comparator${path}`;
+}
+
+async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(accountUrl(path), {
+    credentials: "include",
+    headers: { "content-type": "application/json", ...(init?.headers || {}) },
+    ...init,
+  });
+  if (res.status === 401) {
+    const err = new Error("unauthenticated") as Error & { status?: number };
+    err.status = 401;
+    throw err;
+  }
+  if (!res.ok) {
+    const err = new Error(`request failed (${res.status})`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+export function requestMagicLink(email: string, locale = "fr"): Promise<{ message: string }> {
+  return authFetch("/account/magic-link", {
+    method: "POST",
+    body: JSON.stringify({ email, locale }),
+  });
+}
+
+export function verifyMagicLink(token: string, country = "FR", locale = "fr"): Promise<{ user: ComparatorAccount }> {
+  return authFetch("/account/verify", {
+    method: "POST",
+    body: JSON.stringify({ token, country, locale }),
+  });
+}
+
+export function logout(): Promise<{ message: string }> {
+  return authFetch("/account/logout", { method: "POST" });
+}
+
+export function getMe(): Promise<ComparatorAccount> {
+  return authFetch("/account/me");
+}
+
+export function getCategories(): Promise<{ categories: ComparatorCategory[] }> {
+  return authFetch("/categories");
+}
+
+export function getInterests(): Promise<{ categoryIds: string[] }> {
+  return authFetch("/account/interests");
+}
+
+export function setInterests(categoryIds: string[]): Promise<{ categoryIds: string[] }> {
+  return authFetch("/account/interests", {
+    method: "PUT",
+    body: JSON.stringify({ categoryIds }),
+  });
+}
+
+export function getWatchlist(): Promise<{ items: WatchlistItem[] }> {
+  return authFetch("/account/watchlist");
+}
+
+export function addWatch(groupId: string, country: string): Promise<{ ok: boolean; created: boolean }> {
+  return authFetch("/account/watchlist", {
+    method: "POST",
+    body: JSON.stringify({ groupId, country }),
+  });
+}
+
+export function removeWatch(groupId: string, country?: string): Promise<{ ok: boolean }> {
+  const qs = country ? `?country=${encodeURIComponent(country)}` : "";
+  return authFetch(`/account/watchlist/${encodeURIComponent(groupId)}${qs}`, { method: "DELETE" });
+}
+
+export function getPersonalFeed(params: { country?: string; limit?: number; offset?: number } = {}): Promise<{
+  items: PersonalFeedItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  country: string;
+}> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return authFetch(`/account/feed${suffix}`);
+}

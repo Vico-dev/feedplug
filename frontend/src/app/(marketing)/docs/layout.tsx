@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     title: "Documentation | FeedPlug",
     description:
       "Centralisez vos catalogues, optimisez vos fiches avec l'IA et diffusez sur Google Shopping. Fonctionnalités et guides FeedPlug.",
-    url: `${seo.siteUrl}/docs`,
+    url: `${seo.marketingUrl}/docs`,
     type: "website",
     siteName: "FeedPlug",
     images: [
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     images: [seo.ogImage],
   },
   alternates: {
-    canonical: `${seo.siteUrl}/docs`,
+    canonical: `${seo.marketingUrl}/docs`,
   },
   robots: {
     index: true,

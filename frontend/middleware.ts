@@ -88,6 +88,48 @@ function getLocalePrefix(pathname: string) {
   return match ? `/${match[1]}` : '';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Rehoming domaine (conso/B2B) — voir plan rehoming-apex-conso-b2b-pro.md
+//   apex feedplug.com  → comparateur conso (rewrite / → /comparateur)
+//   pro.feedplug.com   → marketing B2B
+//   app.feedplug.com   → dashboard (inchangé)
+// Le routing reste piloté par le hostname LITTÉRAL (déterministe) ; la var
+// NEXT_PUBLIC_MARKETING_URL ne sert qu'au SEO (canonicals/sitemaps).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PRO_HOST = 'pro.feedplug.com';
+
+/**
+ * Chemins « conso » servis sur l'APEX : ils ne doivent JAMAIS être classés
+ * marketing ni 301 vers pro. (locale-agnostique — passer pathnameWithoutLocale)
+ *  - /comparateur*  : comparateur public + fiches produit
+ *  - /compte/*      : espace conso (magic-link, cookie cmp_session, /compte/verifier)
+ *  - /legal/*       : pages légales servies côté conso
+ */
+function isConsumerPath(pathnameWithoutLocale: string) {
+  return (
+    pathnameWithoutLocale === '/comparateur' ||
+    pathnameWithoutLocale.startsWith('/comparateur/') ||
+    pathnameWithoutLocale === '/compte' ||
+    pathnameWithoutLocale.startsWith('/compte/') ||
+    pathnameWithoutLocale === '/legal' ||
+    pathnameWithoutLocale.startsWith('/legal/')
+  );
+}
+
+/**
+ * Construit l'URL absolue d'une redirection 301 cross-host feedplug, en
+ * préservant path + query et en neutralisant le port interne Cloud Run
+ * (sinon le :3000 fuit dans le Location → URL morte).
+ */
+function buildHostRedirect(request: NextRequest, targetHost: string) {
+  const url = new URL(request.url);
+  url.protocol = 'https:';
+  url.hostname = targetHost;
+  url.port = '';
+  return url;
+}
+
 function isRouteMatch(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -116,8 +158,10 @@ export function middleware(request: NextRequest) {
   const port = hostHeader.includes(':') ? hostHeader.split(':')[1] : '';
   const pathname = request.nextUrl.pathname;
 
-  // API/assets
-  if (pathname.startsWith('/feedplug-api') || pathname === '/sitemap.xml' || pathname === '/robots.txt' || pathname === '/og-image' || pathname === '/logo' || pathname === '/icon' || pathname.startsWith('/icon?')) {
+  // API/assets — servis tels quels sur tous les hôtes (jamais 301 cross-host).
+  // sitemap-comparateur.xml = sitemap conso (apex) ; sitemap.xml = marketing
+  // (pro). robots.txt est host-aware côté route handler.
+  if (pathname.startsWith('/feedplug-api') || pathname === '/sitemap.xml' || pathname === '/sitemap-comparateur.xml' || pathname === '/robots.txt' || pathname === '/og-image' || pathname === '/logo' || pathname === '/icon' || pathname.startsWith('/icon?')) {
     return NextResponse.next();
   }
 
@@ -178,14 +222,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 301);
   }
 
-  // Domaines marketing
+  // ── Classification des hôtes ──────────────────────────────────────────────
   const isLocalHost = isLocalDevHost(hostname);
-  const isMarketingDomain = 
-    hostname === 'feedplug.com' || 
+
+  // Apex conso : feedplug.com (+ www déjà canonicalisé plus haut). En local,
+  // l'apex sert TOUT (conso + marketing + app) pour le dev — comportement
+  // historique conservé.
+  const isApexDomain =
+    hostname === 'feedplug.com' ||
     hostname === 'www.feedplug.com' ||
     isLocalHost;
-  
-  // Domaine app
+
+  // pro.feedplug.com : marketing B2B (4ᵉ mapping Cloud Run, même service).
+  const isProDomain = hostname === PRO_HOST;
+
+  // « Domaine marketing » au sens des branches historiques (sert les pages
+  // marketing via intlMiddleware). Désormais : pro. + apex (l'apex sert encore
+  // le marketing en local ; en prod les routes marketing y sont 301 vers pro).
+  const isMarketingDomain = isProDomain || isApexDomain;
+
+  // Domaine app (inchangé)
   const isAppDomain =
     hostname === 'app.feedplug.com' ||
     (typeof hostname === 'string' && hostname.endsWith('.run.app')) ||
@@ -193,14 +249,77 @@ export function middleware(request: NextRequest) {
   const isHostedAppDomain =
     hostname === 'app.feedplug.com' ||
     (typeof hostname === 'string' && hostname.endsWith('.run.app'));
-  
+
   const pathnameWithoutLocale = stripLocalePrefix(pathname);
   const localePrefix = getLocalePrefix(pathname);
   const isAppRoute = isAppPath(pathname);
-  
-  const isMarketingRoute = 
+  const isConsumerRoute = isConsumerPath(pathnameWithoutLocale);
+
+  const isMarketingRoute =
     MARKETING_ROUTES_PATTERNS.some(pattern => pattern.test(pathname)) ||
     (!isAppRoute && !pathname.startsWith('/api') && !pathname.startsWith('/_next'));
+
+  // ── Rehoming : routage spécifique apex / pro ──────────────────────────────
+  // Placé APRÈS la classification mais AVANT les branches app historiques pour
+  // que les 301 cross-host priment sur le rendu local. En local (isLocalHost),
+  // on saute tout ce bloc → l'apex local sert tout comme avant.
+  if (!isLocalHost && isApexDomain) {
+    // 1) Home apex → comparateur (REWRITE interne : l'URL /, /en, /es reste
+    //    affichée, mais on rend la page comparateur). On préserve la query
+    //    (?q=, ?country=, …) via le clone de nextUrl.
+    if (pathnameWithoutLocale === '/' && !isAppRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${localePrefix}/comparateur`;
+      return applyFrameHeaders(NextResponse.rewrite(url), false);
+    }
+
+    // 2) /comparateur (racine seule, toute locale) → 301 vers la home / (la
+    //    home conso EST le comparateur, servi en rewrite). On ne touche PAS
+    //    /comparateur/produit/* ni les pages sous /comparateur/<x>.
+    if (pathnameWithoutLocale === '/comparateur') {
+      const url = buildHostRedirect(request, 'feedplug.com');
+      url.pathname = localePrefix || '/';
+      return NextResponse.redirect(url, 301);
+    }
+
+    // 3) Routes conso (/comparateur/*, /compte/*, /legal/*) : servies sur
+    //    l'apex via intlMiddleware. JAMAIS 301 vers pro.
+    if (isConsumerRoute) {
+      return applyFrameHeaders(intlMiddleware(request), false);
+    }
+
+    // 4) Routes app accédées sur l'apex → 302 vers app. (comportement existant,
+    //    géré par la branche `isMarketingDomain && isAppRoute` plus bas — on
+    //    laisse filer).
+
+    // 5) Routes marketing (LP SEO, /tarifs, /docs, /integrations, /audit-flux,
+    //    /demo, /feedplug-vs-*, …) → 301 permanent URL-à-URL vers pro.
+    //    On exclut les routes app (gérées plus bas) et les routes conso (déjà
+    //    traitées au point 3).
+    if (!isAppRoute && isMarketingRoute) {
+      const url = buildHostRedirect(request, PRO_HOST);
+      return NextResponse.redirect(url, 301);
+    }
+  }
+
+  if (!isLocalHost && isProDomain) {
+    // 1) Routes conso atterrissant sur pro → 301 vers l'apex (le comparateur
+    //    vit sur feedplug.com). Inclut /comparateur, /comparateur/*, /compte/*,
+    //    /legal/*. La home conso est l'apex / : on y renvoie /comparateur racine.
+    if (isConsumerRoute) {
+      const url = buildHostRedirect(request, 'feedplug.com');
+      if (pathnameWithoutLocale === '/comparateur') {
+        url.pathname = localePrefix || '/';
+      }
+      return NextResponse.redirect(url, 301);
+    }
+
+    // 2) Routes app atterrissant sur pro → 302 vers app. (géré par la branche
+    //    `isMarketingDomain && isAppRoute` plus bas — on laisse filer).
+
+    // 3) Tout le reste sur pro = marketing → servi via intlMiddleware par la
+    //    branche `isMarketingDomain` plus bas.
+  }
 
   if (isHostedAppDomain && pathnameWithoutLocale === '/') {
     const hasAuthCookie =
@@ -268,13 +387,16 @@ export function middleware(request: NextRequest) {
   }
 
   if (!isLocalHost && isAppDomain && isMarketingRoute) {
+    // Marketing/conso atterrissant sur app. → on renvoie vers le bon hôte :
+    //  - routes conso (/comparateur*, /compte/*, /legal/*) → apex feedplug.com
+    //  - autres routes marketing (LP SEO, /tarifs, /docs, …)  → pro.feedplug.com
+    // 302 (temporaire) : redirection dépendante de la classification de route,
+    // ne doit pas être mise en cache de façon permanente (cf. note ci-dessus).
+    const targetHost = isConsumerRoute ? 'feedplug.com' : PRO_HOST;
     const url = new URL(request.url);
     url.protocol = 'https:';
-    url.hostname = 'feedplug.com';
+    url.hostname = targetHost;
     url.port = '';
-    // 302 (temporaire) : voir explication ci-dessus — redirection dépendante de
-    // la classification de route, ne doit pas être mise en cache de façon
-    // permanente.
     return NextResponse.redirect(url, 302);
   }
   

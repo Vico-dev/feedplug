@@ -4,13 +4,17 @@
  * Ne pas ajouter de app.use() avant le middleware CORS dans server-minimal.js.
  */
 
+// Séparateur d'origines : virgule OU pipe. Le pipe permet de passer une liste
+// multi-origine via gcloud `--set-env-vars` (qui réserve la virgule comme
+// délimiteur entre variables). Cf. CORS_ORIGINS dans cloudbuild-backend-marketing.yaml.
 const CORS_ORIGINS_ENV = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
-  .split(',')
+  .split(/[,|]/)
   .map(o => o.trim())
   .filter(Boolean);
 
 const DEFAULT_ORIGINS = [
   'https://app.feedplug.com',
+  'https://pro.feedplug.com',
   'https://feedplug.com',
   'https://www.feedplug.com',
   'https://feedplug-frontend-771607738477.europe-west1.run.app',

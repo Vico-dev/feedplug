@@ -10,6 +10,7 @@ import {
   type PriceHistoryPoint,
 } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
+import WatchButton from "@/components/comparateur/watch-button";
 
 export const revalidate = 600;
 
@@ -299,6 +300,9 @@ export default async function ComparatorProductPage({
               <span aria-hidden="true">&rarr;</span>
             </a>
           )}
+          <div style={{ margin: "14px 0 0" }}>
+            <WatchButton groupId={product.id} country={country} />
+          </div>
         </div>
       </section>
 

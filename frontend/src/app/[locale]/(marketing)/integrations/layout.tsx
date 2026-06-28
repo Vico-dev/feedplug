@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { isActiveLocale } from "@/i18n/locales";
 import { routing } from "@/i18n/routing";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://feedplug.com";
+// Page marketing B2B → canonicals/hreflang ancrés sur pro.feedplug.com.
+const siteUrl =
+  process.env.NEXT_PUBLIC_MARKETING_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  "https://feedplug.com";
 
 export async function generateMetadata({
   params,

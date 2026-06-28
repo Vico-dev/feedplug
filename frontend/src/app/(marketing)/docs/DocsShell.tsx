@@ -21,12 +21,12 @@ const DOC_LINKS: { href: string; label: string }[] = [
 
 function BreadcrumbJsonLd({ pathname }: { pathname: string }) {
   const items: { name: string; url: string }[] = [
-    { name: "Accueil", url: seo.siteUrl },
-    { name: "Documentation", url: `${seo.siteUrl}/docs` },
+    { name: "Accueil", url: seo.marketingUrl },
+    { name: "Documentation", url: `${seo.marketingUrl}/docs` },
   ];
   const match = DOC_LINKS.find((l) => pathname === l.href || (l.href !== "/docs" && pathname.startsWith(l.href)));
   if (match && match.href !== "/docs") {
-    items.push({ name: match.label, url: `${seo.siteUrl}${match.href}` });
+    items.push({ name: match.label, url: `${seo.marketingUrl}${match.href}` });
   }
   const schema = {
     "@context": "https://schema.org",

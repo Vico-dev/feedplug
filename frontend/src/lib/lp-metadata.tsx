@@ -11,7 +11,7 @@ import { routing } from "@/i18n/routing";
 type Locale = "fr" | "en" | "es";
 
 function lpUrl(path: string, locale: Locale): string {
-  const base = `${seo.siteUrl}`;
+  const base = `${seo.marketingUrl}`;
   if (locale === routing.defaultLocale) {
     return `${base}${path}`;
   }
@@ -112,7 +112,7 @@ export function createBreadcrumbJsonLd(config: LPMetaConfig, locale: Locale) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: homeName, item: seo.siteUrl },
+      { "@type": "ListItem", position: 1, name: homeName, item: seo.marketingUrl },
       { "@type": "ListItem", position: 2, name, item: url },
     ],
   };

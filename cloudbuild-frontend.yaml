@@ -13,6 +13,10 @@ steps:
       # C2 — Sentry frontend : DSN baked au build (sinon Sentry désactivé en prod).
       - '--build-arg'
       - 'NEXT_PUBLIC_SENTRY_DSN=$_SENTRY_DSN'
+      # Rehoming domaine : base canonique marketing B2B bakée au build (canonicals
+      # /hreflang/sitemap marketing → pro.feedplug.com).
+      - '--build-arg'
+      - 'NEXT_PUBLIC_MARKETING_URL=$_MARKETING_URL'
       - '.'
     dir: 'frontend'
 
@@ -46,7 +50,7 @@ steps:
       - '--max-instances'
       - '10'
       - '--set-env-vars'
-      - 'BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com,NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ,NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY,NEXT_PUBLIC_SENTRY_DSN=$_SENTRY_DSN,GIT_SHA=${_GIT_SHA}'
+      - 'BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com,NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ,NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY,NEXT_PUBLIC_SENTRY_DSN=$_SENTRY_DSN,NEXT_PUBLIC_MARKETING_URL=$_MARKETING_URL,GIT_SHA=${_GIT_SHA}'
 
 substitutions:
   _GIT_SHA: 'unknown'   # passé par deploy-frontend.sh : git rev-parse --short HEAD
@@ -54,6 +58,8 @@ substitutions:
   # C2 — DSN Sentry frontend. À renseigner dans le trigger Cloud Build (ou ici).
   # NEXT_PUBLIC = semi-public (inliné dans le bundle), donc pas un secret.
   _SENTRY_DSN: ''
+  # Rehoming domaine : hôte marketing B2B (canonicals/sitemap marketing).
+  _MARKETING_URL: 'https://pro.feedplug.com'
 
 options:
   logging: CLOUD_LOGGING_ONLY

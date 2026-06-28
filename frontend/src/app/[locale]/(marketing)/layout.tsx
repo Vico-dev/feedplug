@@ -23,7 +23,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const lang = isActiveLocale(locale) ? locale : routing.defaultLocale;
   const canonicalPath = lang === routing.defaultLocale ? "/" : `/${lang}`;
-  const canonicalUrl = `${seo.siteUrl}${canonicalPath}`;
+  const canonicalUrl = `${seo.marketingUrl}${canonicalPath}`;
 
   return {
     title: titles[lang] || titles.fr,
@@ -59,10 +59,10 @@ export async function generateMetadata({
     alternates: {
       canonical: canonicalUrl,
       languages: {
-        fr: `${seo.siteUrl}/`,
-        en: `${seo.siteUrl}/en`,
-        es: `${seo.siteUrl}/es`,
-        "x-default": `${seo.siteUrl}/`,
+        fr: `${seo.marketingUrl}/`,
+        en: `${seo.marketingUrl}/en`,
+        es: `${seo.marketingUrl}/es`,
+        "x-default": `${seo.marketingUrl}/`,
       },
     },
     robots: { index: true, follow: true },
@@ -112,7 +112,7 @@ function JsonLdHome({ locale }: { locale: string }) {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "FeedPlug",
-    url: seo.siteUrl,
+    url: seo.marketingUrl,
     logo: seo.logo,
     description: ORG_DESCRIPTIONS[lang] ?? ORG_DESCRIPTIONS.en,
   };
@@ -123,11 +123,11 @@ function JsonLdHome({ locale }: { locale: string }) {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "FeedPlug",
-    url: seo.siteUrl,
+    url: seo.marketingUrl,
     inLanguage: lang === "fr" ? "fr" : lang === "es" ? "es" : "en",
     potentialAction: {
       "@type": "SearchAction",
-      target: { "@type": "EntryPoint", url: `${seo.siteUrl}/docs` },
+      target: { "@type": "EntryPoint", url: `${seo.marketingUrl}/docs` },
       "query-input": "required name=q",
     },
   };
@@ -146,7 +146,7 @@ function JsonLdHome({ locale }: { locale: string }) {
     name: "FeedPlug",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    url: seo.siteUrl,
+    url: seo.marketingUrl,
     description: APP_DESCRIPTIONS[lang] ?? APP_DESCRIPTIONS.en,
   };
   return (

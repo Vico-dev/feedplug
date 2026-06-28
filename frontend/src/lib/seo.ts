@@ -4,12 +4,26 @@
  * - /logo : logo 200×200 pour schémas JSON-LD (remplaçable par /public/logo.png)
  */
 
+// Apex conso : feedplug.com — sert le comparateur public.
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://feedplug.com";
+// Hôte marketing B2B : pro.feedplug.com — base des canonicals/OG des pages
+// marketing & docs depuis le rehoming de domaine. Fallback sur l'apex tant que
+// la variable n'est pas définie (rétro-compat avant bascule DNS).
+const marketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL || siteUrl;
 
 export const seo = {
+  /** Apex conso (comparateur). */
   siteUrl,
-  ogImage: `${siteUrl}/og-image`,
-  logo: `${siteUrl}/logo`,
+  /**
+   * Base canonique du marketing B2B (pro.feedplug.com). À utiliser pour TOUTES
+   * les métadonnées des pages marketing & docs (canonical, OG url, hreflang,
+   * JSON-LD Organization/WebSite). Le comparateur/conso garde `siteUrl`.
+   */
+  marketingUrl,
+  // OG/logo servis sous l'hôte marketing (les assets vivent aussi sur l'apex,
+  // mais l'image OG de référence du site B2B est ancrée sur pro.).
+  ogImage: `${marketingUrl}/og-image`,
+  logo: `${marketingUrl}/logo`,
   defaultImages: {
     width: 1200,
     height: 630,
@@ -29,7 +43,7 @@ export function createDocMetadata(
   path: string,
   keywords?: string[]
 ): import("next").Metadata {
-  const url = `${seo.siteUrl}/docs${path}`;
+  const url = `${seo.marketingUrl}/docs${path}`;
   return {
     title,
     description,

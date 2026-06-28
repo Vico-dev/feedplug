@@ -6227,10 +6227,18 @@ registerComparateurRoutes(app, {
 // Auth CONSO du comparateur (magic-link) — population séparée du B2B.
 const { registerComparatorAccountRoutes } = require('./routes/comparator-account');
 const { sendComparatorMagicLinkEmail: sendComparatorMagicLink } = require('./email/email-service');
-registerComparatorAccountRoutes(app, {
+const { requireComparatorAuth: requireComparatorAuthMw } = registerComparatorAccountRoutes(app, {
   getPrisma: () => prisma,
   getPrismaReady: () => prismaReady,
   sendMagicLinkEmail: sendComparatorMagicLink,
+});
+
+// Données du compte conso (intérêts, watchlist, feed perso) — réutilise le middleware auth ci-dessus.
+const { registerComparatorAccountDataRoutes } = require('./routes/comparator-account-data');
+registerComparatorAccountDataRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requireComparatorAuth: requireComparatorAuthMw,
 });
 
 const { registerPlatformsRoutes } = require('./routes/platforms');

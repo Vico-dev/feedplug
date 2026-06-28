@@ -1,6 +1,12 @@
 import type { MetadataRoute } from "next";
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://feedplug.com";
+// Sitemap MARKETING B2B — toutes les URLs sont ancrées sur l'hôte marketing
+// (pro.feedplug.com depuis le rehoming de domaine). Sert /sitemap.xml.
+// Le comparateur conso a son propre sitemap apex : /sitemap-comparateur.xml.
+const baseUrl =
+  process.env.NEXT_PUBLIC_MARKETING_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  "https://feedplug.com";
 
 const docPaths = [
   "",
@@ -20,7 +26,7 @@ const docPaths = [
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
-  // Home FR (/) + EN (/en)
+  // Home marketing B2B (/) + EN (/en) + ES (/es) — sur pro.feedplug.com
   const homeEntries: MetadataRoute.Sitemap = [
     { url: `${baseUrl}/`, lastModified, changeFrequency: "weekly", priority: 1 },
     { url: `${baseUrl}/en`, lastModified, changeFrequency: "weekly", priority: 1 },

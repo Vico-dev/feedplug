@@ -24,10 +24,14 @@ function clientIp(req) {
   return req.ip || null;
 }
 function cookieOptions() {
+  // En prod, les pages compte (feedplug.com) appellent l'API backend (*.run.app) en
+  // cross-site → le cookie doit être SameSite=None; Secure pour être envoyé en fetch.
+  // En dev (http localhost, ports ≠), Lax suffit et None;Secure serait rejeté sans https.
+  const isProd = process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     path: '/',
     maxAge: SESSION_TTL_MS,
   };

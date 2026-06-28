@@ -5,6 +5,8 @@ import { Laptop, Gamepad2, ShoppingBag, Sparkles, Search, ArrowRight } from "luc
 import { searchProducts, formatPrice, type SearchItem } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
 import AssistPanel from "@/components/comparateur/assist-panel";
+import WatchButton from "@/components/comparateur/watch-button";
+import { seo } from "@/lib/seo";
 
 export const revalidate = 300;
 
@@ -31,6 +33,19 @@ export const metadata: Metadata = {
   title: "Comparateur de prix — Feedplug",
   description:
     "Comparez les prix de milliers de produits chez plusieurs marchands, avec l'historique des prix. Indépendant et gratuit.",
+  // La home conso EST le comparateur (apex / rewrite → /comparateur). Le
+  // canonical pointe donc explicitement vers la racine de l'apex, jamais vers
+  // /comparateur (qui 301 vers /). hreflang fr|en|es cohérents sur l'apex.
+  alternates: {
+    canonical: `${seo.siteUrl}/`,
+    languages: {
+      fr: `${seo.siteUrl}/`,
+      en: `${seo.siteUrl}/en`,
+      es: `${seo.siteUrl}/es`,
+      "x-default": `${seo.siteUrl}/`,
+    },
+  },
+  robots: { index: true, follow: true },
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -70,10 +85,12 @@ const sectionTitle: CSSProperties = {
 function ProductCard({ item, country }: { item: SearchItem; country: string }) {
   const multi = item.merchantCount > 1;
   return (
+    <div style={{ position: "relative", display: "flex" }}>
     <Link
       href={`/comparateur/produit/${item.id}?country=${country}`}
       className="card-hover"
       style={{
+        flex: 1,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -177,6 +194,10 @@ function ProductCard({ item, country }: { item: SearchItem; country: string }) {
         </div>
       </div>
     </Link>
+      <div style={{ position: "absolute", top: "10px", right: "10px", zIndex: 2 }}>
+        <WatchButton groupId={item.id} country={country} variant="compact" />
+      </div>
+    </div>
   );
 }
 
