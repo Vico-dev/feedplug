@@ -194,6 +194,23 @@ export default async function ComparatorProductPage({
               )}
             </div>
           )}
+
+          {lowest && (
+            <a
+              href={buildVisitUrl(lowest.offerId, country)}
+              target="_blank"
+              rel="nofollow sponsored noopener"
+              className="mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-ink px-6 text-fs-15 font-semibold text-paper shadow-sm transition duration-base ease-ds hover:bg-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+            >
+              {multi ? "Voir la meilleure offre" : "Voir l'offre"}
+              <span className="font-mono text-fs-13 font-normal text-paper/70">
+                {lowest.merchant}
+              </span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </a>
+          )}
         </div>
       </section>
 
