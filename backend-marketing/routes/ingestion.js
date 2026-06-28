@@ -12,6 +12,29 @@
  * (middlewares d'acces, helpers metier, normalizers, schedulers, services) sont
  * injectees via `deps`. AUCUN changement de comportement.
  */
+const { checkPlanLimit, canUseFeature, countProductsForAccount } = require('../lib/plan-limits');
+const {
+  createRevision,
+  getRevisionById,
+  listRevisions,
+  getLastIngestionRevision,
+  buildItemSnapshot,
+} = require('../lib/revisions');
+const { decryptObjectSecrets } = require('../lib/secret-crypto');
+const { ingestShopifyFromApi } = require('../ingestion/shopify');
+const { sendSyncCompleteEmail, sendErrorEmail } = require('../email/email-service');
+const {
+  normalizePlatformKey,
+  getPlatformLabel,
+  inferAmazonChannelKeyForMarket,
+} = require('../lib/markets');
+const {
+  getAdvancedQualityScore,
+  updateAdvancedQualityScore,
+  ensureProductScoreHistoryTable,
+  calculateAdvancedQualityScore,
+} = require('../scoring/quality-advanced');
+
 function registerIngestionRoutes(app, {
   getPrisma,
   getPrismaReady,
@@ -2510,7 +2533,7 @@ function registerIngestionRoutes(app, {
         for (const field of ['title', 'description', 'image']) {
           const tests = await prisma.aBTest.findMany({
             where: {
-              accountId,
+              accountId: req.accountId,
               status: 'RUNNING',
               fieldUnderTest: field,
               platform: platformNorm,

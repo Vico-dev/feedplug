@@ -14,11 +14,15 @@
  * push extraits, scheduler GMC, etc.) sont injectées via `deps`. Leurs
  * définitions RESTENT dans server-minimal.js. AUCUN changement de comportement.
  */
+const { decryptObjectSecrets } = require('../lib/secret-crypto');
+const { parseGmcMerchantOptions } = require('../domains/gmc/push');
+
 function registerPlatformsRoutes(app, {
   getPrisma,
   getPrismaReady,
   AMAZON_APPLICATION_ID,
   AMAZON_CHANNEL_CONFIG,
+  AMAZON_CONNECT_CODE_TTL_MS,
   AMAZON_LOGIN_URI,
   AMAZON_LWA_CLIENT_ID,
   AMAZON_LWA_CLIENT_SECRET,
@@ -26,6 +30,7 @@ function registerPlatformsRoutes(app, {
   AMAZON_SELLER_CENTRAL_BASE,
   AMAZON_STATE_TTL_MS,
   APP_URL,
+  GMC_SELECTION_TTL_MS,
   GOOGLE_ADS_CLIENT_ID,
   GOOGLE_ADS_CLIENT_SECRET,
   GOOGLE_ADS_REDIRECT_URI,
@@ -44,6 +49,7 @@ function registerPlatformsRoutes(app, {
   buildDashboardRedirectUrl,
   buildEmbeddedShopifyAdminRedirectUrl,
   buildFluxRedirectUrl,
+  buildLocalizedAppUrl,
   buildSurfaceReturnRedirectUrl,
   checkChannelLimit,
   consumeOAuthEphemeralState,
@@ -51,23 +57,29 @@ function registerPlatformsRoutes(app, {
   crypto,
   decryptSecret,
   encryptSecret,
+  enrichGmcMerchantNames,
   executeAmazonPush,
   executeGmcPush,
   executeLiaShopifySync,
   getDestinationPushContext,
+  getShopifyAdminAccessForAccount,
   normalizeAppLocale,
   normalizeDashboardReturnTo,
   normalizeEmbeddedReturnTo,
   parseJsonObject,
   readOAuthEphemeralState,
   requireAuth,
+  resolveDefaultFeedIdForAccount,
   respondLiaScopeMissing,
   revokeGoogleOAuthToken,
   saveGmcConnection,
   scheduleAutoGmcPush,
   scheduleSyncGoogleAdsPerformance,
+  shopifyAdminGraphql,
   storeOAuthEphemeralState,
+  stringifyEncryptedJson,
   upsertPlatformConnection,
+  verifyFeedAccess,
 }) {
 // 0. Diagnostic OAuth (redirect_uri à ajouter dans la Console Google)
 app.get('/api/v1/platforms/gmc/oauth-config', requireAuth, (req, res) => {
