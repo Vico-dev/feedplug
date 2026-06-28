@@ -1,12 +1,16 @@
+substitutions:
+  _GIT_SHA: 'unknown'   # passé par deploy-backend-marketing.sh : git rev-parse --short HEAD
+
 steps:
-  # Build l'image Docker avec le Dockerfile du backend-marketing
+  # Build l'image Docker avec le Dockerfile du backend-marketing.
+  # Taguée par le SHA git (traçabilité) ET par BUILD_ID (unicité / rollback).
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-f', 'Dockerfile', '-t', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID', '.']
+    args: ['build', '-f', 'Dockerfile', '-t', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:${_GIT_SHA}', '-t', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID', '.']
     dir: 'backend-marketing'
-  
+
   # Push l'image vers Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID']
+    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:${_GIT_SHA}']
   
   # Déployer sur Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -16,11 +20,14 @@ steps:
       - 'deploy'
       - 'feedplug-backend-marketing'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID'
+      - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:${_GIT_SHA}'
       - '--region'
       - 'europe-west1'
       - '--platform'
       - 'managed'
+      # Label de révision : `gcloud run services describe` révèle alors le commit déployé.
+      - '--update-labels'
+      - 'git-sha=${_GIT_SHA}'
       # gen2 : environnement d'exécution Linux complet, requis pour Chromium
       # headless (le PDF d'audit). gen1 (gVisor) fait crasher Chrome (SIGTRAP).
       - '--execution-environment'
@@ -60,7 +67,7 @@ steps:
       # SHOPIFY_SCOPES n'est pas listé ici : la valeur a des virgules qui
       # cassent la syntaxe gcloud --set-env-vars. Le défaut hardcodé dans
       # server-minimal.js (aligné sur shopify.app.toml) est utilisé.
-      - 'NODE_ENV=production,CORS_ORIGIN=https://app.feedplug.com,APP_URL=https://app.feedplug.com,API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,API_PUBLIC_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,EMAIL_FROM=FeedPlug <noreply@feedplug.com>,MARKETING_REPLY_TO=hello@feedplug.com,RESEND_AUDIENCE_ID=18689648-4319-4fa5-a78b-2b332d4e7429,SHOPIFY_CALLBACK_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/connectors/shopify/callback,SHOPIFY_ADMIN_API_VERSION=2026-04,SHOPIFY_BILLING_TRIAL_DAYS=14,SHOPIFY_BILLING_EUR_USD_RATE=1.08,SHOPIFY_PROVISION_TRIAL_DAYS=14,GOOGLE_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback,AMAZON_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/amazon/callback,STRIPE_PRICE_STARTER=,STRIPE_PRICE_PROFESSIONAL=price_1T161cQ8WO9CgnnOY6LOv3Va,STRIPE_PRICE_ENTERPRISE=,LIFESTYLE_IMAGE_PROVIDER=vertex,GOOGLE_CLOUD_PROJECT=feedplug-prod,GOOGLE_CLOUD_LOCATION=europe-west1,GOOGLE_CLOUD_LOCATION_IMAGE=global,GOOGLE_GENAI_USE_VERTEXAI=true'
+      - 'NODE_ENV=production,CORS_ORIGIN=https://app.feedplug.com,APP_URL=https://app.feedplug.com,API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,API_PUBLIC_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,EMAIL_FROM=FeedPlug <noreply@feedplug.com>,MARKETING_REPLY_TO=hello@feedplug.com,RESEND_AUDIENCE_ID=18689648-4319-4fa5-a78b-2b332d4e7429,SHOPIFY_CALLBACK_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/connectors/shopify/callback,SHOPIFY_ADMIN_API_VERSION=2026-04,SHOPIFY_BILLING_TRIAL_DAYS=14,SHOPIFY_BILLING_EUR_USD_RATE=1.08,SHOPIFY_PROVISION_TRIAL_DAYS=14,GOOGLE_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/gmc/callback,AMAZON_REDIRECT_URI=https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/platforms/amazon/callback,STRIPE_PRICE_STARTER=,STRIPE_PRICE_PROFESSIONAL=price_1T161cQ8WO9CgnnOY6LOv3Va,STRIPE_PRICE_ENTERPRISE=,LIFESTYLE_IMAGE_PROVIDER=vertex,GOOGLE_CLOUD_PROJECT=feedplug-prod,GOOGLE_CLOUD_LOCATION=europe-west1,GOOGLE_CLOUD_LOCATION_IMAGE=global,GOOGLE_GENAI_USE_VERTEXAI=true,GIT_SHA=${_GIT_SHA}'
       # ── Jobs background Cloud Tasks (Sprint 2, B-PROPER) — OPTIONNEL ──────
       # Décommenter et compléter pour activer le mode cloud-tasks (sinon fallback
       # in-process). À ajouter à la fin de la ligne --set-env-vars ci-dessus :
@@ -124,4 +131,5 @@ steps:
       - '--project=$PROJECT_ID'
 
 images:
+  - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:${_GIT_SHA}'
   - 'gcr.io/$PROJECT_ID/feedplug-backend-marketing:$BUILD_ID'

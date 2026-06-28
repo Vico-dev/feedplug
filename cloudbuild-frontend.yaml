@@ -7,7 +7,7 @@ steps:
       - '-f'
       - 'Dockerfile'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID'
+      - 'gcr.io/$PROJECT_ID/feedplug-frontend:${_GIT_SHA}'
       - '--build-arg'
       - 'NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY'
       # C2 — Sentry frontend : DSN baked au build (sinon Sentry désactivé en prod).
@@ -17,7 +17,7 @@ steps:
     dir: 'frontend'
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID']
+    args: ['push', 'gcr.io/$PROJECT_ID/feedplug-frontend:${_GIT_SHA}']
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
@@ -26,11 +26,14 @@ steps:
       - 'deploy'
       - 'feedplug-frontend'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/feedplug-frontend:$BUILD_ID'
+      - 'gcr.io/$PROJECT_ID/feedplug-frontend:${_GIT_SHA}'
       - '--region'
       - 'europe-west1'
       - '--platform'
       - 'managed'
+      # Label de révision : `gcloud run services describe` révèle le commit déployé.
+      - '--update-labels'
+      - 'git-sha=${_GIT_SHA}'
       - '--allow-unauthenticated'
       - '--port'
       - '3000'
@@ -43,9 +46,10 @@ steps:
       - '--max-instances'
       - '10'
       - '--set-env-vars'
-      - 'BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com,NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ,NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY,NEXT_PUBLIC_SENTRY_DSN=$_SENTRY_DSN'
+      - 'BACKEND_API_URL=https://feedplug-backend-marketing-771607738477.europe-west1.run.app,NEXT_PUBLIC_GOOGLE_CLIENT_ID=771607738477-iam4qts7ch3sn9do88djdkohvpj0f4a9.apps.googleusercontent.com,NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADTQDHlvHFctmhiJ,NEXT_PUBLIC_SHOPIFY_API_KEY=$_SHOPIFY_API_KEY,NEXT_PUBLIC_SENTRY_DSN=$_SENTRY_DSN,GIT_SHA=${_GIT_SHA}'
 
 substitutions:
+  _GIT_SHA: 'unknown'   # passé par deploy-frontend.sh : git rev-parse --short HEAD
   _SHOPIFY_API_KEY: ''
   # C2 — DSN Sentry frontend. À renseigner dans le trigger Cloud Build (ou ici).
   # NEXT_PUBLIC = semi-public (inliné dans le bundle), donc pas un secret.

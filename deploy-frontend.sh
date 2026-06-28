@@ -47,9 +47,18 @@ echo "Build + Deploy via cloudbuild-frontend.yaml (bake les NEXT_PUBLIC_* dans l
 # le build-arg NEXT_PUBLIC_SHOPIFY_API_KEY, le bundle Next.js ne contient pas
 # la clé → App Bridge ne se charge pas → /embedded plante en "shopify is not
 # defined".
+# Traçabilité git ↔ GCP : déployer uniquement du code COMMITÉ + baker le SHA git.
+if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+  echo "❌ Working tree non commité (fichiers suivis modifiés). Commit avant de déployer."
+  echo "   Override d'urgence : ALLOW_DIRTY=1 ./deploy-frontend.sh"
+  [ "${ALLOW_DIRTY:-}" = "1" ] || exit 1
+fi
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "   Commit déployé : $GIT_SHA"
+
 $GCLOUD_CMD builds submit \
   --config=cloudbuild-frontend.yaml \
-  --substitutions=_SHOPIFY_API_KEY="$NEXT_PUBLIC_SHOPIFY_API_KEY" \
+  --substitutions=_SHOPIFY_API_KEY="$NEXT_PUBLIC_SHOPIFY_API_KEY",_GIT_SHA="$GIT_SHA" \
   --project="$PROJECT_ID" \
   .
 
