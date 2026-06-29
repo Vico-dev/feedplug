@@ -253,7 +253,8 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
     const prisma = ready(res); if (!prisma) return;
     try {
       const rows = await prisma.$queryRawUnsafe(`
-        SELECT fi.id, fi.url, fi.groupid, fs.countrycode
+        SELECT fi.id, fi.url, fi.groupid, fs.countrycode,
+               fi.customfields->>'merchant_name' AS merchantname
         FROM "FeedItem" fi
         JOIN "Feed" f        ON f.id = fi.feedid
         JOIN "FeedSource" fs ON fs.id = f.sourceid
@@ -264,20 +265,39 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       const offer = rows[0];
       if (!offer || !offer.url) return res.status(404).json({ message: 'Offre introuvable' });
 
+      // Résolution best-effort de l'utilisateur connecté (cookie conso). Anonyme accepté
+      // (tracké sans cashback). On ne bloque jamais la redirection.
+      let userId = null;
+      try {
+        const cookie = req.cookies && req.cookies.cmp_session;
+        if (cookie) {
+          const { verifySession } = require('../domains/comparator-account/sessions');
+          const sess = await verifySession(prisma, cookie);
+          userId = sess ? sess.userId : null;
+        }
+      } catch { /* anonyme */ }
+
+      // clickref unique = identité du clic, propagée à AWIN pour relier la conversion à l'user.
+      const clickId = crypto.randomUUID();
+
       // Log best-effort : ne jamais bloquer la redirection si l'insert échoue.
       try {
         const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress;
         await prisma.$executeRawUnsafe(`
-          INSERT INTO "ClickEvent" (id, offerid, groupid, countrycode, iphash, useragent, referer, targeturl, createdat)
-          VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, NOW())
-        `, crypto.randomUUID(), offer.id, offer.groupid || null, offer.countrycode || null,
+          INSERT INTO "ClickEvent" (id, offerid, groupid, countrycode, iphash, useragent, referer, targeturl, userid, clickref, merchantname, createdat)
+          VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, $9::text, $10::text, $11::text, NOW())
+        `, clickId, offer.id, offer.groupid || null, offer.countrycode || null,
            hashIp(ip, CLICK_SALT), (req.headers['user-agent'] || '').slice(0, 500),
-           (req.headers['referer'] || '').slice(0, 500), offer.url);
+           (req.headers['referer'] || '').slice(0, 500), offer.url,
+           userId, clickId, offer.merchantname || null);
       } catch (logErr) {
         console.warn('ClickEvent non loggé:', logErr.message);
       }
 
-      res.redirect(302, offer.url);
+      // Injecte le clickref dans le deep link AWIN (mécanisme SubID publisher) avant la redirection.
+      const sep = offer.url.includes('?') ? '&' : '?';
+      const target = `${offer.url}${sep}clickref=${encodeURIComponent(clickId)}`;
+      res.redirect(302, target);
     } catch (e) {
       console.error('comparator visit error:', e);
       res.status(500).json({ message: 'Erreur redirection' });
