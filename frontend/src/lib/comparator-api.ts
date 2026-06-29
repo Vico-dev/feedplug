@@ -91,6 +91,27 @@ export function searchProducts(params: {
   return apiGet<SearchResponse>(`/products/search?${qs.toString()}`);
 }
 
+export interface CategoryPageResponse {
+  category: { id: string; slug: string; labelfr: string; labelen: string | null; icon: string | null };
+  items: SearchItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  country: string;
+}
+
+// Page rayon (catégorie) : produits d'une catégorie de la taxonomie. Public (sans auth).
+export function getCategory(
+  slug: string,
+  country: string,
+  params: { limit?: number; offset?: number } = {},
+): Promise<CategoryPageResponse | null> {
+  const qs = new URLSearchParams({ country });
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.offset) qs.set("offset", String(params.offset));
+  return apiGet<CategoryPageResponse>(`/category/${encodeURIComponent(slug)}?${qs.toString()}`);
+}
+
 export function getProduct(id: string, country: string): Promise<ComparatorProductResponse | null> {
   return apiGet<ComparatorProductResponse>(`/products/${encodeURIComponent(id)}?country=${country}`, 600);
 }

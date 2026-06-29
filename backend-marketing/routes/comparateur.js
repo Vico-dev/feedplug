@@ -105,6 +105,43 @@ async function runProductSearch(prisma, accountId, { country, qNorm, brand, sort
   return { items, total };
 }
 
+/** Produits d'un rayon (taxonomie). Même agrégat que la recherche, filtré par categoryid. */
+async function getCategoryProducts(prisma, accountId, { country, categoryId, limit, offset, minMerchants = 1 }) {
+  const rows = await prisma.$queryRawUnsafe(`
+    WITH agg AS (
+      SELECT fi.groupid,
+             min(fi.price) AS lowestprice,
+             count(DISTINCT COALESCE(fi.customfields->>'merchant_id', f.sourceid)) AS merchant_count,
+             (array_agg(fi.currency ORDER BY fi.price ASC NULLS LAST) FILTER (WHERE fi.currency IS NOT NULL))[1] AS currency
+      FROM "FeedItem" fi
+      JOIN "Feed" f        ON f.id = fi.feedid
+      JOIN "FeedSource" fs ON fs.id = f.sourceid
+      JOIN "Account" a     ON a.id = f.accountid
+      WHERE fi.groupid IS NOT NULL AND fi.price > 0
+        AND ((f.accountid = $1::text AND fs.approvalstatus = 'approved') OR a.comparatoroptin = true)
+        AND COALESCE(fs.countrycode, '') = $2::text
+      GROUP BY fi.groupid
+      HAVING count(DISTINCT COALESCE(fi.customfields->>'merchant_id', f.sourceid)) >= $5::int
+    )
+    SELECT pg.id, pg.canonicaltitle, pg.brand, pg.imageurl,
+           a.lowestprice, a.currency, a.merchant_count::int AS merchant_count,
+           count(*) OVER()::int AS total
+    FROM "ProductGroup" pg
+    JOIN agg a ON a.groupid = pg.id
+    JOIN "ProductGroupCategory" pgc ON pgc.groupid = pg.id
+    WHERE pg.accountid = $1::text AND pgc.categoryid = $3::text
+    ORDER BY a.merchant_count DESC, a.lowestprice ASC NULLS LAST
+    LIMIT $4::int OFFSET $6::int
+  `, accountId, country, categoryId, limit, minMerchants, offset);
+  const total = rows[0]?.total ?? 0;
+  const items = rows.map((r) => ({
+    id: r.id, title: r.canonicaltitle, brand: r.brand, imageUrl: r.imageurl,
+    lowestPrice: r.lowestprice != null ? Number(r.lowestprice) : null,
+    currency: r.currency, merchantCount: r.merchant_count,
+  }));
+  return { items, total };
+}
+
 /** Extrait un objet JSON d'une réponse LLM (gère les fences ```json). PUR. */
 function parseAiJson(text) {
   if (!text) return null;
@@ -153,6 +190,28 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
       res.json({ categories: rows });
     } catch (e) {
       console.error('Comparator categories error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // GET /api/v1/comparator/category/:slug?country=FR&limit=&offset= — page rayon (produits d'une catégorie).
+  app.get('/api/v1/comparator/category/:slug', async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const country = parseCountry(req.query.country);
+      const { limit, offset } = parsePaging(req.query);
+      const slug = String(req.params.slug || '').toLowerCase().slice(0, 64);
+      const cat = await prisma.$queryRawUnsafe(
+        `SELECT id, slug, labelfr, labelen, icon FROM "ComparatorCategory" WHERE id = $1::text AND active = true LIMIT 1`,
+        slug,
+      );
+      if (!cat[0]) return res.status(404).json({ message: 'Rayon introuvable' });
+      const { items, total } = await getCategoryProducts(prisma, COMPARATOR_ACCOUNT_ID, {
+        country, categoryId: slug, limit, offset, minMerchants: MIN_MERCHANTS,
+      });
+      res.json({ category: cat[0], items, total, limit, offset, country });
+    } catch (e) {
+      console.error('Comparator category error:', e.message);
       res.status(500).json({ message: 'Erreur' });
     }
   });

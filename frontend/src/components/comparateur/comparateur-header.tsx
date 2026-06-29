@@ -7,22 +7,22 @@ import {
   Laptop, Smartphone, Tv, WashingMachine, Gamepad2, Sofa, Shirt, Sparkles, Dumbbell, ToyBrick,
 } from "lucide-react";
 
-// Rayons du comparateur (taxonomie maison). Pas de pages catégorie dédiées en v1 →
-// chaque rayon pointe sur une recherche. À remplacer par /rayon/<slug> quand elles existeront.
+// Rayons du comparateur (taxonomie maison). slug = id de catégorie (ComparatorCategory)
+// → vraies pages rayon /rayon/<slug>.
 const RAYONS = [
-  { label: "Informatique", q: "ordinateur", Icon: Laptop },
-  { label: "Téléphonie", q: "smartphone", Icon: Smartphone },
-  { label: "TV & Son", q: "tv", Icon: Tv },
-  { label: "Électroménager", q: "electromenager", Icon: WashingMachine },
-  { label: "Jeux vidéo", q: "jeu", Icon: Gamepad2 },
-  { label: "Maison & Déco", q: "maison", Icon: Sofa },
-  { label: "Mode", q: "mode", Icon: Shirt },
-  { label: "Beauté & Parfums", q: "parfum", Icon: Sparkles },
-  { label: "Sport", q: "sport", Icon: Dumbbell },
-  { label: "Jouets", q: "jouet", Icon: ToyBrick },
+  { label: "Informatique", slug: "informatique", Icon: Laptop },
+  { label: "Téléphonie", slug: "telephonie", Icon: Smartphone },
+  { label: "TV & Son", slug: "tv-son", Icon: Tv },
+  { label: "Électroménager", slug: "electromenager", Icon: WashingMachine },
+  { label: "Jeux vidéo", slug: "jeux-video", Icon: Gamepad2 },
+  { label: "Maison & Déco", slug: "maison-deco", Icon: Sofa },
+  { label: "Mode", slug: "mode", Icon: Shirt },
+  { label: "Beauté & Parfums", slug: "beaute-parfums", Icon: Sparkles },
+  { label: "Sport", slug: "sport", Icon: Dumbbell },
+  { label: "Jouets", slug: "jouets", Icon: ToyBrick },
 ];
 
-const rayonHref = (q: string) => `/comparateur?q=${encodeURIComponent(q)}`;
+const rayonHref = (slug: string) => `/rayon/${slug}`;
 
 export default function ComparateurHeader() {
   const [megaOpen, setMegaOpen] = useState(false);
@@ -118,7 +118,7 @@ export default function ComparateurHeader() {
 
         {/* Actions droite — desktop */}
         <div className="cmp-hd-desktop" style={{ marginLeft: "auto" }}>
-          <Link href={rayonHref("promo")} className="cmp-hd-link" style={{ color: "var(--accent-2)" }}>
+          <Link href={"/"} className="cmp-hd-link" style={{ color: "var(--accent-2)" }}>
             <Flame size={16} /> Bons plans
           </Link>
           <Link href="/compte" className="cmp-hd-link">
@@ -142,13 +142,13 @@ export default function ComparateurHeader() {
       {megaOpen && (
         <div className="cmp-mega" onMouseLeave={() => setMegaOpen(false)}>
           <div className="cmp-mega-panel">
-            <Link href={rayonHref("promo")} onClick={() => setMegaOpen(false)} className="cmp-mega-item" style={{ background: "var(--accent-bg)", marginBottom: "12px" }}>
+            <Link href={"/"} onClick={() => setMegaOpen(false)} className="cmp-mega-item" style={{ background: "var(--accent-bg)", marginBottom: "12px" }}>
               <Flame size={20} style={{ color: "var(--accent-2)" }} />
               <span style={{ fontWeight: 700, color: "var(--accent-2)" }}>Bons plans — les meilleures baisses</span>
             </Link>
             <div className="cmp-mega-grid">
-              {RAYONS.map(({ label, q, Icon }) => (
-                <Link key={q} href={rayonHref(q)} onClick={() => setMegaOpen(false)} className="cmp-mega-item">
+              {RAYONS.map(({ label, slug, Icon }) => (
+                <Link key={slug} href={rayonHref(slug)} onClick={() => setMegaOpen(false)} className="cmp-mega-item">
                   <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "var(--r-md)", background: "var(--paper-2)", color: "var(--ink-2)", flexShrink: 0 }}>
                     <Icon size={18} aria-hidden="true" />
                   </span>
@@ -172,12 +172,12 @@ export default function ComparateurHeader() {
               <Search size={17} aria-hidden="true" style={{ position: "absolute", left: "12px", color: "var(--ink-4)" }} />
               <input name="q" placeholder="Rechercher…" aria-label="Rechercher" className="input-field" style={{ width: "100%", height: "44px", padding: "0 14px 0 36px", borderRadius: "var(--r-pill)", border: "1px solid var(--line)", background: "var(--surface)", fontSize: "15px", color: "var(--ink)", outline: "none" }} />
             </form>
-            <Link href={rayonHref("promo")} onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px", borderRadius: "var(--r-lg)", background: "var(--accent-bg)", color: "var(--accent-2)", fontWeight: 700, textDecoration: "none", marginBottom: "12px" }}>
+            <Link href={"/"} onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px", borderRadius: "var(--r-lg)", background: "var(--accent-bg)", color: "var(--accent-2)", fontWeight: 700, textDecoration: "none", marginBottom: "12px" }}>
               <Flame size={20} /> Bons plans
             </Link>
             <p style={{ margin: "0 0 8px", fontFamily: "var(--font-mono)", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}>Rayons</p>
-            {RAYONS.map(({ label, q, Icon }) => (
-              <Link key={q} href={rayonHref(q)} onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "12px", minHeight: "52px", padding: "12px", borderRadius: "var(--r-lg)", color: "var(--ink)", textDecoration: "none" }}>
+            {RAYONS.map(({ label, slug, Icon }) => (
+              <Link key={slug} href={rayonHref(slug)} onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "12px", minHeight: "52px", padding: "12px", borderRadius: "var(--r-lg)", color: "var(--ink)", textDecoration: "none" }}>
                 <Icon size={20} aria-hidden="true" style={{ color: "var(--ink-3)" }} /> <span style={{ fontSize: "16px", fontWeight: 500 }}>{label}</span>
               </Link>
             ))}
