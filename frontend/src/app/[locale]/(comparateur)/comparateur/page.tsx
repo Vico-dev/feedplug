@@ -6,6 +6,7 @@ import { searchProducts, formatPrice, type SearchItem } from "@/lib/comparator-a
 import CountrySelector from "@/components/comparateur/country-selector";
 import AssistPanel from "@/components/comparateur/assist-panel";
 import WatchButton from "@/components/comparateur/watch-button";
+import RecommendedSection from "@/components/comparateur/recommended-section";
 import { seo } from "@/lib/seo";
 
 export const revalidate = 300;
@@ -444,6 +445,12 @@ export default async function ComparatorSearchPage({
       {/* ───────── Page d'accueil ───────── */}
       {!q && (
         <>
+          {/* Recommandé pour vous — section CLIENT, ne s'affiche que si connecté + intérêts.
+              Préserve le SSR public (le composant ne rend rien sinon). */}
+          <div style={{ marginBottom: "56px" }}>
+            <RecommendedSection country={country} limit={8} />
+          </div>
+
           {/* Catégories */}
           <section style={{ marginBottom: "56px" }}>
             <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>

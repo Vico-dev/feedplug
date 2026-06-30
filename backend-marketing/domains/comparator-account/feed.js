@@ -41,8 +41,13 @@ function parsePaging(rawLimit, rawOffset) {
 /**
  * Construit le feed perso de l'user. Retourne { items, total }.
  * @param {string} country pays ISO-2 (déjà normalisé en amont)
+ * @param {string[]} [favoriteBrands] marques favorites (affinité) — pondèrent le ranking.
+ *   Optionnel : si absent/vide, le tri reste celui des baisses pures (rétro-compatible).
  */
-async function getPersonalFeed(prisma, accountId, userId, { country, limit, offset }) {
+async function getPersonalFeed(prisma, accountId, userId, { country, limit, offset, favoriteBrands = [] }) {
+  const brands = Array.isArray(favoriteBrands)
+    ? favoriteBrands.filter((b) => typeof b === 'string' && b).map((b) => b.trim().toLowerCase())
+    : [];
   const rows = await prisma.$queryRawUnsafe(`
     WITH followed AS (
       SELECT categoryid FROM "ComparatorInterest" WHERE userid = $2::text
@@ -89,14 +94,18 @@ async function getPersonalFeed(prisma, accountId, userId, { country, limit, offs
     LEFT JOIN past p ON p.groupid = pg.id
     WHERE pg.accountid = $1::text
     ORDER BY
-      LEAST(
-        COALESCE(CASE WHEN p.pastprice > 0 THEN (l.lowestprice - p.pastprice) / p.pastprice * 100 END, 0),
-        COALESCE(CASE WHEN COALESCE(l.rrp_price, l.base_price) > 0
-                      THEN (l.lowestprice - COALESCE(l.rrp_price, l.base_price)) / COALESCE(l.rrp_price, l.base_price) * 100 END, 0)
+      (
+        LEAST(
+          COALESCE(CASE WHEN p.pastprice > 0 THEN (l.lowestprice - p.pastprice) / p.pastprice * 100 END, 0),
+          COALESCE(CASE WHEN COALESCE(l.rrp_price, l.base_price) > 0
+                        THEN (l.lowestprice - COALESCE(l.rrp_price, l.base_price)) / COALESCE(l.rrp_price, l.base_price) * 100 END, 0)
+        )
+        -- Affinité marque : bonus négatif (= remonte le produit) si la marque est favorite.
+        + CASE WHEN lower(COALESCE(pg.brand,'')) = ANY($6::text[]) THEN -12 ELSE 0 END
       ) ASC,
       pg.updatedat DESC
     LIMIT $4::int OFFSET $5::int
-  `, accountId, userId, country, limit, offset);
+  `, accountId, userId, country, limit, offset, brands);
 
   const total = rows[0]?.total ?? 0;
   const items = rows.map((r) => {
