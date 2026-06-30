@@ -7,6 +7,7 @@ import {
   formatPrice,
   type PersonalFeedItem,
 } from "@/lib/comparator-api";
+import RecommendedSection from "@/components/comparateur/recommended-section";
 
 const eyebrowStyle: CSSProperties = {
   display: "inline-flex",
@@ -172,6 +173,11 @@ export default function FeedPage() {
             Mes catégories
           </Link>
         </div>
+      </div>
+
+      {/* Recommandé pour vous — pondéré par intérêts + marques favorites. */}
+      <div style={{ margin: "44px 0 0" }}>
+        <RecommendedSection country="FR" limit={4} />
       </div>
 
       {loading ? (

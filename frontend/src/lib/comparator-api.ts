@@ -311,3 +311,73 @@ export function getPersonalFeed(params: { country?: string; limit?: number; offs
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return authFetch(`/account/feed${suffix}`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding enrichi : socio-démo (RGPD, optionnel + consenti) + affinité marques + reco.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ComparatorDemographics {
+  agerange: string | null;
+  gender: string | null;
+  region: string | null;
+  household: string | null;
+  budgetrange: string | null;
+  consentAt: string | null;
+}
+
+// Payload PUT : tous les champs optionnels. `consent` (booléen) pose/retire le consentement.
+export interface ComparatorDemographicsInput {
+  agerange?: string | null;
+  gender?: string | null;
+  region?: string | null;
+  household?: string | null;
+  budgetrange?: string | null;
+  consent?: boolean;
+}
+
+export interface RecommendationItem {
+  id: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string | null;
+  categoryId: string;
+  lowestPrice: number | null;
+  currency: string | null;
+  merchantCount: number;
+  rrpDropPct: number | null;
+  affinityBonus: number;
+}
+
+export function getDemographics(): Promise<{ demographics: ComparatorDemographics }> {
+  return authFetch("/account/profile-demographics");
+}
+
+export function setDemographics(input: ComparatorDemographicsInput): Promise<{ demographics: ComparatorDemographics }> {
+  return authFetch("/account/profile-demographics", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getFavoriteBrands(): Promise<{ brands: string[] }> {
+  return authFetch("/account/brands");
+}
+
+export function setFavoriteBrands(brands: string[]): Promise<{ brands: string[] }> {
+  return authFetch("/account/brands", {
+    method: "PUT",
+    body: JSON.stringify({ brands }),
+  });
+}
+
+export function getRecommendations(params: { country?: string; limit?: number } = {}): Promise<{
+  items: RecommendationItem[];
+  country: string;
+}> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return authFetch(`/account/recommendations${suffix}`);
+}

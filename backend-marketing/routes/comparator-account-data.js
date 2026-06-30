@@ -22,6 +22,13 @@ const {
   listWatchlist,
 } = require('../domains/comparator-account/watchlist');
 const { getPersonalFeed, parsePaging } = require('../domains/comparator-account/feed');
+const {
+  getDemographics,
+  setDemographics,
+  getFavoriteBrands,
+  setFavoriteBrands,
+  getRecommendations,
+} = require('../domains/comparator-account/personalization');
 
 function registerComparatorAccountDataRoutes(app, { getPrisma, getPrismaReady, requireComparatorAuth }) {
   const COMPARATOR_ACCOUNT_ID =
@@ -114,10 +121,78 @@ function registerComparatorAccountDataRoutes(app, { getPrisma, getPrismaReady, r
     try {
       const country = normCountry(req.query.country);
       const { limit, offset } = parsePaging(req.query.limit, req.query.offset);
-      const { items, total } = await getPersonalFeed(prisma, COMPARATOR_ACCOUNT_ID, req.comparatorUser.id, { country, limit, offset });
+      // Pondération par affinité marques (perso). Non bloquant : [] si l'user n'en a pas.
+      const favoriteBrands = await getFavoriteBrands(prisma, req.comparatorUser.id);
+      const { items, total } = await getPersonalFeed(prisma, COMPARATOR_ACCOUNT_ID, req.comparatorUser.id, { country, limit, offset, favoriteBrands });
       res.json({ items, total, limit, offset, country });
     } catch (e) {
       console.error('[comparator-account-data] feed error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // ───────── Profil socio-démo (RGPD : optionnel + consenti) ─────────
+
+  app.get('/api/v1/comparator/account/profile-demographics', requireComparatorAuth, async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const demographics = await getDemographics(prisma, req.comparatorUser.id);
+      res.json({ demographics });
+    } catch (e) {
+      console.error('[comparator-account-data] demographics get error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // Upsert socio-démo. `consent` (booléen) requis pour poser le consentement ; sinon stocké sans
+  // consentat (et la perso retombe sur les seuls intérêts). Valeurs hors-liste blanche → null.
+  app.put('/api/v1/comparator/account/profile-demographics', requireComparatorAuth, async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const demographics = await setDemographics(prisma, req.comparatorUser.id, req.body || {});
+      res.json({ demographics });
+    } catch (e) {
+      console.error('[comparator-account-data] demographics put error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // ───────── Affinité marques (set complet remplaçable) ─────────
+
+  app.get('/api/v1/comparator/account/brands', requireComparatorAuth, async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const brands = await getFavoriteBrands(prisma, req.comparatorUser.id);
+      res.json({ brands });
+    } catch (e) {
+      console.error('[comparator-account-data] brands get error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  app.put('/api/v1/comparator/account/brands', requireComparatorAuth, async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const body = req.body || {};
+      const brands = await setFavoriteBrands(prisma, req.comparatorUser.id, body.brands);
+      res.json({ brands });
+    } catch (e) {
+      console.error('[comparator-account-data] brands put error:', e.message);
+      res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // ───────── « Recommandé pour toi » (perso : intérêts + affinité marques) ─────────
+
+  app.get('/api/v1/comparator/account/recommendations', requireComparatorAuth, async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const country = normCountry(req.query.country);
+      const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
+      const { items } = await getRecommendations(prisma, COMPARATOR_ACCOUNT_ID, req.comparatorUser.id, { country, limit });
+      res.json({ items, country });
+    } catch (e) {
+      console.error('[comparator-account-data] recommendations error:', e.message);
       res.status(500).json({ message: 'Erreur' });
     }
   });
