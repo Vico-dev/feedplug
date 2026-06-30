@@ -58,7 +58,7 @@ function VerifyRunner({ token, country }: { token: string; country: string }) {
 
     (async () => {
       try {
-        await verifyMagicLink(token, country, "fr");
+        const { user } = await verifyMagicLink(token, country, "fr");
 
         let returnTo: string | null = null;
         try {
@@ -66,10 +66,6 @@ function VerifyRunner({ token, country }: { token: string; country: string }) {
           sessionStorage.removeItem("cmp_return_to");
         } catch {
           returnTo = null;
-        }
-        if (returnTo && returnTo.startsWith("/")) {
-          router.replace(returnTo);
-          return;
         }
 
         let hasInterests = false;
@@ -79,7 +75,20 @@ function VerifyRunner({ token, country }: { token: string; country: string }) {
         } catch {
           hasInterests = false;
         }
-        router.replace(hasInterests ? "/compte/feed" : "/compte/onboarding");
+        const destination =
+          returnTo && returnTo.startsWith("/")
+            ? returnTo
+            : hasInterests
+              ? "/compte/feed"
+              : "/compte/onboarding";
+
+        // Premier passage sans prénom connu : on propose « Comment on t'appelle ? »
+        // avant de poursuivre. Étape optionnelle (skippable), elle relaie la destination.
+        if (!user.firstName) {
+          router.replace(`/compte/bienvenue?next=${encodeURIComponent(destination)}`);
+          return;
+        }
+        router.replace(destination);
       } catch {
         setErrored(true);
       }

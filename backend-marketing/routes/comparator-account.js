@@ -99,7 +99,14 @@ function registerComparatorAccountRoutes(app, { getPrisma, getPrismaReady, sendM
       });
       res.cookie(COOKIE, sessionToken, cookieOptions());
       return res.status(200).json({
-        user: { id: user.id, email: user.email, countryCode: user.countrycode, locale: user.locale },
+        user: {
+          id: user.id,
+          email: user.email,
+          countryCode: user.countrycode,
+          locale: user.locale,
+          // Permet au client de proposer « Comment on t'appelle ? » quand le prénom manque.
+          firstName: user.firstname || null,
+        },
       });
     } catch (e) {
       console.error('[comparator-account] verify error:', e);
@@ -119,12 +126,12 @@ function registerComparatorAccountRoutes(app, { getPrisma, getPrismaReady, sendM
     const prisma = ready(res); if (!prisma) return;
     try {
       const rows = await prisma.$queryRawUnsafe(
-        `SELECT id, email, countrycode, locale, marketingoptin FROM "ComparatorUser" WHERE id = $1::text LIMIT 1`,
+        `SELECT id, email, countrycode, locale, marketingoptin, firstname FROM "ComparatorUser" WHERE id = $1::text LIMIT 1`,
         req.comparatorUser.id,
       );
       if (!rows[0]) return res.status(404).json({ message: 'Introuvable' });
       const u = rows[0];
-      return res.json({ id: u.id, email: u.email, countryCode: u.countrycode, locale: u.locale, marketingOptIn: u.marketingoptin });
+      return res.json({ id: u.id, email: u.email, countryCode: u.countrycode, locale: u.locale, marketingOptIn: u.marketingoptin, firstName: u.firstname || null });
     } catch (e) {
       console.error('[comparator-account] me error:', e.message);
       return res.status(500).json({ message: 'Erreur' });

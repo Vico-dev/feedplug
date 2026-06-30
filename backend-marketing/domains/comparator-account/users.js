@@ -6,7 +6,7 @@ const { normalizeEmail } = require('./magic-link');
 async function findOrCreateUser(prisma, { email, countryCode = 'FR', locale = 'fr' }) {
   const e = normalizeEmail(email);
   const existing = await prisma.$queryRawUnsafe(
-    `SELECT id, email, countrycode, locale, emailverified, marketingoptin, status
+    `SELECT id, email, countrycode, locale, emailverified, marketingoptin, firstname, status
      FROM "ComparatorUser" WHERE lower(email) = $1::text LIMIT 1`,
     e,
   );
@@ -25,7 +25,7 @@ async function findOrCreateUser(prisma, { email, countryCode = 'FR', locale = 'f
      VALUES ($1::text, $2::text, true, $3::text, $4::text, 'active', now(), now(), now())`,
     id, e, cc, loc,
   );
-  return { id, email: e, countrycode: cc, locale: loc, emailverified: true, marketingoptin: false, status: 'active' };
+  return { id, email: e, countrycode: cc, locale: loc, emailverified: true, marketingoptin: false, firstname: null, status: 'active' };
 }
 
 module.exports = { findOrCreateUser };

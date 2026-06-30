@@ -6241,6 +6241,14 @@ registerComparatorAccountDataRoutes(app, {
   requireComparatorAuth: requireComparatorAuthMw,
 });
 
+// Profil + suppression RGPD du compte conso — réutilise le middleware auth ci-dessus.
+const { registerComparatorAccountProfileRoutes } = require('./routes/comparator-account-profile');
+registerComparatorAccountProfileRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requireComparatorAuth: requireComparatorAuthMw,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

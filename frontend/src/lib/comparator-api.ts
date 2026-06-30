@@ -148,6 +148,25 @@ export interface ComparatorAccount {
   countryCode: string;
   locale: string;
   marketingOptIn?: boolean;
+  firstName?: string | null;
+}
+
+export interface ComparatorProfile {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  countryCode: string;
+  locale: string;
+  marketingOptIn: boolean;
+}
+
+// Champs éditables du profil (PATCH partiel : on n'envoie que ce qui change).
+export interface ProfileUpdate {
+  firstName?: string;
+  lastName?: string;
+  countryCode?: string;
+  marketingOptIn?: boolean;
 }
 
 export interface ComparatorCategory {
@@ -230,6 +249,21 @@ export function logout(): Promise<{ message: string }> {
 
 export function getMe(): Promise<ComparatorAccount> {
   return authFetch("/account/me");
+}
+
+export function getProfile(): Promise<ComparatorProfile> {
+  return authFetch("/account/profile");
+}
+
+export function updateProfile(patch: ProfileUpdate): Promise<ComparatorProfile> {
+  return authFetch("/account/profile", {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteAccount(): Promise<{ message: string }> {
+  return authFetch("/account", { method: "DELETE" });
 }
 
 export function getCategories(): Promise<{ categories: ComparatorCategory[] }> {
