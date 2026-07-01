@@ -1,6 +1,7 @@
 [
   "DELETE /api/v1/accounts",
   "DELETE /api/v1/accounts/users/:userId",
+  "DELETE /api/v1/comparator/account",
   "DELETE /api/v1/comparator/account/watchlist/:groupId",
   "DELETE /api/v1/ingestion/enrichment-sources/:id",
   "DELETE /api/v1/ingestion/sources/:id",
@@ -33,6 +34,7 @@
   "GET /api/v1/comparator/account/feed",
   "GET /api/v1/comparator/account/interests",
   "GET /api/v1/comparator/account/me",
+  "GET /api/v1/comparator/account/profile",
   "GET /api/v1/comparator/account/profile-demographics",
   "GET /api/v1/comparator/account/recommendations",
   "GET /api/v1/comparator/account/watchlist",
@@ -226,6 +228,7 @@
   "PUT /api/v1/auth/me/password",
   "PUT /api/v1/comparator/account/brands",
   "PUT /api/v1/comparator/account/interests",
+  "PUT /api/v1/comparator/account/profile",
   "PUT /api/v1/comparator/account/profile-demographics",
   "PUT /api/v1/ingestion/enrichment-sources/:id",
   "PUT /api/v1/ingestion/feeds/:id",

@@ -130,6 +130,8 @@ async function deleteAccount(prisma, userId) {
   // Purge des données liées (best-effort : ces tables peuvent ne pas exister selon l'env).
   for (const stmt of [
     `DELETE FROM "ComparatorInterest" WHERE userid = $1::text`,
+    `DELETE FROM "ComparatorProfile" WHERE userid = $1::text`,
+    `DELETE FROM "ComparatorBrandAffinity" WHERE userid = $1::text`,
     `DELETE FROM "ComparatorSession" WHERE userid = $1::text`,
     `DELETE FROM "ComparatorWatchlist" WHERE userid = $1::text`,
     `DELETE FROM "ComparatorMagicLink" WHERE lower(email) = (SELECT lower(email) FROM "ComparatorUser" WHERE id = $1::text)`,
