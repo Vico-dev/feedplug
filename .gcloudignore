@@ -24,3 +24,9 @@ node_modules/
 config.local.js
 **/service-account*.json
 *.pem
+
+# Gros dossiers hors périmètre backend/frontend — ne jamais uploader au build context
+# (app mobile Expo ~450 Mo, build iOS, worktrees d'agents ~3 Go).
+mobile/
+ios/
+.claude/
