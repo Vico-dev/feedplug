@@ -23,6 +23,7 @@
 const crypto = require('crypto');
 const { normalizeTitle } = require('../domains/comparator/matching');
 const { getPriceSignals, getPriceHistory } = require('../domains/comparator/price-history');
+const { getPublicDeals } = require('../domains/comparator/deals');
 
 const SORTS = ['relevance', 'price_asc', 'price_desc', 'recent'];
 
@@ -213,6 +214,21 @@ function registerComparateurRoutes(app, { getPrisma, getPrismaReady }) {
     } catch (e) {
       console.error('Comparator category error:', e.message);
       res.status(500).json({ message: 'Erreur' });
+    }
+  });
+
+  // GET /api/v1/comparator/deals?country=FR&limit=&offset= — feed PUBLIC des plus fortes
+  // baisses sur tout le catalogue comparateur (acquisition, sans login ni intérêts).
+  app.get('/api/v1/comparator/deals', async (req, res) => {
+    const prisma = ready(res); if (!prisma) return;
+    try {
+      const country = parseCountry(req.query.country);
+      const { limit, offset } = parsePaging(req.query);
+      const { items, total } = await getPublicDeals(prisma, COMPARATOR_ACCOUNT_ID, { country, limit, offset });
+      res.json({ items, total, limit, offset, country });
+    } catch (e) {
+      console.error('comparator deals error:', e);
+      res.status(500).json({ message: 'Erreur bons plans' });
     }
   });
 

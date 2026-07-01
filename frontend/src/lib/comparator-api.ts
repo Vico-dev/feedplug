@@ -112,6 +112,41 @@ export function getCategory(
   return apiGet<CategoryPageResponse>(`/category/${encodeURIComponent(slug)}?${qs.toString()}`);
 }
 
+// Feed public « bons plans » (plus fortes baisses, sans login). Public via apiGet.
+export interface DealItem {
+  id: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string | null;
+  lowestPrice: number | null;
+  currency: string | null;
+  merchantCount: number;
+  pctVs30d: number | null;
+  rrpDropPct: number | null;
+  dropScore: number;
+}
+
+export interface DealsResponse {
+  items: DealItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  country: string;
+}
+
+export function getPublicDeals(params: {
+  country?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<DealsResponse | null> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiGet<DealsResponse>(`/deals${suffix}`);
+}
+
 export function getProduct(id: string, country: string): Promise<ComparatorProductResponse | null> {
   return apiGet<ComparatorProductResponse>(`/products/${encodeURIComponent(id)}?country=${country}`, 600);
 }

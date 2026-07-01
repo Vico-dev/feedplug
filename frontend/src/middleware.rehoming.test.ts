@@ -94,6 +94,12 @@ describe("rehoming host-routing", () => {
     expect(r.status).not.toBe(301);
   });
 
+  it("apex /deals → servi sur l'apex (feed bons plans public)", () => {
+    const r = run("feedplug.com", "/deals");
+    if (r.location) expect(new URL(r.location).hostname).toBe("feedplug.com");
+    expect(r.status).not.toBe(301);
+  });
+
   it("apex /tarifs → 301 vers pro.feedplug.com/tarifs", () => {
     const r = run("feedplug.com", "/tarifs");
     expect(r.status).toBe(301);

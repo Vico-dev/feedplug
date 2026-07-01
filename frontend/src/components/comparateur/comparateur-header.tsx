@@ -118,7 +118,7 @@ export default function ComparateurHeader() {
 
         {/* Actions droite — desktop */}
         <div className="cmp-hd-desktop" style={{ marginLeft: "auto" }}>
-          <Link href={"/"} className="cmp-hd-link" style={{ color: "var(--accent-2)" }}>
+          <Link href="/deals" className="cmp-hd-link" style={{ color: "var(--accent-2)" }}>
             <Flame size={16} /> Bons plans
           </Link>
           <Link href="/compte" className="cmp-hd-link">
@@ -142,7 +142,7 @@ export default function ComparateurHeader() {
       {megaOpen && (
         <div className="cmp-mega" onMouseLeave={() => setMegaOpen(false)}>
           <div className="cmp-mega-panel">
-            <Link href={"/"} onClick={() => setMegaOpen(false)} className="cmp-mega-item" style={{ background: "var(--accent-bg)", marginBottom: "12px" }}>
+            <Link href="/deals" onClick={() => setMegaOpen(false)} className="cmp-mega-item" style={{ background: "var(--accent-bg)", marginBottom: "12px" }}>
               <Flame size={20} style={{ color: "var(--accent-2)" }} />
               <span style={{ fontWeight: 700, color: "var(--accent-2)" }}>Bons plans — les meilleures baisses</span>
             </Link>
@@ -172,7 +172,7 @@ export default function ComparateurHeader() {
               <Search size={17} aria-hidden="true" style={{ position: "absolute", left: "12px", color: "var(--ink-4)" }} />
               <input name="q" placeholder="Rechercher…" aria-label="Rechercher" className="input-field" style={{ width: "100%", height: "44px", padding: "0 14px 0 36px", borderRadius: "var(--r-pill)", border: "1px solid var(--line)", background: "var(--surface)", fontSize: "15px", color: "var(--ink)", outline: "none" }} />
             </form>
-            <Link href={"/"} onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px", borderRadius: "var(--r-lg)", background: "var(--accent-bg)", color: "var(--accent-2)", fontWeight: 700, textDecoration: "none", marginBottom: "12px" }}>
+            <Link href="/deals" onClick={() => setMobileOpen(false)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px", borderRadius: "var(--r-lg)", background: "var(--accent-bg)", color: "var(--accent-2)", fontWeight: 700, textDecoration: "none", marginBottom: "12px" }}>
               <Flame size={20} /> Bons plans
             </Link>
             <p style={{ margin: "0 0 8px", fontFamily: "var(--font-mono)", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}>Rayons</p>
