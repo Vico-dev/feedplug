@@ -103,10 +103,16 @@ export default function ComparateurFooter({ locale }: { locale: string }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <Link
-              href="/legal/privacy"
+              href="/confidentialite"
               style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
             >
               {isEn ? "Privacy policy" : "Politique de confidentialité"}
+            </Link>
+            <Link
+              href="/transparence"
+              style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
+            >
+              {isEn ? "Transparency" : "Transparence"}
             </Link>
             <Link
               href="/legal/terms"

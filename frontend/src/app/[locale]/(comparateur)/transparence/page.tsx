@@ -83,7 +83,7 @@ export default function TransparencePage() {
         <Block title="Tes données">
           On ne collecte que le nécessaire (e-mail pour ton compte, produits suivis). Connexion par lien magique,
           sans mot de passe. Détails dans notre{" "}
-          <Link href="/legal/privacy" style={{ color: "var(--accent)", textDecoration: "none" }}>politique de confidentialité</Link>{" "}
+          <Link href="/confidentialite" style={{ color: "var(--accent)", textDecoration: "none" }}>politique de confidentialité</Link>{" "}
           et notre{" "}
           <Link href="/legal/cookies" style={{ color: "var(--accent)", textDecoration: "none" }}>politique cookies</Link>.
         </Block>

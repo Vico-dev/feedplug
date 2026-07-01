@@ -577,7 +577,11 @@ function StepDemographics({
         />
         <span style={{ fontFamily: "var(--font-sans)", fontSize: "13px", lineHeight: 1.55, color: "var(--ink-2)" }}>
           J&apos;autorise Feedplug à utiliser ces informations pour personnaliser mes recommandations. Données
-          facultatives, conservées de façon anonyme et supprimables à tout moment depuis mon compte.
+          facultatives, supprimables à tout moment depuis mon compte. Voir la{" "}
+          <Link href="/confidentialite" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+            politique de confidentialité
+          </Link>
+          .
         </span>
       </label>
     </>

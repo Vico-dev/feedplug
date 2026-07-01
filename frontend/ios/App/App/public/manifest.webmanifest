@@ -1,0 +1,47 @@
+{
+  "name": "Feedplug — Comparateur de prix",
+  "short_name": "Feedplug",
+  "description": "Comparez les prix, suivez vos produits et soyez alerté dès que le prix baisse.",
+  "lang": "fr",
+  "dir": "ltr",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAFAFA",
+  "theme_color": "#FAFAFA",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mes produits suivis",
+      "short_name": "Suivis",
+      "url": "/compte/produits"
+    },
+    {
+      "name": "Mon feed de bons plans",
+      "short_name": "Bons plans",
+      "url": "/compte/feed"
+    }
+  ]
+}

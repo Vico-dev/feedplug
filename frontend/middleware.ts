@@ -116,6 +116,8 @@ function isConsumerPath(pathnameWithoutLocale: string) {
     pathnameWithoutLocale.startsWith('/legal/') ||
     pathnameWithoutLocale === '/transparence' ||
     pathnameWithoutLocale.startsWith('/transparence/') ||
+    pathnameWithoutLocale === '/confidentialite' ||
+    pathnameWithoutLocale.startsWith('/confidentialite/') ||
     pathnameWithoutLocale === '/rayon' ||
     pathnameWithoutLocale.startsWith('/rayon/')
   );

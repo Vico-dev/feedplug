@@ -1,0 +1,33 @@
+{
+	"appId": "com.feedplug.comparateur",
+	"appName": "Feedplug",
+	"webDir": "public",
+	"server": {
+		"url": "https://feedplug.com",
+		"cleartext": false
+	},
+	"plugins": {
+		"SplashScreen": {
+			"backgroundColor": "#FAFAFA",
+			"launchShowDuration": 1500,
+			"launchAutoHide": true,
+			"showSpinner": false,
+			"androidScaleType": "CENTER_CROP"
+		},
+		"PushNotifications": {
+			"presentationOptions": [
+				"badge",
+				"sound",
+				"alert"
+			]
+		}
+	},
+	"ios": {
+		"contentInset": "always"
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"PushNotificationsPlugin",
+		"SplashScreenPlugin"
+	]
+}
