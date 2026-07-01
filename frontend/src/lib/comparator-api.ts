@@ -381,3 +381,36 @@ export function getRecommendations(params: { country?: string; limit?: number } 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return authFetch(`/account/recommendations${suffix}`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cashback — wallet conso (ledger CashbackTransaction alimenté par le poll AWIN).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CashbackWallet {
+  pending: number;
+  available: number;
+  paid: number;
+  lifetime: number;
+  currency: string;
+}
+
+export interface CashbackTransactionItem {
+  id: string;
+  merchantname: string | null;
+  cashbackamount: number | null;
+  currency: string | null;
+  status: string;
+  occurredat: string | null;
+  createdat: string;
+}
+
+export interface CashbackResponse {
+  wallet: CashbackWallet;
+  transactions: CashbackTransactionItem[];
+  payoutThreshold: number;
+  payoutAvailable: boolean;
+}
+
+export function getCashback(): Promise<CashbackResponse> {
+  return authFetch("/account/cashback");
+}

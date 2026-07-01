@@ -6249,6 +6249,21 @@ registerComparatorAccountProfileRoutes(app, {
   requireComparatorAuth: requireComparatorAuthMw,
 });
 
+// Wallet cashback conso (lecture du ledger) — réutilise le middleware auth ci-dessus.
+const { registerCashbackAccountRoutes } = require('./routes/cashback-account');
+registerCashbackAccountRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requireComparatorAuth: requireComparatorAuthMw,
+});
+
+// Poll interne des conversions AWIN (Cloud Scheduler, auth x-scheduler-secret) → ledger cashback.
+const { registerCashbackRoutes } = require('./routes/cashback');
+registerCashbackRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

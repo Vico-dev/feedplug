@@ -169,6 +169,9 @@ export default function FeedPage() {
           <Link href="/compte/produits" style={{ fontSize: "14px", fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
             Mes produits
           </Link>
+          <Link href="/compte/cashback" style={{ fontSize: "14px", fontWeight: 600, color: "var(--accent-2)", textDecoration: "none" }}>
+            Cashback
+          </Link>
           <Link href="/compte/onboarding" style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink-3)", textDecoration: "none" }}>
             Mes catégories
           </Link>
