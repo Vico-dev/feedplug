@@ -13,6 +13,8 @@
  * injectees via `deps`. AUCUN changement de comportement.
  */
 const { checkPlanLimit, canUseFeature, countProductsForAccount } = require('../lib/plan-limits');
+const { checkSchedulerAuth } = require('../lib/scheduler-auth');
+const { safeFetch } = require('../lib/safe-url');
 const {
   createRevision,
   getRevisionById,
@@ -1668,19 +1670,9 @@ function registerIngestionRoutes(app, {
   app.post('/api/v1/ingestion/scheduled-runs', async (req, res) => {
       const prisma = getPrisma(); const prismaReady = getPrismaReady();
     try {
-      const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
-        ? process.env.SCHEDULER_SECRET.trim()
-        : '';
-      if (!schedulerSecret) {
-        return res.status(503).json({ message: 'Scheduler non configuré' });
-      }
-      const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-      const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-      const providedSecret = typeof rawProvidedSecret === 'string'
-        ? rawProvidedSecret.replace('Bearer ', '').trim()
-        : '';
-      if (providedSecret !== schedulerSecret) {
-        return res.status(401).json({ message: 'Non autorisé' });
+      const auth = checkSchedulerAuth(req);
+      if (!auth.ok) {
+        return res.status(auth.status).json({ message: auth.message });
       }
 
       if (!prismaReady || !prisma) {
@@ -4062,9 +4054,10 @@ function registerIngestionRoutes(app, {
         return res.status(400).json({ message: 'csvUrl requis' });
       }
 
-      // Fonction pour récupérer le texte du CSV
+      // Anti-SSRF : csvUrl provient de req.body → safeFetch valide l'URL et chaque
+      // redirection contre les adresses internes (metadata cloud, loopback…).
       const fetchText = async (url) => {
-        const response = await fetch(url);
+        const response = await safeFetch(url, { method: 'GET' });
         if (!response.ok) {
           throw new Error(`Erreur HTTP: ${response.status}`);
         }

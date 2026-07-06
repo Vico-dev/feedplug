@@ -140,9 +140,38 @@ async function proxyRequest(
     });
   }
 
+  // Anti-traversal : un segment `..` (ou sa forme encodée) laisserait l'URL finale
+  // s'échapper du préfixe /api/v1 et atteindre n'importe quel chemin du backend
+  // (ex. /internal/*, /api/docs). On rejette avant de construire l'URL, puis on
+  // vérifie que le pathname résolu reste bien sous BACKEND_BASE.
+  if (/(?:^|\/)\.\.(?:\/|$)/.test(path) || /%2e%2e/i.test(path)) {
+    return new Response(JSON.stringify({ message: "Invalid proxy path" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const url = new URL(request.url, "http://localhost");
   const search = url.searchParams.toString();
   const backendUrl = `${BACKEND_BASE}/${path}${search ? `?${search}` : ""}`;
+
+  // Défense en profondeur : après normalisation par URL(), le chemin final doit
+  // toujours commencer par le pathname de BACKEND_BASE (+ "/").
+  try {
+    const resolved = new URL(backendUrl);
+    const basePath = new URL(BACKEND_BASE).pathname.replace(/\/+$/, "");
+    if (!resolved.pathname.startsWith(`${basePath}/`)) {
+      return new Response(JSON.stringify({ message: "Invalid proxy path" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  } catch {
+    return new Response(JSON.stringify({ message: "Invalid proxy path" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const method = request.method;
   const headers = new Headers();
 

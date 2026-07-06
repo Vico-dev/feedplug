@@ -2950,7 +2950,7 @@ app.post('/api/v1/exports/scheduled-runs', async (req, res) => {
     const providedSecret = typeof rawProvidedSecret === 'string'
       ? rawProvidedSecret.replace('Bearer ', '').trim()
       : '';
-    if (providedSecret !== schedulerSecret) {
+    if (!timingSafeSecretEqual(providedSecret, schedulerSecret)) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
     if (!prismaReady || !prisma) {
@@ -3055,6 +3055,30 @@ function timingSafeSecretEqual(a, b) {
     return false;
   }
   try { return crypto.timingSafeEqual(ba, bb); } catch (_) { return false; }
+}
+
+// Auth partagée des endpoints déclenchés par Cloud Scheduler / Cloud Tasks.
+// Fail-closed : si SCHEDULER_SECRET n'est pas configuré, on refuse (503) au lieu
+// de laisser l'endpoint ouvert. Le secret est accepté via l'en-tête dédié
+// `x-scheduler-secret` ou `Authorization: Bearer <secret>`, comparé en timing-safe.
+// IMPORTANT : la présence seule d'un `Bearer` ne vaut PAS authentification — un
+// token OIDC non vérifié n'est pas une preuve tant que l'ingress Cloud Run reste
+// public (`--allow-unauthenticated`). Pour s'appuyer sur l'IAM, il faut passer
+// l'ingress en interne et vérifier réellement le token OIDC (verifyIdToken).
+function checkSchedulerAuth(req) {
+  const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
+    ? process.env.SCHEDULER_SECRET.trim()
+    : '';
+  if (!schedulerSecret) {
+    return { ok: false, status: 503, message: 'Scheduler non configuré' };
+  }
+  const hdr = req.headers['x-scheduler-secret'] || req.headers['authorization'];
+  const raw = Array.isArray(hdr) ? hdr[0] : hdr;
+  const provided = typeof raw === 'string' ? raw.replace(/^Bearer /i, '').trim() : '';
+  if (!timingSafeSecretEqual(provided, schedulerSecret)) {
+    return { ok: false, status: 401, message: 'Non autorisé' };
+  }
+  return { ok: true };
 }
 
 // Construit l'objet feed (avec source) attendu par les modules d'ingestion,
@@ -3200,17 +3224,9 @@ async function runIngestionJob({ feedId, accountId, ingestionRunId }) {
 
 // Endpoint worker interne : reçoit { type, payload } depuis Cloud Tasks.
 app.post('/internal/jobs/run', express.json({ limit: '256kb' }), async (req, res) => {
-  const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string' ? process.env.SCHEDULER_SECRET.trim() : '';
-  // Auth : si un secret est configuré, on l'exige (timing-safe). Si OIDC est la
-  // seule auth (pas de secret), on accepte (l'IAM Cloud Run a déjà vérifié le token).
-  if (schedulerSecret) {
-    const hdr = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-    const raw = Array.isArray(hdr) ? hdr[0] : hdr;
-    const provided = typeof raw === 'string' ? raw.replace('Bearer ', '').trim() : '';
-    const oidcPresent = !!(req.headers['authorization'] && /^Bearer /i.test(String(req.headers['authorization'])) && !req.headers['x-scheduler-secret']);
-    if (!oidcPresent && !timingSafeSecretEqual(provided, schedulerSecret)) {
-      return res.status(401).json({ message: 'Non autorisé' });
-    }
+  const auth = checkSchedulerAuth(req);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ message: auth.message });
   }
   const { type, payload } = req.body || {};
   if (!type || typeof type !== 'string') {
@@ -3237,15 +3253,9 @@ app.post('/internal/jobs/run', express.json({ limit: '256kb' }), async (req, res
 // déclenche PAS la sync en synchrone : on passe par enqueueJob (Cloud Tasks en
 // prod, fallback in-process en dev) pour étaler la charge et bénéficier des retries.
 app.post('/internal/sync/performance', express.json({ limit: '64kb' }), async (req, res) => {
-  const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string' ? process.env.SCHEDULER_SECRET.trim() : '';
-  if (schedulerSecret) {
-    const hdr = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-    const raw = Array.isArray(hdr) ? hdr[0] : hdr;
-    const provided = typeof raw === 'string' ? raw.replace('Bearer ', '').trim() : '';
-    const oidcPresent = !!(req.headers['authorization'] && /^Bearer /i.test(String(req.headers['authorization'])) && !req.headers['x-scheduler-secret']);
-    if (!oidcPresent && !timingSafeSecretEqual(provided, schedulerSecret)) {
-      return res.status(401).json({ message: 'Non autorisé' });
-    }
+  const auth = checkSchedulerAuth(req);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ message: auth.message });
   }
   if (!prismaReady || !prisma) {
     return res.status(503).json({ message: 'Service indisponible' });

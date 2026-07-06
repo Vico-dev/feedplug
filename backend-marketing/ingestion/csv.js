@@ -1,7 +1,39 @@
 const crypto = require('crypto');
 const { analyzeProduct, enrichProduct } = require('../enrichment/auto-enrichment');
 const { createRevision } = require('../lib/revisions');
-const { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS } = require('../lib/resilience');
+const { DEFAULT_FETCH_TIMEOUT_MS } = require('../lib/resilience');
+const { safeFetch } = require('../lib/safe-url');
+
+// Plafonds de sécurité pour le pull de flux distant : borne la taille téléchargée
+// et la sortie de décompression pour empêcher un OOM (bombe gzip : quelques Ko
+// compressés → plusieurs Go décompressés).
+const MAX_FEED_DOWNLOAD_BYTES = 150 * 1024 * 1024; // 150 Mo compressés/bruts
+const MAX_FEED_DECOMPRESSED_BYTES = 300 * 1024 * 1024; // 300 Mo après gunzip
+
+// Lit le corps d'une Response en abandonnant si la taille dépasse le plafond.
+async function readBodyCapped(res, maxBytes) {
+	const body = res.body;
+	if (!body || typeof body.getReader !== 'function') {
+		// Pas de stream disponible : repli sur arrayBuffer avec contrôle a posteriori.
+		const buf = Buffer.from(await res.arrayBuffer());
+		if (buf.length > maxBytes) throw new Error('Flux distant trop volumineux');
+		return buf;
+	}
+	const reader = body.getReader();
+	const chunks = [];
+	let total = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		total += value.length;
+		if (total > maxBytes) {
+			try { await reader.cancel(); } catch (_) {}
+			throw new Error('Flux distant trop volumineux');
+		}
+		chunks.push(Buffer.from(value));
+	}
+	return Buffer.concat(chunks);
+}
 const {
 	buildNormalizedRow,
 	getFirstNonEmptyValue,
@@ -29,13 +61,24 @@ function buildIngestionSnapshot(item, finalCustomFields, priceValue) {
 }
 
 async function fetchText(url, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
-	const res = await fetchWithTimeout(url, { method: 'GET', timeoutMs });
+	// Anti-SSRF : l'URL provient (in)directement de l'utilisateur (config de source,
+	// req.body.csvUrl). safeFetch valide l'URL et chaque redirection contre les
+	// adresses privées/loopback/link-local (metadata cloud). Timeout via AbortController.
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	let res;
+	try {
+		res = await safeFetch(url, { method: 'GET', signal: controller.signal });
+	} finally {
+		clearTimeout(timer);
+	}
 	if (!res.ok) throw new Error(`Fetch CSV failed: ${res.status}`);
-	const buf = Buffer.from(await res.arrayBuffer());
+	const buf = await readBodyCapped(res, MAX_FEED_DOWNLOAD_BYTES);
 	// Flux gzip (ex. AWIN /compression/gzip/, redirige vers legacydatafeeds) :
 	// décompresser si l'entête magic gzip (1f 8b) est présente. Sinon UTF-8 brut.
+	// maxOutputLength borne la sortie pour neutraliser une bombe de décompression.
 	if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
-		return require('zlib').gunzipSync(buf).toString('utf8');
+		return require('zlib').gunzipSync(buf, { maxOutputLength: MAX_FEED_DECOMPRESSED_BYTES }).toString('utf8');
 	}
 	return buf.toString('utf8');
 }

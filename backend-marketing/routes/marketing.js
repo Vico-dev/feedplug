@@ -11,6 +11,7 @@
  * POST /api/v1/marketing/audits/:shareToken/connectors/{shopify,prestashop,file}/connect
  */
 const crypto = require('crypto');
+const { checkSchedulerAuth } = require('../lib/scheduler-auth');
 const {
   sendMarketingAuditNurtureEmail,
   sendMarketingAuditEmail,
@@ -586,20 +587,9 @@ app.post('/api/v1/marketing/unsubscribe', async (req, res) => {
 
 app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
   try {
-    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
-      ? process.env.SCHEDULER_SECRET.trim()
-      : '';
-    if (!schedulerSecret) {
-      return res.status(503).json({ message: 'Scheduler non configuré' });
-    }
-
-    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-    const providedSecret = typeof rawProvidedSecret === 'string'
-      ? rawProvidedSecret.replace('Bearer ', '').trim()
-      : '';
-    if (providedSecret !== schedulerSecret) {
-      return res.status(401).json({ message: 'Non autorisé' });
+    const auth = checkSchedulerAuth(req);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ message: auth.message });
     }
 
     const prisma = getPrisma?.();
@@ -673,19 +663,9 @@ app.post('/api/v1/marketing/nurture-runs', async (req, res) => {
 // Protégé par SCHEDULER_SECRET. Envoie A1, A2, B1→B4 avec des données d'exemple.
 app.post('/api/v1/marketing/nurture-test', async (req, res) => {
   try {
-    const schedulerSecret = typeof process.env.SCHEDULER_SECRET === 'string'
-      ? process.env.SCHEDULER_SECRET.trim()
-      : '';
-    if (!schedulerSecret) {
-      return res.status(503).json({ message: 'Scheduler non configuré' });
-    }
-    const authHeader = req.headers['x-scheduler-secret'] || req.headers['authorization'];
-    const rawProvidedSecret = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-    const providedSecret = typeof rawProvidedSecret === 'string'
-      ? rawProvidedSecret.replace('Bearer ', '').trim()
-      : '';
-    if (providedSecret !== schedulerSecret) {
-      return res.status(401).json({ message: 'Non autorisé' });
+    const auth = checkSchedulerAuth(req);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ message: auth.message });
     }
 
     const email = String(req.body?.email || '').trim().toLowerCase();

@@ -4,7 +4,8 @@
  */
 
 const crypto = require('crypto');
-const { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS } = require('../lib/resilience');
+const { DEFAULT_FETCH_TIMEOUT_MS } = require('../lib/resilience');
+const { safeFetch } = require('../lib/safe-url');
 const { createRevision } = require('../lib/revisions');
 
 async function resolveCsvUrl(config, storage) {
@@ -30,7 +31,16 @@ async function resolveCsvUrl(config, storage) {
 }
 
 async function fetchText(url, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
-  const res = await fetchWithTimeout(url, { method: 'GET', timeoutMs });
+  // Anti-SSRF : url dérivée de la config utilisateur → safeFetch valide l'hôte
+  // (rejet des adresses internes) et revalide chaque redirection.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await safeFetch(url, { method: 'GET', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return await res.text();
 }
