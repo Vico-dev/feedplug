@@ -11,8 +11,23 @@ const {
 } = require('../domains/comparator-account/magic-link');
 const { createSession, verifySession, revokeSession, SESSION_TTL_MS } = require('../domains/comparator-account/sessions');
 const { findOrCreateUser } = require('../domains/comparator-account/users');
+const { isOriginAllowed } = require('../lib/cors');
 
 const COOKIE = 'cmp_session';
+
+// Le cookie de session conso est SameSite=None (pages feedplug.com → API *.run.app
+// en cross-site), donc un site tiers peut déclencher une mutation authentifiée par
+// CSRF. Défense : sur une méthode mutante, si un en-tête Origin est présent mais hors
+// allowlist FeedPlug, on refuse. Origin absent (app native, sans notion d'origine
+// navigateur) → laissé passer : la CSRF suppose un navigateur qui joint le cookie et
+// envoie toujours Origin sur une mutation cross-site.
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+function isCsrfBlocked(req) {
+  if (!MUTATING_METHODS.has(String(req.method || '').toUpperCase())) return false;
+  const origin = (req.headers && req.headers.origin || '').trim();
+  if (!origin) return false;
+  return !isOriginAllowed(origin);
+}
 
 function hashIp(ip) {
   if (!ip) return null;
@@ -42,6 +57,7 @@ function makeRequireComparatorAuth({ getPrisma, getPrismaReady }) {
   return async function requireComparatorAuth(req, res, next) {
     const prisma = getPrisma();
     if (!getPrismaReady() || !prisma) return res.status(503).json({ message: 'Service indisponible' });
+    if (isCsrfBlocked(req)) return res.status(403).json({ message: 'Origine non autorisée' });
     try {
       const sess = await verifySession(prisma, req.cookies && req.cookies[COOKIE]);
       if (!sess) return res.status(401).json({ message: 'Non authentifié' });
@@ -115,6 +131,7 @@ function registerComparatorAccountRoutes(app, { getPrisma, getPrismaReady, sendM
   });
 
   app.post('/api/v1/comparator/account/logout', async (req, res) => {
+    if (isCsrfBlocked(req)) return res.status(403).json({ message: 'Origine non autorisée' });
     const prisma = getPrisma();
     try { if (prisma) await revokeSession(prisma, req.cookies && req.cookies[COOKIE]); }
     catch (e) { console.error('[comparator-account] logout error:', e.message); }
@@ -141,4 +158,4 @@ function registerComparatorAccountRoutes(app, { getPrisma, getPrismaReady, sendM
   return { requireComparatorAuth };
 }
 
-module.exports = { registerComparatorAccountRoutes, makeRequireComparatorAuth, hashIp, cookieOptions, COOKIE };
+module.exports = { registerComparatorAccountRoutes, makeRequireComparatorAuth, hashIp, cookieOptions, COOKIE, isCsrfBlocked };
