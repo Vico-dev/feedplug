@@ -11,8 +11,25 @@ import {
 } from "@/lib/comparator-api";
 import CountrySelector from "@/components/comparateur/country-selector";
 import WatchButton from "@/components/comparateur/watch-button";
+import { seo } from "@/lib/seo";
 
 export const revalidate = 600;
+
+// Libellés des rayons (taxonomie maison — cf. RAYONS dans
+// components/comparateur/comparateur-header.tsx) : sert à raccrocher le fil
+// d'Ariane quand la catégorie du produit correspond à un slug de rayon.
+const RAYON_LABELS: Record<string, string> = {
+  informatique: "Informatique",
+  telephonie: "Téléphonie",
+  "tv-son": "TV & Son",
+  electromenager: "Électroménager",
+  "jeux-video": "Jeux vidéo",
+  "maison-deco": "Maison & Déco",
+  mode: "Mode",
+  "beaute-parfums": "Beauté & Parfums",
+  sport: "Sport",
+  jouets: "Jouets",
+};
 
 type Params = Promise<{ locale: string; id: string }>;
 type Search = Promise<{ country?: string }>;
@@ -55,7 +72,14 @@ export async function generateMetadata({
   const description = low
     ? `${product.title} à partir de ${formatPrice(low.price, low.currency)} chez ${offers.length} marchands. Comparez les prix et l'historique.`
     : `Comparez les prix de ${product.title}.`;
-  return { title, description, robots: { index: indexable, follow: true } };
+  return {
+    title,
+    description,
+    // Canonical SANS le paramètre country : une seule URL de référence par
+    // fiche, quel que soit le pays sélectionné.
+    alternates: { canonical: `${seo.siteUrl}/comparateur/produit/${encodeURIComponent(id)}` },
+    robots: { index: indexable, follow: true },
+  };
 }
 
 function Sparkline({ points }: { points: PriceHistoryPoint[] }) {
@@ -122,20 +146,55 @@ export default async function ComparatorProductPage({
   const points = history?.points ?? [];
   const multi = offers.length > 1;
 
+  const canonicalUrl = `${seo.siteUrl}/comparateur/produit/${encodeURIComponent(product.id)}`;
+  const description = lowest
+    ? `${product.title} à partir de ${formatPrice(lowest.price, lowest.currency)} chez ${merchantLabel(offers.length)}. Comparez les prix et l'historique.`
+    : undefined;
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.title,
+    description,
     brand: product.brand ?? undefined,
     image: product.imageUrl ?? undefined,
     gtin: product.gtin ?? undefined,
+    url: canonicalUrl,
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: lowest?.currency ?? undefined,
       lowPrice: lowest?.price ?? undefined,
       highPrice: offers[offers.length - 1]?.price ?? undefined,
       offerCount: offers.length,
+      // Offres marchandes individuelles (AggregateOffer.offers est valide en
+      // schema.org) : prix, dispo et vendeur de chaque marchand.
+      offers: offers.map((o) => ({
+        "@type": "Offer",
+        price: o.price ?? undefined,
+        priceCurrency: o.currency ?? undefined,
+        availability: o.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        seller: { "@type": "Organization", name: o.merchant },
+      })),
     },
+  };
+
+  // Fil d'Ariane : Accueil → Rayon (si la catégorie correspond à un rayon connu) → Produit.
+  const rayonLabel = product.category ? RAYON_LABELS[product.category] : undefined;
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { name: "Accueil", item: `${seo.siteUrl}/` },
+      ...(rayonLabel && product.category
+        ? [{ name: rayonLabel, item: `${seo.siteUrl}/rayon/${product.category}` }]
+        : []),
+      { name: product.title, item: canonicalUrl },
+    ].map((crumb, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: crumb.name,
+      item: crumb.item,
+    })),
   };
 
   return (
@@ -143,6 +202,10 @@ export default async function ComparatorProductPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       <div

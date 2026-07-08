@@ -1,4 +1,4 @@
-import { searchProducts } from "@/lib/comparator-api";
+import { getCategory } from "@/lib/comparator-api";
 
 // Sitemap du COMPARATEUR conso — ancré sur l'apex (feedplug.com).
 // Exposé en Route Handler (et non via app/sitemap.ts, déjà pris par le sitemap
@@ -8,11 +8,25 @@ export const revalidate = 3600; // 1 h : suit le rythme d'indexation conso
 
 const APEX_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://feedplug.com";
 
-// Requêtes des catégories mises en avant sur la home comparateur (cf.
-// CATEGORIES dans (comparateur)/comparateur/page.tsx). Servent d'amorce pour
-// remonter des fiches indexables sans endpoint sitemap dédié côté backend.
-const CATEGORY_QUERIES = ["acer", "jeu", "sac", "parfum"];
-const PRODUCTS_PER_CATEGORY = 50;
+// Rayons de la taxonomie maison (cf. RAYONS dans
+// components/comparateur/comparateur-header.tsx). Un rayon n'est listé que
+// s'il a des produits (sinon page « thin » sans intérêt pour le crawl).
+const RAYON_SLUGS = [
+  "informatique",
+  "telephonie",
+  "tv-son",
+  "electromenager",
+  "jeux-video",
+  "maison-deco",
+  "mode",
+  "beaute-parfums",
+  "sport",
+  "jouets",
+];
+
+const PAGE_SIZE = 48; // taille de page de l'API catégorie (alignée sur la page rayon)
+const MAX_PRODUCT_URLS = 8000; // plafond fiches : reste sous les 10 000 URLs / sitemap
+const MAX_PAGES_PER_RAYON = 60; // garde-fou anti-boucle si l'API renvoie un total incohérent
 
 function xmlEscape(value: string): string {
   return value
@@ -25,51 +39,82 @@ function xmlEscape(value: string): string {
 
 type Entry = { loc: string; changefreq: string; priority: string };
 
-async function collectProductEntries(): Promise<Entry[]> {
+// Énumère les rayons non vides + TOUTES leurs fiches produit (dédupliquées,
+// un produit pouvant apparaître dans plusieurs rayons) en paginant l'API
+// catégorie. Best-effort : un rayon injoignable est simplement ignoré
+// (getCategory renvoie null sans jeter) et on dégrade vers le statique.
+async function collectCatalogEntries(): Promise<{
+  rayonEntries: Entry[];
+  productEntries: Entry[];
+}> {
   const seen = new Set<string>();
-  const entries: Entry[] = [];
-  // Best-effort : si l'API comparateur est injoignable au build, on dégrade
-  // proprement vers le sitemap statique (home + /comparateur + catégories).
+  const rayonEntries: Entry[] = [];
+  const productEntries: Entry[] = [];
+
+  const pushProducts = (items: { id: string }[]) => {
+    for (const item of items) {
+      if (seen.has(item.id) || productEntries.length >= MAX_PRODUCT_URLS) continue;
+      seen.add(item.id);
+      productEntries.push({
+        loc: `${APEX_URL}/comparateur/produit/${encodeURIComponent(item.id)}`,
+        changefreq: "daily",
+        priority: "0.6",
+      });
+    }
+  };
+
   await Promise.all(
-    CATEGORY_QUERIES.map(async (q) => {
-      const res = await searchProducts({ q, country: "FR", limit: PRODUCTS_PER_CATEGORY });
-      if (!res?.items) return;
-      for (const item of res.items) {
-        if (seen.has(item.id)) continue;
-        seen.add(item.id);
-        entries.push({
-          loc: `${APEX_URL}/comparateur/produit/${encodeURIComponent(item.id)}`,
-          changefreq: "daily",
-          priority: "0.6",
-        });
+    RAYON_SLUGS.map(async (slug) => {
+      const first = await getCategory(slug, "FR", { limit: PAGE_SIZE });
+      if (!first || first.total <= 0) return; // rayon vide ou API muette : URL non exposée
+      rayonEntries.push({
+        loc: `${APEX_URL}/rayon/${slug}`,
+        changefreq: "daily",
+        priority: "0.8",
+      });
+      pushProducts(first.items);
+      let offset = first.items.length;
+      let pages = 1;
+      while (
+        offset < first.total &&
+        pages < MAX_PAGES_PER_RAYON &&
+        productEntries.length < MAX_PRODUCT_URLS
+      ) {
+        const page = await getCategory(slug, "FR", { limit: PAGE_SIZE, offset });
+        if (!page || page.items.length === 0) break;
+        pushProducts(page.items);
+        offset += page.items.length;
+        pages += 1;
       }
     })
   );
-  return entries;
+
+  return { rayonEntries, productEntries };
 }
 
 export async function GET() {
+  // Pages statiques de l'apex conso (home = comparateur, rewrite / → /comparateur).
   const staticEntries: Entry[] = [
     { loc: `${APEX_URL}/`, changefreq: "daily", priority: "1.0" },
     { loc: `${APEX_URL}/en`, changefreq: "daily", priority: "0.9" },
     { loc: `${APEX_URL}/es`, changefreq: "daily", priority: "0.9" },
     { loc: `${APEX_URL}/comparateur`, changefreq: "daily", priority: "0.9" },
-    // Pages catégorie = recherche pré-filtrée sur la home conso (indexables)
-    ...CATEGORY_QUERIES.map((q) => ({
-      loc: `${APEX_URL}/?q=${encodeURIComponent(q)}`,
-      changefreq: "weekly",
-      priority: "0.7",
-    })),
+    { loc: `${APEX_URL}/deals`, changefreq: "daily", priority: "0.8" },
+    { loc: `${APEX_URL}/transparence`, changefreq: "monthly", priority: "0.3" },
+    { loc: `${APEX_URL}/confidentialite`, changefreq: "monthly", priority: "0.3" },
   ];
 
+  let rayonEntries: Entry[] = [];
   let productEntries: Entry[] = [];
   try {
-    productEntries = await collectProductEntries();
+    ({ rayonEntries, productEntries } = await collectCatalogEntries());
   } catch {
+    // API injoignable au build : on dégrade proprement vers le sitemap statique.
+    rayonEntries = [];
     productEntries = [];
   }
 
-  const all = [...staticEntries, ...productEntries];
+  const all = [...staticEntries, ...rayonEntries, ...productEntries];
   const lastmod = new Date().toISOString();
 
   const body =

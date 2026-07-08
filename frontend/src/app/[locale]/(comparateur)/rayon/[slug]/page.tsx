@@ -4,20 +4,48 @@ import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { getCategory, formatPrice, type SearchItem } from "@/lib/comparator-api";
 import WatchButton from "@/components/comparateur/watch-button";
+import { seo } from "@/lib/seo";
 
 export const revalidate = 300;
 
 type Params = Promise<{ locale: string; slug: string }>;
-type Search = Promise<{ country?: string }>;
+type Search = Promise<{ country?: string; offset?: string }>;
+
+const PAGE_SIZE = 48;
+// En dessous de ce nombre de produits, le rayon est du « thin content » :
+// on le laisse crawlable (follow) mais hors index.
+const MIN_INDEXABLE_PRODUCTS = 8;
 
 function normCountry(c?: string): string {
   return c && /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : "FR";
+}
+// Offset assaini et aligné sur la taille de page (évite les quasi-doublons ?offset=1, 2…).
+function normOffset(o?: string): number {
+  const n = Number.parseInt(o ?? "", 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n / PAGE_SIZE) * PAGE_SIZE;
 }
 function merchantLabel(count: number): string {
   return count <= 1 ? "1 marchand" : `${count} marchands`;
 }
 
 const clamp2: CSSProperties = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
+const pageLinkStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "10px 18px",
+  border: "1px solid var(--line)",
+  borderRadius: "var(--r-lg)",
+  background: "var(--surface)",
+  boxShadow: "var(--sh-xs)",
+  fontFamily: "var(--font-sans)",
+  fontSize: "14px",
+  fontWeight: 600,
+  color: "var(--ink)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+};
 
 export async function generateMetadata({ params, searchParams }: { params: Params; searchParams: Search }): Promise<Metadata> {
   const { slug } = await params;
@@ -28,7 +56,10 @@ export async function generateMetadata({ params, searchParams }: { params: Param
   return {
     title: `${label} — comparateur de prix | Feedplug`,
     description: `Comparez les prix de ${data.total} produits du rayon ${label} chez plusieurs marchands, avec l'historique des prix.`,
-    robots: { index: data.total > 0, follow: true },
+    // Canonical SANS paramètres (ni country, ni offset) : une seule URL de
+    // référence par rayon.
+    alternates: { canonical: `${seo.siteUrl}/rayon/${slug}` },
+    robots: { index: data.total >= MIN_INDEXABLE_PRODUCTS, follow: true },
   };
 }
 
@@ -67,14 +98,44 @@ function ProductCard({ item, country }: { item: SearchItem; country: string }) {
 
 export default async function RayonPage({ params, searchParams }: { params: Params; searchParams: Search }) {
   const { slug } = await params;
-  const country = normCountry((await searchParams).country);
-  const data = await getCategory(slug, country, { limit: 48 });
+  const sp = await searchParams;
+  const country = normCountry(sp.country);
+  const offset = normOffset(sp.offset);
+  const data = await getCategory(slug, country, { limit: PAGE_SIZE, offset });
   if (!data) notFound();
 
   const { category, items, total } = data;
 
+  // Pagination crawlable : liens <a> classiques (?offset=) rendus côté serveur
+  // pour que les robots atteignent les pages 2+ sans JavaScript.
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageIndex = Math.min(Math.floor(offset / PAGE_SIZE), pageCount - 1);
+  const hasPrev = offset > 0;
+  const hasNext = offset + PAGE_SIZE < total;
+  const pageHref = (targetOffset: number): string => {
+    const qs = new URLSearchParams();
+    if (sp.country) qs.set("country", country);
+    if (targetOffset > 0) qs.set("offset", String(targetOffset));
+    const s = qs.toString();
+    return `/rayon/${slug}${s ? `?${s}` : ""}`;
+  };
+
+  // Fil d'Ariane : Accueil → Rayon.
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: `${seo.siteUrl}/` },
+      { "@type": "ListItem", position: 2, name: category.labelfr, item: `${seo.siteUrl}/rayon/${slug}` },
+    ],
+  };
+
   return (
     <main style={{ maxWidth: "1120px", margin: "0 auto", padding: "48px var(--page-padding-x) 80px" }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: 500, color: "var(--ink-3)", textDecoration: "none" }}>
         <span aria-hidden="true">&larr;</span> Tous les rayons
       </Link>
@@ -86,9 +147,28 @@ export default async function RayonPage({ params, searchParams }: { params: Para
       </p>
 
       {items.length > 0 ? (
-        <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", marginTop: "28px" }}>
-          {items.map((it) => <ProductCard key={it.id} item={it} country={country} />)}
-        </div>
+        <>
+          <div className="rg4" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", marginTop: "28px" }}>
+            {items.map((it) => <ProductCard key={it.id} item={it} country={country} />)}
+          </div>
+          {pageCount > 1 && (
+            <nav aria-label="Pagination du rayon" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "40px" }}>
+              {hasPrev && (
+                <a href={pageHref(offset - PAGE_SIZE)} className="card-hover" style={pageLinkStyle}>
+                  <span aria-hidden="true">&larr;</span> Page précédente
+                </a>
+              )}
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--ink-3)" }}>
+                Page {pageIndex + 1} sur {pageCount}
+              </span>
+              {hasNext && (
+                <a href={pageHref(offset + PAGE_SIZE)} className="card-hover" style={pageLinkStyle}>
+                  Page suivante <span aria-hidden="true">&rarr;</span>
+                </a>
+              )}
+            </nav>
+          )}
+        </>
       ) : (
         <div style={{ marginTop: "28px", textAlign: "center", padding: "64px 24px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-2xl)", boxShadow: "var(--sh-xs)" }}>
           <p style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>Bientôt des produits ici</p>
