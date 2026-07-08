@@ -6283,6 +6283,21 @@ registerCashbackRoutes(app, {
   getPrismaReady: () => prismaReady,
 });
 
+// Abonnements push du compte conso (web + natif) — réutilise le middleware auth ci-dessus.
+const { registerComparatorAccountPushRoutes } = require('./routes/comparator-account-push');
+registerComparatorAccountPushRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+  requireComparatorAuth: requireComparatorAuthMw,
+});
+
+// Cron interne des alertes baisse de prix (Cloud Scheduler, auth x-scheduler-secret).
+const { registerComparatorAlertsRoutes } = require('./routes/comparator-alerts');
+registerComparatorAlertsRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,

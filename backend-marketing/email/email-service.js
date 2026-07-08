@@ -802,6 +802,58 @@ async function sendComparatorMagicLinkEmail(email, token, locale = DEFAULT_EMAIL
   });
 }
 
+// Digest « baisse de prix » du COMPARATEUR conso (cron price-alerts). Un email
+// par user et par run, listant tous ses produits suivis qui ont baissé.
+// items: [{ title, brand, groupId, priceAtAdd, currentPrice, currency }]
+async function sendComparatorPriceDropEmail(email, items, locale = DEFAULT_EMAIL_LOCALE) {
+  if (!Array.isArray(items) || items.length === 0) return { skipped: true };
+  const loc = getEmailLocale(locale);
+  const isEn = loc === 'en';
+  const title = items.length === 1
+    ? (isEn ? 'Price drop on a product you follow' : 'Baisse de prix sur un produit que vous suivez')
+    : (isEn ? `Price drops on ${items.length} products you follow` : `Baisse de prix sur ${items.length} produits que vous suivez`);
+  const intro = isEn
+    ? 'Good news — prices went down since you started following:'
+    : 'Bonne nouvelle — les prix ont baissé depuis que vous les suivez :';
+  const ctaLabel = isEn ? 'See my products' : 'Voir mes produits';
+
+  const fmt = (n, cur) => `${Number(n).toFixed(2)} ${cur || '€'}`;
+  const lines = items.map((it) => {
+    const drop = Math.round(((it.currentPrice - it.priceAtAdd) / it.priceAtAdd) * 100);
+    const productUrl = `${SITE_URL}/comparateur/produit/${encodeURIComponent(it.groupId)}`;
+    return `
+      <tr>
+        <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+          <a href="${escapeHtml(productUrl)}" style="color: #111827; text-decoration: none; font-weight: 600;">${escapeHtml(it.title || '')}</a>
+          ${it.brand ? `<span style="color: #9ca3af;"> · ${escapeHtml(it.brand)}</span>` : ''}
+          <br/>
+          <span style="color: #15803d; font-weight: 600;">${escapeHtml(fmt(it.currentPrice, it.currency))}</span>
+          <span style="color: #9ca3af; text-decoration: line-through; margin-left: 6px;">${escapeHtml(fmt(it.priceAtAdd, it.currency))}</span>
+          <span style="color: #15803d; margin-left: 6px;">${drop}%</span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const html = baseTemplate(`
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(intro)}</p>
+    <table style="width: 100%; border-collapse: collapse; margin: 8px 0 24px;">${lines}</table>
+    <p style="margin: 24px 0;">
+      <a href="${escapeHtml(`${SITE_URL}/compte/produits`)}" class="btn">${escapeHtml(ctaLabel)}</a>
+    </p>
+  `, {
+    locale: loc,
+    previewText: isEn ? 'A product you follow just got cheaper.' : 'Un produit que vous suivez vient de baisser de prix.',
+  });
+
+  return dispatchEmail({
+    to: email,
+    subject: title,
+    html,
+    tags: [{ name: 'category', value: 'comparator_price_drop' }],
+  });
+}
+
 async function sendInvitationEmail(email, firstName, inviterName, invitationToken, locale = DEFAULT_EMAIL_LOCALE) {
   const loc = getEmailLocale(locale);
   const isEn = loc === 'en';
@@ -1626,6 +1678,7 @@ module.exports = {
   sendErrorEmail,
   sendPasswordResetEmail,
   sendComparatorMagicLinkEmail,
+  sendComparatorPriceDropEmail,
   sendInvitationEmail,
   sendMarketingNurtureEmail,
   sendMarketingAuditNurtureEmail,

@@ -14,6 +14,7 @@
  */
 const { checkPlanLimit, canUseFeature, countProductsForAccount } = require('../lib/plan-limits');
 const { checkSchedulerAuth } = require('../lib/scheduler-auth');
+const { isFeedDueForScheduledRun } = require('../lib/schedule-eligibility');
 const { safeFetch } = require('../lib/safe-url');
 const {
   createRevision,
@@ -1680,9 +1681,7 @@ function registerIngestionRoutes(app, {
       }
 
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-    
+
       // Récupérer tous les feeds actifs avec leur source (credentialid pour Shopify)
       let feeds;
       try {
@@ -1742,41 +1741,17 @@ function registerIngestionRoutes(app, {
 
       for (const feed of feeds) {
         try {
-          // Vérifier si le feed doit être exécuté
+          // Vérifier si le feed doit être exécuté (fenêtre horaire si scheduleTime,
+          // sinon cadence quotidienne imposée par lastrunat)
           const scheduleTime = feed.scheduletime; // Format "HH:MM" (ex: "02:00")
-        
-          if (!scheduleTime) {
-            // Pas d'horaire configuré, on skip
+          const eligibility = isFeedDueForScheduledRun({ scheduleTime, lastRunAt: feed.lastrunat, now });
+          if (!eligibility.due) {
             results.skipped++;
             continue;
-          }
-
-          // Parser l'heure programmée
-          const [scheduledHour, scheduledMinute] = scheduleTime.split(':').map(Number);
-        
-          // Vérifier si on est dans la fenêtre d'exécution (heure exacte ou heure suivante pour permettre un délai)
-          const shouldRun = 
-            (currentHour === scheduledHour && currentMinute >= scheduledMinute) ||
-            (currentHour === scheduledHour + 1 && currentMinute < scheduledMinute);
-
-          if (!shouldRun) {
-            results.skipped++;
-            continue;
-          }
-
-          // Vérifier si la dernière exécution est > 24h (pour éviter les exécutions multiples)
-          const lastRunAt = feed.lastrunat ? new Date(feed.lastrunat) : null;
-          if (lastRunAt) {
-            const hoursSinceLastRun = (now - lastRunAt) / (1000 * 60 * 60);
-            if (hoursSinceLastRun < 23) {
-              // Déjà exécuté dans les dernières 23h, on skip
-              results.skipped++;
-              continue;
-            }
           }
 
           // Exécuter l'ingestion
-          console.log(`🔄 Exécution automatique du feed ${feed.feed_name} (${feed.feed_id}) à ${scheduleTime}`);
+          console.log(`🔄 Exécution automatique du feed ${feed.feed_name} (${feed.feed_id}) à ${scheduleTime || 'sans horaire (quotidien)'}`);
         
           const sourceConfig = feed.configjson || {};
           const connector = feed.connector;

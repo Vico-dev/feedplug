@@ -15,6 +15,12 @@ MARKETING_SCHEDULE="15 * * * *"  # Toutes les heures à la minute 15
 EXPORTS_SERVICE_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/exports/scheduled-runs"
 EXPORTS_JOB_NAME="feedplug-scheduled-exports"
 EXPORTS_SCHEDULE="30 * * * *"  # Toutes les heures à la minute 30
+CASHBACK_SERVICE_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/comparator/internal/cashback/poll"
+CASHBACK_JOB_NAME="feedplug-cashback-poll"
+CASHBACK_SCHEDULE="15 3,15 * * *"  # Deux fois par jour — conversions AWIN (clickref -> CashbackTransaction)
+ALERTS_SERVICE_URL="https://feedplug-backend-marketing-771607738477.europe-west1.run.app/api/v1/comparator/internal/price-alerts"
+ALERTS_JOB_NAME="feedplug-comparator-price-alerts"
+ALERTS_SCHEDULE="0 8 * * *"  # Tous les jours à 8h Paris — alertes baisse de prix (watchlist)
 TIMEZONE="Europe/Paris"
 SCHEDULER_SECRET_NAME="scheduler-secret"
 
@@ -121,6 +127,42 @@ else
 fi
 
 echo "✅ Job exports planifiés configuré avec succès!"
+
+# Crée ou met à jour un job HTTP authentifié par x-scheduler-secret
+upsert_job() {
+    local name="$1" schedule="$2" url="$3" desc="$4"
+    if $GCLOUD_CMD scheduler jobs describe "$name" --location=$REGION --project=$PROJECT_ID &> /dev/null; then
+        echo "📝 Mise à jour du job $name..."
+        $GCLOUD_CMD scheduler jobs update http "$name" \
+            --location=$REGION \
+            --schedule="$schedule" \
+            --uri="$url" \
+            --http-method=POST \
+            --update-headers="Content-Type=application/json,x-scheduler-secret=$SCHEDULER_SECRET" \
+            --time-zone="$TIMEZONE" \
+            --attempt-deadline=600s \
+            --description="$desc" \
+            --project=$PROJECT_ID
+    else
+        echo "✨ Création du job $name..."
+        $GCLOUD_CMD scheduler jobs create http "$name" \
+            --location=$REGION \
+            --schedule="$schedule" \
+            --uri="$url" \
+            --http-method=POST \
+            --headers="Content-Type=application/json,x-scheduler-secret=$SCHEDULER_SECRET" \
+            --time-zone="$TIMEZONE" \
+            --attempt-deadline=600s \
+            --description="$desc" \
+            --project=$PROJECT_ID
+    fi
+}
+
+upsert_job "$CASHBACK_JOB_NAME" "$CASHBACK_SCHEDULE" "$CASHBACK_SERVICE_URL" "Poll des conversions AWIN (cashback comparateur)"
+echo "✅ Job cashback configuré avec succès!"
+
+upsert_job "$ALERTS_JOB_NAME" "$ALERTS_SCHEDULE" "$ALERTS_SERVICE_URL" "Alertes baisse de prix (watchlist comparateur)"
+echo "✅ Job alertes prix configuré avec succès!"
 echo ""
 echo "📋 Détails du job:"
 echo "   - Nom: $JOB_NAME"
