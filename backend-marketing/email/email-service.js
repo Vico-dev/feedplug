@@ -763,11 +763,18 @@ async function sendComparatorMagicLinkEmail(email, token, locale = DEFAULT_EMAIL
   const isEn = loc === 'en';
   const prefix = loc === 'fr' ? '' : `/${loc}`;
   const url = `${SITE_URL}${prefix}/compte/verifier?token=${encodeURIComponent(token)}`;
+  // Lien profond app native (scheme `feedplug`) : ouvre l'app sur la fiche de
+  // vérification. Proposé en secondaire ; le lien web reste le principal (marche
+  // partout, y compris desktop / si l'app n'est pas installée). Token à usage
+  // unique → l'utilisateur clique UN seul des deux, pas de double consommation.
+  const appUrl = `feedplug://verify?token=${encodeURIComponent(token)}`;
   const title = isEn ? 'Your sign-in link' : 'Votre lien de connexion';
   const intro = isEn
     ? 'Click below to sign in to the price comparator. This link expires in 15 minutes and can be used once.'
     : 'Cliquez ci-dessous pour vous connecter au comparateur. Ce lien expire dans 15 minutes et ne fonctionne qu’une seule fois.';
   const cta = isEn ? 'Sign in' : 'Me connecter';
+  const appHint = isEn ? 'On mobile with our app installed:' : 'Sur mobile, avec l’app installée :';
+  const appCta = isEn ? 'Open in the app' : 'Ouvrir dans l’app';
   const ignore = isEn
     ? 'If you did not request this, you can safely ignore this email.'
     : 'Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.';
@@ -777,6 +784,9 @@ async function sendComparatorMagicLinkEmail(email, token, locale = DEFAULT_EMAIL
     <p>${intro}</p>
     <p style="margin: 24px 0;">
       <a href="${escapeHtml(url)}" class="btn">${escapeHtml(cta)}</a>
+    </p>
+    <p style="font-size: 13px; color: #6b7280; margin: 0 0 24px;">
+      ${escapeHtml(appHint)} <a href="${escapeHtml(appUrl)}">${escapeHtml(appCta)}</a>
     </p>
     <p style="font-size: 12px; color: #9ca3af;">${escapeHtml(ignore)}</p>
   `, {
