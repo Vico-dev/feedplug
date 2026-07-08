@@ -7,16 +7,19 @@ const {
   DEFAULT_GMC_CATEGORY,
   normalizeAvailabilityForGMC,
   normalizeConditionForGMC,
+  toMerchantAvailability,
+  toMerchantCondition,
+  priceToAmountMicros,
   parseGmcMerchantOptions,
   resolveGmcOfferId,
-  buildGmcProductEntry,
+  buildProductInput,
   createGmcPush,
 } = require('../../domains/gmc/push');
 
 // ---------------------------------------------------------------------------
-// normalizeAvailabilityForGMC
+// normalizeAvailabilityForGMC (valeurs v2.1 minuscules — réutilisées Amazon/Meta)
 // ---------------------------------------------------------------------------
-test('normalizeAvailabilityForGMC keeps canonical GMC values', () => {
+test('normalizeAvailabilityForGMC keeps canonical v2.1 values', () => {
   assert.equal(normalizeAvailabilityForGMC('in_stock', null), 'in_stock');
   assert.equal(normalizeAvailabilityForGMC('preorder', null), 'preorder');
   assert.equal(normalizeAvailabilityForGMC('backorder', null), 'backorder');
@@ -58,41 +61,63 @@ test('normalizeConditionForGMC maps multilingual synonyms', () => {
 });
 
 // ---------------------------------------------------------------------------
-// parseGmcMerchantOptions
+// Mapping vers les enums Merchant API + prix en micros
 // ---------------------------------------------------------------------------
-test('parseGmcMerchantOptions dedupes and labels merchant entries', () => {
+test('toMerchantAvailability uppercases v2.1 values to Merchant API enum', () => {
+  assert.equal(toMerchantAvailability('in_stock'), 'IN_STOCK');
+  assert.equal(toMerchantAvailability('out_of_stock'), 'OUT_OF_STOCK');
+  assert.equal(toMerchantAvailability('preorder'), 'PREORDER');
+  assert.equal(toMerchantAvailability('backorder'), 'BACKORDER');
+  assert.equal(toMerchantAvailability(null), 'OUT_OF_STOCK');
+});
+
+test('toMerchantCondition uppercases v2.1 values to Merchant API enum', () => {
+  assert.equal(toMerchantCondition('new'), 'NEW');
+  assert.equal(toMerchantCondition('refurbished'), 'REFURBISHED');
+  assert.equal(toMerchantCondition('used'), 'USED');
+  assert.equal(toMerchantCondition(null), 'NEW');
+});
+
+test('priceToAmountMicros converts to integer micros string, null when absent', () => {
+  assert.equal(priceToAmountMicros(19.99), '19990000');
+  assert.equal(priceToAmountMicros('5'), '5000000');
+  assert.equal(priceToAmountMicros(0), '0');
+  assert.equal(priceToAmountMicros(null), null);
+  assert.equal(priceToAmountMicros(''), null);
+  assert.equal(priceToAmountMicros('abc'), null);
+});
+
+// ---------------------------------------------------------------------------
+// parseGmcMerchantOptions — désormais nourri par accounts.list (Merchant API)
+// ---------------------------------------------------------------------------
+test('parseGmcMerchantOptions parses accounts.list, dedupes and labels', () => {
   const out = parseGmcMerchantOptions({
-    accountIdentifiers: [
-      { merchantId: '123', name: 'Boutique A' },
-      { merchantId: '123', name: 'dup ignored' },
-      { merchantId: '456' },
-      // merchantId empty → falls back to aggregatorId (preserved behavior)
-      { aggregatorId: '999', merchantId: '' },
+    accounts: [
+      { name: 'accounts/123', accountName: 'Boutique A' },
+      { name: 'accounts/123', accountName: 'dup ignored' },
+      { name: 'accounts/456' }, // pas de accountName → fallback label
     ],
   });
-  assert.equal(out.length, 3);
+  assert.equal(out.length, 2);
   assert.deepEqual(out[0], {
     merchantId: '123',
     merchantName: 'Boutique A',
     aggregatorId: '',
     label: 'Boutique A (123)',
   });
-  // No name → fallback label
   assert.equal(out[1].merchantId, '456');
+  assert.equal(out[1].merchantName, '');
   assert.equal(out[1].label, 'Merchant Center 456');
-  // merchantId empty → uses aggregatorId as id (fallback chain preserved)
-  assert.equal(out[2].merchantId, '999');
-  assert.equal(out[2].aggregatorId, '999');
 });
 
 test('parseGmcMerchantOptions returns [] for malformed input', () => {
   assert.deepEqual(parseGmcMerchantOptions(null), []);
   assert.deepEqual(parseGmcMerchantOptions({}), []);
-  assert.deepEqual(parseGmcMerchantOptions({ accountIdentifiers: 'nope' }), []);
+  assert.deepEqual(parseGmcMerchantOptions({ accounts: 'nope' }), []);
 });
 
 // ---------------------------------------------------------------------------
-// resolveGmcOfferId — ≤50 propre / fallback id FeedItem
+// resolveGmcOfferId — inchangé
 // ---------------------------------------------------------------------------
 test('resolveGmcOfferId uses clean originid when ≤50 chars', () => {
   assert.equal(resolveGmcOfferId({ originid: 'SKU-123', id: 'uuid-aaa' }), 'SKU-123');
@@ -112,13 +137,13 @@ test('resolveGmcOfferId falls back to id when originid empty, and caps at 50', (
 });
 
 // ---------------------------------------------------------------------------
-// buildGmcProductEntry — construction du payload batch
+// buildProductInput — corps ProductInput Merchant API
 // ---------------------------------------------------------------------------
 function stubGetOptimized(item) {
   return { title: item.title, description: item.descriptionText || '' };
 }
 
-test('buildGmcProductEntry builds a well-formed batch entry', () => {
+test('buildProductInput builds a well-formed Merchant API ProductInput', () => {
   const item = {
     id: 'feed-uuid',
     originid: 'SKU-42',
@@ -135,53 +160,56 @@ test('buildGmcProductEntry builds a well-formed batch entry', () => {
     mpn: 'MPN-42',
     customfields: { google_product_category: 'Apparel > Dresses', condition: 'neuf' },
   };
-  const entry = buildGmcProductEntry(item, 3, {
-    merchantId: 'M-1',
+  const pi = buildProductInput(item, {
     contentLanguage: 'fr',
-    targetCountry: 'FR',
+    feedLabel: 'FR',
     getOptimizedContentForPlatform: stubGetOptimized,
   });
 
-  assert.equal(entry.batchId, 3);
-  assert.equal(entry.merchantId, 'M-1');
-  assert.equal(entry.method, 'insert');
-  assert.equal(entry.product.offerId, 'SKU-42');
-  assert.equal(entry.product.title, 'Robe rouge');
-  assert.equal(entry.product.description, 'Belle robe'); // HTML stripped
-  assert.deepEqual(entry.product.price, { value: '19.90', currency: 'EUR' });
-  assert.equal(entry.product.availability, 'in_stock'); // inventory > 0
-  assert.equal(entry.product.condition, 'new'); // "neuf"
-  assert.equal(entry.product.googleProductCategory, 'Apparel > Dresses');
-  assert.equal(entry.product.channel, 'online');
-  assert.equal(entry.product.contentLanguage, 'fr');
-  assert.equal(entry.product.targetCountry, 'FR');
+  assert.equal(pi.offerId, 'SKU-42');
+  assert.equal(pi.contentLanguage, 'fr');
+  assert.equal(pi.feedLabel, 'FR');
+  const a = pi.productAttributes;
+  assert.equal(a.title, 'Robe rouge');
+  assert.equal(a.description, 'Belle robe'); // HTML stripped
+  assert.equal(a.link, 'https://shop/p/42');
+  assert.equal(a.imageLink, 'https://img/42.jpg');
+  assert.deepEqual(a.price, { amountMicros: '19900000', currencyCode: 'EUR' });
+  assert.equal(a.availability, 'IN_STOCK'); // inventory > 0, uppercased
+  assert.equal(a.condition, 'NEW'); // "neuf"
+  assert.deepEqual(a.gtins, ['0123456789012']); // plural array
+  assert.equal(a.mpn, 'MPN-42');
+  assert.equal(a.googleProductCategory, 'Apparel > Dresses');
+  // plus de champ v2.1 : ni channel, ni targetCountry, ni price.value
+  assert.equal(a.channel, undefined);
+  assert.equal(a.targetCountry, undefined);
 });
 
-test('buildGmcProductEntry defaults category and currency, omits price when absent', () => {
+test('buildProductInput defaults category, omits price/gtins/mpn when absent', () => {
   const item = { id: 'id1', title: 'T', customfields: null };
-  const entry = buildGmcProductEntry(item, 0, {
-    merchantId: 'M',
+  const pi = buildProductInput(item, {
     contentLanguage: 'en',
-    targetCountry: 'GB',
+    feedLabel: 'GB',
     currencyCode: 'GBP',
     getOptimizedContentForPlatform: stubGetOptimized,
   });
-  assert.equal(entry.product.googleProductCategory, DEFAULT_GMC_CATEGORY);
-  assert.equal(entry.product.price, undefined); // no price field
-  assert.equal(entry.product.availability, 'out_of_stock');
-  assert.equal(entry.product.offerId, 'id1');
+  assert.equal(pi.productAttributes.googleProductCategory, DEFAULT_GMC_CATEGORY);
+  assert.equal(pi.productAttributes.price, undefined);
+  assert.equal(pi.productAttributes.gtins, undefined);
+  assert.equal(pi.productAttributes.mpn, undefined);
+  assert.equal(pi.productAttributes.availability, 'OUT_OF_STOCK');
+  assert.equal(pi.offerId, 'id1');
 });
 
-test('buildGmcProductEntry uses destination currency fallback when item has none', () => {
+test('buildProductInput uses destination currency fallback when item has none', () => {
   const item = { id: 'id1', title: 'T', price: 5, customfields: {} };
-  const entry = buildGmcProductEntry(item, 0, {
-    merchantId: 'M',
+  const pi = buildProductInput(item, {
     contentLanguage: 'es',
-    targetCountry: 'ES',
+    feedLabel: 'ES',
     currencyCode: 'USD',
     getOptimizedContentForPlatform: stubGetOptimized,
   });
-  assert.deepEqual(entry.product.price, { value: '5.00', currency: 'USD' });
+  assert.deepEqual(pi.productAttributes.price, { amountMicros: '5000000', currencyCode: 'USD' });
 });
 
 // ---------------------------------------------------------------------------
@@ -193,7 +221,6 @@ function makeDeps(overrides = {}) {
     queries: [],
     async $queryRawUnsafe(sql, ...args) {
       this.queries.push({ sql, args });
-      // 1er appel = SELECT FeedItem
       return overrides.items || [
         { id: 'i1', originid: 'O1', title: 'P1', price: 10, currency: 'EUR', inventory: 1, customfields: {} },
       ];
@@ -203,20 +230,27 @@ function makeDeps(overrides = {}) {
       return 1;
     },
   };
-  const deps = {
-    getPrisma: () => prisma,
-    fetch: async (url, opts) => {
-      fetchCalls.push({ url, opts });
+  // Stub fetch routé par URL : dataSources.list → une source API primaire ;
+  // productInputs:insert → 200.
+  const defaultFetch = async (url, opts) => {
+    fetchCalls.push({ url, opts });
+    if (/\/dataSources$/.test(url) && (!opts || opts.method !== 'POST')) {
       return {
-        ok: true,
-        status: 200,
+        ok: true, status: 200,
         async json() {
-          // 1 entry succeeded
-          return { entries: [{ batchId: 0 }] };
+          return { dataSources: [{ name: 'accounts/M-123/dataSources/ds-1', input: 'API', primaryProductDataSourceInput: {} }] };
         },
         async text() { return ''; },
       };
-    },
+    }
+    if (/productInputs:insert/.test(url)) {
+      return { ok: true, status: 200, async json() { return { name: 'accounts/M-123/products/x' }; }, async text() { return ''; } };
+    }
+    return { ok: true, status: 200, async json() { return {}; }, async text() { return ''; } };
+  };
+  const deps = {
+    getPrisma: () => prisma,
+    fetch: overrides.fetch || defaultFetch,
     crypto: { randomUUID: () => 'log-uuid-1' },
     getActivePlatformConnectionForPush: async () => ({ id: 'conn1', merchantid: 'M-123', accesstoken: 'tok', tokenexpiry: null }),
     refreshGMCToken: async () => 'tok2',
@@ -237,20 +271,75 @@ function makeDeps(overrides = {}) {
   return { deps, prisma, fetchCalls };
 }
 
-test('executeGmcPush pushes a batch and logs success', async () => {
-  const { deps, fetchCalls, prisma } = makeDeps();
+test('executeGmcPush inserts each product via productInputs.insert and logs success', async () => {
+  const { deps, fetchCalls, prisma } = makeDeps({
+    items: [
+      { id: 'i1', originid: 'O1', title: 'P1', price: 10, currency: 'EUR', inventory: 1, customfields: {} },
+      { id: 'i2', originid: 'O2', title: 'P2', price: 20, currency: 'EUR', inventory: 0, customfields: {} },
+    ],
+  });
   const { executeGmcPush } = createGmcPush(deps);
   const res = await executeGmcPush({ accountId: 'acc1', userId: 'u1', feedId: 'feed1' });
 
-  assert.equal(res.succeeded, 1);
+  assert.equal(res.succeeded, 2);
   assert.equal(res.failed, 0);
-  assert.equal(res.total, 1);
+  assert.equal(res.total, 2);
   assert.equal(res.logId, 'log-uuid-1');
-  // batch endpoint hit once
-  assert.equal(fetchCalls.length, 1);
-  assert.match(fetchCalls[0].url, /products\/batch$/);
-  // ExportLog written
+  // dataSource résolu une fois, puis un insert par produit.
+  const inserts = fetchCalls.filter(c => /productInputs:insert/.test(c.url));
+  assert.equal(inserts.length, 2);
+  assert.match(inserts[0].url, /merchantapi\.googleapis\.com\/products\/v1\/accounts\/M-123\/productInputs:insert\?dataSource=/);
+  assert.ok(fetchCalls.some(c => /\/datasources\/v1\/accounts\/M-123\/dataSources$/.test(c.url)));
+  // ExportLog écrit
   assert.ok(prisma.queries.some(q => q.write && /INSERT INTO "ExportLog"/.test(q.sql)));
+});
+
+test('executeGmcPush counts per-product failures', async () => {
+  let n = 0;
+  const fetch = async (url, opts) => {
+    if (/\/dataSources$/.test(url) && (!opts || opts.method !== 'POST')) {
+      return { ok: true, status: 200, async json() { return { dataSources: [{ name: 'accounts/M-123/dataSources/ds-1', input: 'API', primaryProductDataSourceInput: {} }] }; }, async text() { return ''; } };
+    }
+    if (/productInputs:insert/.test(url)) {
+      n++;
+      if (n === 2) return { ok: false, status: 400, async text() { return 'invalid attribute'; } };
+      return { ok: true, status: 200, async json() { return {}; }, async text() { return ''; } };
+    }
+    return { ok: true, status: 200, async json() { return {}; }, async text() { return ''; } };
+  };
+  const { deps } = makeDeps({
+    fetch,
+    items: [
+      { id: 'i1', title: 'P1', price: 1, customfields: {} },
+      { id: 'i2', title: 'P2', price: 2, customfields: {} },
+      { id: 'i3', title: 'P3', price: 3, customfields: {} },
+    ],
+  });
+  const { executeGmcPush } = createGmcPush(deps);
+  const res = await executeGmcPush({ accountId: 'acc1', userId: 'u1', feedId: 'feed1' });
+  assert.equal(res.total, 3);
+  assert.equal(res.succeeded, 2);
+  assert.equal(res.failed, 1);
+  assert.equal(res.errors.length, 1);
+});
+
+test('executeGmcPush marks connection expired and throws on 401', async () => {
+  const fetch = async (url, opts) => {
+    if (/\/dataSources$/.test(url) && (!opts || opts.method !== 'POST')) {
+      return { ok: true, status: 200, async json() { return { dataSources: [{ name: 'accounts/M-123/dataSources/ds-1', input: 'API', primaryProductDataSourceInput: {} }] }; }, async text() { return ''; } };
+    }
+    if (/productInputs:insert/.test(url)) {
+      return { ok: false, status: 401, async text() { return 'unauthorized'; } };
+    }
+    return { ok: true, status: 200, async json() { return {}; }, async text() { return ''; } };
+  };
+  const { deps, prisma } = makeDeps({ fetch });
+  const { executeGmcPush } = createGmcPush(deps);
+  await assert.rejects(
+    () => executeGmcPush({ accountId: 'acc1', userId: 'u1', feedId: 'feed1' }),
+    (err) => err.statusCode === 401 && err.reconnect === true
+  );
+  assert.ok(prisma.queries.some(q => q.write && /status = 'expired'/.test(q.sql)));
 });
 
 test('executeGmcPush throws createPushError when GMC not connected', async () => {

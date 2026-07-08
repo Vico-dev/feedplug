@@ -3814,30 +3814,39 @@ async function fetchMarketingAuditGmcData(audit, input = {}) {
     throw new Error('Token GMC introuvable');
   }
 
-  const productsData = await fetchJson(`https://shoppingcontent.googleapis.com/content/v2.1/${merchantId}/products?maxResults=250`);
-  const statusesData = await fetchJson(`https://shoppingcontent.googleapis.com/content/v2.1/${merchantId}/productstatuses?maxResults=250`);
-  const statusByOfferId = new Map((statusesData.resources || []).map((entry) => [entry.productId, entry]));
-  const items = (productsData.resources || []).map((product) => {
-    const status = statusByOfferId.get(product.id) || null;
+  // Merchant API : products.list renvoie des produits « traités » avec le statut
+  // embarqué (productStatus) → une seule requête remplace products + productstatuses
+  // de la Content API v2.1 (fermée le 18/08/2026). Attributs sous productAttributes ;
+  // prix en amountMicros ; statut par reportingContext (SHOPPING_ADS) avec des listes
+  // approved/disapprovedCountries au lieu d'un champ `status` unique.
+  const productsData = await fetchJson(`https://merchantapi.googleapis.com/products/v1/accounts/${merchantId}/products?pageSize=250`);
+  const items = (productsData.products || []).map((product) => {
+    const attrs = product.productAttributes || {};
+    const status = product.productStatus || null;
     const destinationStatuses = Array.isArray(status?.destinationStatuses) ? status.destinationStatuses : [];
-    const shoppingStatus = destinationStatuses.find((entry) => entry.destination === 'Shopping_ads') || destinationStatuses[0] || null;
+    const shoppingStatus = destinationStatuses.find((entry) => entry.reportingContext === 'SHOPPING_ADS') || destinationStatuses[0] || null;
+    // Statut dérivé du modèle Merchant API : disapproved si au moins un pays refusé.
+    const disapproved = Array.isArray(shoppingStatus?.disapprovedCountries) && shoppingStatus.disapprovedCountries.length > 0;
+    const approved = Array.isArray(shoppingStatus?.approvedCountries) && shoppingStatus.approvedCountries.length > 0;
+    const gmcStatus = shoppingStatus ? (disapproved ? 'disapproved' : (approved ? 'approved' : 'pending')) : null;
+    const micros = attrs.price?.amountMicros;
     return {
-      title: product.title || null,
-      descriptionText: product.description || null,
-      descriptionHtml: product.description || null,
-      imageUrl: product.imageLink || null,
-      brand: product.brand || null,
-      category: product.googleProductCategory || null,
-      googleProductCategory: product.googleProductCategory || null,
+      title: attrs.title || null,
+      descriptionText: attrs.description || null,
+      descriptionHtml: attrs.description || null,
+      imageUrl: attrs.imageLink || null,
+      brand: attrs.brand || null,
+      category: attrs.googleProductCategory || null,
+      googleProductCategory: attrs.googleProductCategory || null,
       sku: product.offerId || null,
-      mpn: product.mpn || null,
-      gtin: product.gtin || null,
-      price: product.price?.value ? Number(product.price.value) : null,
-      currency: product.price?.currency || null,
-      url: product.link || null,
-      availability: product.availability || null,
+      mpn: attrs.mpn || null,
+      gtin: (Array.isArray(attrs.gtins) ? attrs.gtins[0] : attrs.gtin) || null,
+      price: micros != null ? Number(micros) / 1e6 : null,
+      currency: attrs.price?.currencyCode || null,
+      url: attrs.link || null,
+      availability: attrs.availability || null,
       inventory: null,
-      gmcStatus: shoppingStatus?.status || null,
+      gmcStatus,
       itemLevelIssues: status?.itemLevelIssues || [],
     };
   });

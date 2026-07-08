@@ -1,48 +1,43 @@
 'use strict';
 
 /**
- * domains/gmc/push.js — Domaine Google Merchant Center (GMC) push (bloc 2).
+ * domains/gmc/push.js — Domaine Google Merchant Center (GMC) push.
  *
- * EXTRACTION STRANGLER À COMPORTEMENT STRICTEMENT PRÉSERVÉ.
- * Sorti À L'IDENTIQUE de la fonction géante `run()` de server-minimal.js
- * (mêmes appels GMC batch, même gestion offerId / availability / condition,
- * même traduction marché best-effort, mêmes logs ExportLog, même best-effort
- * email). AUCUN changement fonctionnel.
+ * MIGRATION Content API for Shopping v2.1 → Merchant API v1 (08/07/2026).
+ * Content API v2.1 ferme le 18/08/2026 ; v1beta a été coupé le 28/02/2026, la
+ * version live est donc `v1` sur `merchantapi.googleapis.com`.
+ *
+ * Changements structurants imposés par Merchant API :
+ *  - `products.custombatch` (insert par lot) N'EXISTE PLUS. On envoie des
+ *    `productInputs.insert` individuels, parallélisés (pool borné). insert = upsert.
+ *  - Toute écriture produit exige un `dataSource` (query param). On résout — et si
+ *    besoin crée — une source de données primaire de type API par compte (cache).
+ *  - Les attributs produit (title, price, link, …) descendent dans un sous-objet
+ *    `productAttributes`. `price` = `{ amountMicros, currencyCode }` (plus `value`).
+ *    `availability`/`condition` = enums MAJUSCULES. `gtin` → `gtins[]`.
+ *    `targetCountry` → `feedLabel`.
+ *  - `accounts/authinfo` → `accounts.list` (GET /accounts/v1/accounts).
  *
  * Deux familles d'exports :
- *
- *  1. Helpers PURS (testables directement, sans DI) :
- *       - DEFAULT_GMC_CATEGORY
- *       - normalizeAvailabilityForGMC(raw, inventory)
- *       - normalizeConditionForGMC(raw)
- *       - parseGmcMerchantOptions(accountsData)
- *       - resolveGmcOfferId(item)   ← logique offerId ≤50 / fallback id
- *       - buildGmcProductEntry(...) ← construction d'une entrée du batch GMC
- *     `normalizeAvailabilityForGMC` / `normalizeConditionForGMC` sont aussi
- *     utilisés par d'autres chemins de push (Amazon / Meta) dans
- *     server-minimal.js ; ils restent donc ré-exportés tels quels (les appelants
- *     historiques gardent les mêmes symboles via des const locales).
- *
- *  2. Factory `createGmcPush(deps)` (DI), qui assemble :
- *       - enrichGmcMerchantNames(options, accessToken) ← a besoin de `fetch`
- *       - executeGmcPush({ accountId, userId, feedId, destinationContext })
- *     `executeGmcPush` appelle beaucoup de fonctions historiquement
- *     closure-scoped (`getActivePlatformConnectionForPush`, `refreshGMCToken`,
- *     `filterItemsForDestinationActivation`, `getOptimizedContentForPlatform`,
- *     `findUserById`, `sendExportCompleteEmail`, `buildDestinationPushLabel`,
- *     `translateItemsForDestination`, `createPushError`, `prisma`, `fetch`,
- *     `crypto`, …). Elles sont INJECTÉES via la factory. `prisma` est un état
- *     muté pendant le boot → injecté via un GETTER `getPrisma()` (late-binding).
- *
- * Les routes Express GMC (callback OAuth, endpoints de push) RESTENT dans
- * server-minimal.js ; elles appellent les fonctions extraites via des wrappers
- * locaux de signatures inchangées. `executeGmcPush` reste compatible avec le
- * câblage du bloc 1 (`createJobHandlers({ executeGmcPush, … })`).
+ *  1. Helpers PURS (testables sans réseau) : normalisation, mapping enums,
+ *     conversion prix, construction du ProductInput, parsing accounts.list.
+ *     `normalizeAvailabilityForGMC` / `normalizeConditionForGMC` restent en
+ *     valeurs v2.1 minuscules car ré-utilisés par les chemins Amazon/Meta ;
+ *     la conversion vers les enums Merchant API se fait au bord (to*ForMerchant).
+ *  2. Factory `createGmcPush(deps)` (DI) : enrichGmcMerchantNames, executeGmcPush.
  */
+
+// --- Endpoints Merchant API (constantes : faciles à ajuster si Google bouge) ---
+const MERCHANT_API_BASE = 'https://merchantapi.googleapis.com';
+const PRODUCTS_API_VERSION = 'v1';
+const ACCOUNTS_API_VERSION = 'v1';
+const DATASOURCES_API_VERSION = 'v1';
+// Parallélisme des insert individuels (custombatch supprimé côté Merchant API).
+const INSERT_CONCURRENCY = 15;
 
 const DEFAULT_GMC_CATEGORY = 'Apparel & Accessories > Clothing';
 
-/** Normalise la disponibilité vers les valeurs GMC. */
+/** Normalise la disponibilité vers les valeurs v2.1 (minuscules) — réutilisé Amazon/Meta. */
 function normalizeAvailabilityForGMC(raw, inventory) {
   const s = (raw && String(raw).toLowerCase()) || '';
   if (s === 'in_stock' || s === 'preorder' || s === 'backorder') return s;
@@ -53,7 +48,7 @@ function normalizeAvailabilityForGMC(raw, inventory) {
   return 'out_of_stock';
 }
 
-/** Normalise la condition vers les valeurs GMC : new, refurbished, used. */
+/** Normalise la condition vers les valeurs v2.1 : new, refurbished, used. */
 function normalizeConditionForGMC(raw) {
   const s = (raw && String(raw).toLowerCase().trim()) || '';
   if (['new', 'refurbished', 'used'].includes(s)) return s;
@@ -64,33 +59,60 @@ function normalizeConditionForGMC(raw) {
 }
 
 /**
- * Parse la réponse `accounts/authinfo` en options Merchant Center dédoublonnées.
- * Logique sortie à l'identique de server-minimal.js.
+ * Convertit une disponibilité v2.1 (in_stock, out_of_stock, preorder, backorder)
+ * vers l'enum Merchant API (IN_STOCK, OUT_OF_STOCK, PREORDER, BACKORDER).
+ */
+function toMerchantAvailability(v21Value) {
+  return String(v21Value || 'out_of_stock').toUpperCase();
+}
+
+/** Convertit une condition v2.1 (new/refurbished/used) vers l'enum Merchant API. */
+function toMerchantCondition(v21Value) {
+  return String(v21Value || 'new').toUpperCase();
+}
+
+/**
+ * Prix Merchant API : `amountMicros` (entier en micro-unités, sous forme de string)
+ * + `currencyCode`. 19.99 EUR → amountMicros "19990000". Renvoie null si pas de prix.
+ */
+function priceToAmountMicros(price) {
+  if (price == null || price === '') return null;
+  const n = Number(price);
+  if (!Number.isFinite(n)) return null;
+  return String(Math.round(n * 1e6));
+}
+
+/**
+ * Parse la réponse `accounts.list` (Merchant API) en options Merchant Center
+ * dédoublonnées. Chaque compte : `name` = "accounts/{id}", `accountName` = libellé.
+ * Conserve la forme de sortie historique { merchantId, merchantName, aggregatorId, label }
+ * pour ne pas casser les appelants (routes/platforms.js).
  */
 function parseGmcMerchantOptions(accountsData) {
-  const rawEntries = Array.isArray(accountsData?.accountIdentifiers) ? accountsData.accountIdentifiers : [];
+  const rawEntries = Array.isArray(accountsData?.accounts) ? accountsData.accounts : [];
   const seen = new Set();
   const options = [];
 
   for (const entry of rawEntries) {
-    const merchantId = String(entry?.merchantId || entry?.merchantid || entry?.aggregatorId || entry?.aggregatorid || '').trim();
+    // name = "accounts/123456" → merchantId = "123456".
+    const name = String(entry?.name || '').trim();
+    const idFromName = name.includes('/') ? name.split('/').pop() : name;
+    const merchantId = String(idFromName || entry?.merchantId || '').trim();
     if (!merchantId || seen.has(merchantId)) continue;
     seen.add(merchantId);
 
     const merchantName = String(
-      entry?.name ||
       entry?.accountName ||
       entry?.displayName ||
-      entry?.merchantName ||
+      entry?.name ||
       ''
     ).trim();
-    const aggregatorId = String(entry?.aggregatorId || entry?.aggregatorid || '').trim();
 
     options.push({
       merchantId,
-      merchantName: merchantName || '',
-      aggregatorId: aggregatorId || '',
-      label: merchantName ? `${merchantName} (${merchantId})` : `Merchant Center ${merchantId}`,
+      merchantName: merchantName && merchantName !== name ? merchantName : '',
+      aggregatorId: '',
+      label: (merchantName && merchantName !== name) ? `${merchantName} (${merchantId})` : `Merchant Center ${merchantId}`,
     });
   }
 
@@ -98,14 +120,8 @@ function parseGmcMerchantOptions(accountsData) {
 }
 
 /**
- * offerId GMC : doit être COURT (≤50) ET UNIQUE. Le champ originid contient
- * parfois un libellé long (mauvais mapping source — ex. le titre 150 car.) :
- *  - >50 car. → Google rejette "[id] Value too long" (3500+ produits perdus) ;
- *  - tronqué à 50 → offerId dupliqués entre produits → GMC dédoublonne (écart
- *    "X envoyés" vs "Y visibles dans GMC").
- * On n'utilise originid que s'il est propre (≤50) ; sinon on retombe sur l'id
- * FeedItem (UUID 36 car., unique et stable via upsert).
- * Sorti À L'IDENTIQUE de server-minimal.js.
+ * offerId GMC : COURT (≤50) ET UNIQUE. Si originid propre (≤50) on le garde ;
+ * sinon fallback sur l'id FeedItem (UUID unique/stable). Inchangé vs v2.1.
  */
 function resolveGmcOfferId(item) {
   const rawOriginId = (item.originid ?? item.originId ?? '').toString().trim();
@@ -113,24 +129,22 @@ function resolveGmcOfferId(item) {
 }
 
 /**
- * Construit une entrée du batch products.batch GMC pour un FeedItem.
- * Sorti À L'IDENTIQUE de la boucle de `executeGmcPush`.
+ * Construit le corps `ProductInput` (Merchant API) pour un FeedItem.
+ * Remplace buildGmcProductEntry (qui produisait la forme custombatch v2.1).
  *
  * @param {object} item   - FeedItem (champs SQL bruts : originid, customfields, …).
- * @param {number} idx    - index dans le lot (batchId).
  * @param {object} ctx
- * @param {string} ctx.merchantId
  * @param {string} ctx.contentLanguage
- * @param {string} ctx.targetCountry
+ * @param {string} ctx.feedLabel                    - ex-targetCountry (ex. 'FR').
  * @param {string|null} [ctx.destinationId]
- * @param {string|null} [ctx.currencyCode]   - devise de la destination (fallback prix).
- * @param {Function} ctx.getOptimizedContentForPlatform - injecté (utils/platform-content).
+ * @param {string|null} [ctx.currencyCode]          - devise de la destination (fallback prix).
+ * @param {Function} ctx.getOptimizedContentForPlatform
+ * @returns {object} ProductInput
  */
-function buildGmcProductEntry(item, idx, ctx) {
+function buildProductInput(item, ctx) {
   const {
-    merchantId,
     contentLanguage,
-    targetCountry,
+    feedLabel,
     destinationId = null,
     currencyCode = null,
     getOptimizedContentForPlatform,
@@ -140,53 +154,54 @@ function buildGmcProductEntry(item, idx, ctx) {
   const { title: optTitle, description: optDesc } = getOptimizedContentForPlatform(item, 'gmc', { destinationId: destinationId || null });
   const title = (optTitle || item.title || '').substring(0, 150);
   const description = (optDesc || '').replace(/<[^>]*>/g, '').substring(0, 5000);
-  const price = item.price ? { value: String(Number(item.price).toFixed(2)), currency: item.currency || currencyCode || 'EUR' } : undefined;
-  const availability = normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory);
+  const availability = toMerchantAvailability(normalizeAvailabilityForGMC(cf.availability || cf.inventory, item.inventory));
+  const condition = toMerchantCondition(normalizeConditionForGMC(item.condition || cf.condition));
   const googleProductCategory = (cf.google_product_category && String(cf.google_product_category).trim()) || DEFAULT_GMC_CATEGORY;
-  const condition = normalizeConditionForGMC(item.condition || cf.condition);
-  const offerId = resolveGmcOfferId(item);
+
+  const attributes = {
+    title,
+    description,
+    link: item.url || cf.link || '',
+    imageLink: (item.imageurl ?? item.imageUrl) || cf.image_link || '',
+    availability,
+    condition,
+    brand: item.brand || cf.brand || '',
+    googleProductCategory,
+  };
+
+  const amountMicros = priceToAmountMicros(item.price);
+  if (amountMicros != null) {
+    attributes.price = { amountMicros, currencyCode: item.currency || currencyCode || 'EUR' };
+  }
+  const gtin = item.gtin || cf.gtin || '';
+  if (gtin) attributes.gtins = [String(gtin)];
+  const mpn = item.mpn || cf.mpn || item.sku || '';
+  if (mpn) attributes.mpn = String(mpn);
+
   return {
-    batchId: idx,
-    merchantId: merchantId,
-    method: 'insert',
-    product: {
-      offerId: offerId,
-      title: title,
-      description: description.replace(/<[^>]*>/g, ''),
-      link: item.url || cf.link || '',
-      imageLink: (item.imageurl ?? item.imageUrl) || cf.image_link || '',
-      availability: availability,
-      price: price,
-      brand: item.brand || cf.brand || '',
-      gtin: item.gtin || cf.gtin || undefined,
-      mpn: item.mpn || cf.mpn || item.sku || undefined,
-      condition: condition,
-      googleProductCategory: googleProductCategory,
-      channel: 'online',
-      contentLanguage,
-      targetCountry
-    }
+    offerId: resolveGmcOfferId(item),
+    contentLanguage,
+    feedLabel,
+    productAttributes: attributes,
   };
 }
 
+/** Pool d'exécution à concurrence bornée (remplace le custombatch supprimé). */
+async function runWithConcurrency(items, worker, concurrency) {
+  let cursor = 0;
+  const size = Math.max(1, Math.min(concurrency, items.length));
+  const runners = Array.from({ length: size }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      await worker(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
+
 /**
- * Factory DI : assemble les fonctions GMC qui dépendent d'état/closures du
- * serveur (`prisma`, `fetch`, helpers de push, email, …).
- *
- * @param {object} deps
- * @param {() => any} deps.getPrisma                              - getter late-bind Prisma.
- * @param {Function} deps.fetch                                   - fetch global (HTTP GMC).
- * @param {object}   deps.crypto                                  - module crypto (randomUUID).
- * @param {Function} deps.getActivePlatformConnectionForPush
- * @param {Function} deps.refreshGMCToken
- * @param {Function} deps.filterItemsForDestinationActivation
- * @param {Function} deps.getOptimizedContentForPlatform
- * @param {Function} deps.translateItemsForDestination
- * @param {Function} deps.findUserById
- * @param {Function} deps.sendExportCompleteEmail
- * @param {Function} deps.buildDestinationPushLabel
- * @param {Function} deps.createPushError
- * @returns {object} { enrichGmcMerchantNames, executeGmcPush }
+ * Factory DI : assemble les fonctions GMC qui dépendent d'état/closures du serveur.
+ * Contrat de sortie inchangé vs l'implémentation v2.1 (mêmes clés de retour).
  */
 function createGmcPush(deps) {
   const {
@@ -204,35 +219,92 @@ function createGmcPush(deps) {
     createPushError,
   } = deps;
 
-  // Enrichit chaque option Merchant Center avec son nom lisible. `accounts/authinfo`
-  // ne renvoie que les IDs ; on appelle accounts.get par compte (best-effort, en
-  // parallèle) pour récupérer le nom. Un client avec plusieurs GMC voit ainsi
-  // "Nom (ID)" au lieu d'un ID nu et peut choisir le bon compte.
+  // Cache dataSource par compte (merchantId → "accounts/{id}/dataSources/{ds}").
+  const dataSourceCache = new Map();
+
+  /**
+   * Enrichit chaque option Merchant Center avec son nom lisible via accounts.get
+   * (Merchant API). accounts.list renvoie déjà `accountName` la plupart du temps ;
+   * ceci ne comble que les noms manquants. Best-effort.
+   */
   async function enrichGmcMerchantNames(options, accessToken) {
     if (!Array.isArray(options) || options.length === 0 || !accessToken) return options;
     await Promise.all(
       options.map(async (opt) => {
         if (!opt || opt.merchantName || !opt.merchantId) return;
-        // Sous-compte d'un MCA : contexte d'appel = l'aggregator ; sinon le compte lui-même.
-        const ctx = opt.aggregatorId || opt.merchantId;
         try {
           const res = await fetch(
-            `https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(ctx)}/accounts/${encodeURIComponent(opt.merchantId)}`,
+            `${MERCHANT_API_BASE}/accounts/${ACCOUNTS_API_VERSION}/accounts/${encodeURIComponent(opt.merchantId)}`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
           if (!res.ok) return;
           const data = await res.json();
-          const name = String(data?.name || data?.displayName || '').trim();
+          const name = String(data?.accountName || data?.displayName || '').trim();
           if (name) {
             opt.merchantName = name;
             opt.label = `${name} (${opt.merchantId})`;
           }
         } catch {
-          // best-effort : on garde le fallback "Merchant Center {ID}" si l'appel échoue
+          // best-effort : on garde le fallback "Merchant Center {ID}"
         }
       })
     );
     return options;
+  }
+
+  /**
+   * Résout la source de données primaire de type API du compte (obligatoire pour
+   * productInputs.insert). Réutilise une source API primaire existante ; sinon en
+   * crée une ("FeedPlug"). Cache par merchantId. Lève une createPushError explicite
+   * si aucune source n'est disponible et que la création échoue.
+   */
+  async function resolveApiDataSource(merchantId, accessToken, { contentLanguage, feedLabel }) {
+    if (dataSourceCache.has(merchantId)) return dataSourceCache.get(merchantId);
+    const base = `${MERCHANT_API_BASE}/datasources/${DATASOURCES_API_VERSION}/accounts/${encodeURIComponent(merchantId)}/dataSources`;
+
+    let name = null;
+    try {
+      const res = await fetch(base, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (res.ok) {
+        const data = await res.json();
+        const sources = Array.isArray(data?.dataSources) ? data.dataSources : [];
+        // Source primaire produits alimentée par API.
+        const apiPrimary = sources.find((s) => s && s.primaryProductDataSourceInput && s.input === 'API')
+          || sources.find((s) => s && s.primaryProductDataSourceInput);
+        if (apiPrimary?.name) name = apiPrimary.name;
+      }
+    } catch {
+      // on tentera la création
+    }
+
+    if (!name) {
+      const body = {
+        displayName: 'FeedPlug API',
+        primaryProductDataSourceInput: {},
+      };
+      // contentLanguages/countries n'acceptent qu'une valeur simple selon la source
+      // de la doc ; on cible la langue/pays du push pour une source mono-cible.
+      if (contentLanguage) body.primaryProductDataSourceInput.contentLanguage = contentLanguage;
+      if (feedLabel) body.primaryProductDataSourceInput.feedLabel = feedLabel;
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        name = data?.name || null;
+      } else {
+        const errText = await res.text().catch(() => '');
+        throw createPushError(
+          `Impossible de résoudre une source de données Merchant API (dataSource). Créez une source "API" dans Merchant Center puis relancez. Détail: ${errText.substring(0, 200)}`,
+          502
+        );
+      }
+    }
+
+    if (name) dataSourceCache.set(merchantId, name);
+    return name;
   }
 
   async function executeGmcPush({ accountId, userId, feedId, destinationContext = null }) {
@@ -270,12 +342,9 @@ function createGmcPush(deps) {
     );
     const itemsBeforeDestFilter = items.length;
     items = await filterItemsForDestinationActivation(items, destinationContext);
-    // Diag : si push retourne "Aucun produit à pousser" sans log applicatif,
-    // on ne sait pas si le feed est vide en BDD, si le filter Google les a
-    // exclus, ou si le filter destination a tout retiré. Log ces compteurs.
     console.log(`[gmc-push] account=${accountId} feed=${feedId} merchantId=${conn.merchantid} itemsAfterSqlFilter=${itemsBeforeDestFilter} itemsAfterDestActivation=${items.length} destinationContext=${destinationContext ? destinationContext.slug || destinationContext.id : 'default'}`);
 
-    // Traduction par marché (v2) — best-effort.
+    // Traduction par marché — best-effort.
     try {
       const { items: translated, stats } = await translateItemsForDestination(prisma, items, destinationContext, { prisma, accountId });
       items = translated;
@@ -303,66 +372,58 @@ function createGmcPush(deps) {
 
     const merchantId = conn.merchantid;
     const targetCountry = destinationContext?.countryCode || destinationContext?.marketCode || 'FR';
+    const feedLabel = targetCountry;
     const contentLanguage = String(destinationContext?.languageCode || 'fr').toLowerCase();
+
+    // Source de données obligatoire pour toute écriture produit Merchant API.
+    const dataSource = await resolveApiDataSource(merchantId, accessToken, { contentLanguage, feedLabel });
+
     let succeeded = 0;
     let failed = 0;
     const errors = [];
+    let authError = null; // premier 401 rencontré → on arrête et on demande reconnexion.
 
-    const batchSize = 50;
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize);
-      const entries = batch.map((item, idx) => buildGmcProductEntry(item, idx, {
-        merchantId,
+    const insertUrl = `${MERCHANT_API_BASE}/products/${PRODUCTS_API_VERSION}/accounts/${encodeURIComponent(merchantId)}/productInputs:insert?dataSource=${encodeURIComponent(dataSource)}`;
+
+    await runWithConcurrency(items, async (item) => {
+      if (authError) return; // court-circuite le reste du pool après un 401.
+      const productInput = buildProductInput(item, {
         contentLanguage,
-        targetCountry,
+        feedLabel,
         destinationId: destinationContext?.id || null,
         currencyCode: destinationContext?.currencyCode || null,
         getOptimizedContentForPlatform,
-      }));
-
+      });
       try {
-        const batchRes = await fetch(`https://shoppingcontent.googleapis.com/content/v2.1/products/batch`, {
+        const res = await fetch(insertUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ entries })
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(productInput),
         });
-
-        if (batchRes.ok) {
-          const batchData = await batchRes.json();
-          for (const entry of (batchData.entries || [])) {
-            if (entry.errors && entry.errors.errors && entry.errors.errors.length > 0) {
-              failed++;
-              errors.push({ productId: batch[entry.batchId]?.id, errors: entry.errors.errors.map(e => e.message) });
-            } else {
-              succeeded++;
-            }
-          }
+        if (res.ok) {
+          succeeded++;
         } else {
-          const errText = await batchRes.text();
-          console.error('GMC batch error:', batchRes.status, errText);
-          if (batchRes.status === 401) {
-            await prisma.$executeRawUnsafe(`UPDATE "PlatformConnection" SET status = 'expired', updatedat = NOW() WHERE id = $1::text`, conn.id);
-            throw createPushError('Token GMC expiré. Reconnectez votre compte.', 401, { reconnect: true });
+          const errText = await res.text().catch(() => '');
+          if (res.status === 401 && !authError) {
+            authError = errText || 'unauthorized';
+            return;
           }
-          failed += batch.length;
-          errors.push({ batch: `${i}-${i + batch.length}`, error: errText.substring(0, 200) });
+          failed++;
+          errors.push({ productId: item.id, error: (errText || `HTTP ${res.status}`).substring(0, 200) });
         }
-      } catch (batchErr) {
-        if (batchErr?.statusCode) {
-          throw batchErr;
-        }
-        console.error('GMC batch fetch error:', batchErr);
-        failed += batch.length;
-        errors.push({ batch: `${i}-${i + batch.length}`, error: batchErr.message });
+      } catch (insertErr) {
+        failed++;
+        errors.push({ productId: item.id, error: String(insertErr?.message || insertErr).substring(0, 200) });
       }
+    }, INSERT_CONCURRENCY);
+
+    if (authError) {
+      await prisma.$executeRawUnsafe(`UPDATE "PlatformConnection" SET status = 'expired', updatedat = NOW() WHERE id = $1::text`, conn.id);
+      throw createPushError('Token GMC expiré. Reconnectez votre compte.', 401, { reconnect: true });
     }
 
     const isMcaError = failed > 0 && succeeded === 0 && errors.some(e =>
-      (Array.isArray(e.errors) && e.errors.some(msg => typeof msg === 'string' && msg.includes('products manager access'))) ||
-      (typeof e.error === 'string' && e.error.includes('products manager access'))
+      typeof e.error === 'string' && e.error.includes('products manager access')
     );
 
     const logId = crypto.randomUUID();
@@ -411,11 +472,18 @@ function createGmcPush(deps) {
 }
 
 module.exports = {
+  MERCHANT_API_BASE,
+  PRODUCTS_API_VERSION,
+  ACCOUNTS_API_VERSION,
+  DATASOURCES_API_VERSION,
   DEFAULT_GMC_CATEGORY,
   normalizeAvailabilityForGMC,
   normalizeConditionForGMC,
+  toMerchantAvailability,
+  toMerchantCondition,
+  priceToAmountMicros,
   parseGmcMerchantOptions,
   resolveGmcOfferId,
-  buildGmcProductEntry,
+  buildProductInput,
   createGmcPush,
 };

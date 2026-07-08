@@ -219,7 +219,9 @@ app.get('/api/v1/platforms/gmc/callback', async (req, res) => {
     let merchantName = '';
     let merchantOptions = [];
     try {
-      const accountsRes = await fetch('https://shoppingcontent.googleapis.com/content/v2.1/accounts/authinfo', {
+      // Merchant API : accounts.list remplace content/v2.1/accounts/authinfo
+      // (Content API v2.1 fermé le 18/08/2026 ; v1beta coupé le 28/02/2026 → v1).
+      const accountsRes = await fetch('https://merchantapi.googleapis.com/accounts/v1/accounts', {
         headers: { 'Authorization': `Bearer ${tokens.access_token}` }
       });
       if (accountsRes.ok) {

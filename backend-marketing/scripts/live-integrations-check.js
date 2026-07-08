@@ -113,19 +113,21 @@ async function testGmc() {
     try {
       const refreshToken = decryptSecret(row.refreshtoken);
       const accessToken = await refreshGoogleAccessToken(refreshToken);
+      // Merchant API accounts.list (remplace content/v2.1/accounts/authinfo).
       const authRes = await fetch(
-        'https://shoppingcontent.googleapis.com/content/v2.1/accounts/authinfo',
+        'https://merchantapi.googleapis.com/accounts/v1/accounts',
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
       out.httpStatus = authRes.status;
       if (authRes.ok) {
         const data = await authRes.json();
-        const ids = Array.isArray(data?.accountIdentifiers) ? data.accountIdentifiers : [];
+        const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
+        const ids = accounts.map((a) => String(a?.name || '').split('/').pop()).filter(Boolean);
         out.ok = true;
         out.accountIdentifiers = ids.length;
         out.merchantMatched = !!row.merchantid && ids.some(
-          (entry) => String(entry.merchantId || entry.aggregatorId || '') === String(row.merchantid || '')
+          (id) => String(id) === String(row.merchantid || '')
         );
       } else {
         out.error = trim(await authRes.text());
