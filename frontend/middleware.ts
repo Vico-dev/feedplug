@@ -118,6 +118,12 @@ function isConsumerPath(pathnameWithoutLocale: string) {
     pathnameWithoutLocale.startsWith('/transparence/') ||
     pathnameWithoutLocale === '/confidentialite' ||
     pathnameWithoutLocale.startsWith('/confidentialite/') ||
+    pathnameWithoutLocale === '/mentions-legales' ||
+    pathnameWithoutLocale.startsWith('/mentions-legales/') ||
+    pathnameWithoutLocale === '/cgu' ||
+    pathnameWithoutLocale.startsWith('/cgu/') ||
+    pathnameWithoutLocale === '/cookies' ||
+    pathnameWithoutLocale.startsWith('/cookies/') ||
     pathnameWithoutLocale === '/deals' ||
     pathnameWithoutLocale.startsWith('/deals/') ||
     pathnameWithoutLocale === '/rayon' ||
@@ -169,7 +175,9 @@ export function middleware(request: NextRequest) {
   // API/assets — servis tels quels sur tous les hôtes (jamais 301 cross-host).
   // sitemap-comparateur.xml = sitemap conso (apex) ; sitemap.xml = marketing
   // (pro). robots.txt est host-aware côté route handler.
-  if (pathname.startsWith('/feedplug-api') || pathname === '/sitemap.xml' || pathname === '/sitemap-comparateur.xml' || pathname === '/robots.txt' || pathname === '/og-image' || pathname === '/logo' || pathname === '/icon' || pathname.startsWith('/icon?')) {
+  // PWA (/manifest.webmanifest, /sw.js, /offline.html) : un 301 cross-host
+  // casserait l'enregistrement du service worker (le SW doit être same-origin).
+  if (pathname.startsWith('/feedplug-api') || pathname === '/sitemap.xml' || pathname === '/sitemap-comparateur.xml' || pathname === '/robots.txt' || pathname === '/og-image' || pathname === '/logo' || pathname === '/icon' || pathname.startsWith('/icon?') || pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/offline.html') {
     return NextResponse.next();
   }
 

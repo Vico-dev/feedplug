@@ -8,6 +8,7 @@ import {
   formatPrice,
   type WatchlistItem,
 } from "@/lib/comparator-api";
+import PushOptIn from "@/components/comparateur/push-opt-in";
 
 const eyebrowStyle: CSSProperties = {
   display: "inline-flex",
@@ -135,6 +136,9 @@ export default function MesProduitsPage() {
           Mon feed →
         </Link>
       </div>
+
+      {/* Opt-in aux alertes push (baisse de prix) — en tête de la watchlist. */}
+      <PushOptIn />
 
       {loading ? (
         <p style={{ margin: "40px 0 0", fontSize: "15px", color: "var(--ink-3)" }}>Chargement…</p>

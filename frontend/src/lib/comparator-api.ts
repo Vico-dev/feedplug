@@ -449,3 +449,40 @@ export interface CashbackResponse {
 export function getCashback(): Promise<CashbackResponse> {
   return authFetch("/account/cashback");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Push web (alertes baisse de prix) — abonnements Web Push VAPID.
+// public-key est SANS auth (nécessaire avant l'opt-in) ; subscribe/unsubscribe/test
+// exigent le cookie cmp_session. Payload envoyé par le backend : { title, body, url }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Clé publique VAPID (base64url). 503 côté backend si push non configuré. */
+export function getPushPublicKey(): Promise<{ publicKey: string }> {
+  return authFetch("/account/push/public-key");
+}
+
+export function subscribePush(subscription: PushSubscriptionJSON): Promise<{ ok: boolean; platform: string }> {
+  return authFetch("/account/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ subscription }),
+  });
+}
+
+export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
+  return authFetch("/account/push/unsubscribe", {
+    method: "POST",
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+export interface PushTestResult {
+  ok: boolean;
+  sent: number;
+  skipped: number;
+  purged: number;
+  failed: number;
+}
+
+export function sendTestPush(): Promise<PushTestResult> {
+  return authFetch("/account/push/test", { method: "POST" });
+}
