@@ -66,7 +66,7 @@ export default function CookieConsent() {
       <p style={{ margin: "8px 0 0", fontSize: "13px", lineHeight: 1.55, color: "var(--ink-3)" }}>
         On utilise des cookies essentiels au fonctionnement du comparateur, et — avec ton accord — des
         cookies de mesure d&apos;audience. Tu peux refuser les non-essentiels.{" "}
-        <Link href="/legal/cookies" style={{ color: "var(--accent)", textDecoration: "none" }}>
+        <Link href="/cookies" style={{ color: "var(--accent)", textDecoration: "none" }}>
           En savoir plus
         </Link>
         .

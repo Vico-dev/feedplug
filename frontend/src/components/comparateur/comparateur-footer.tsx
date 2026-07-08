@@ -103,6 +103,12 @@ export default function ComparateurFooter({ locale }: { locale: string }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <Link
+              href="/mentions-legales"
+              style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
+            >
+              {isEn ? "Legal notice" : "Mentions légales"}
+            </Link>
+            <Link
               href="/confidentialite"
               style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
             >
@@ -115,10 +121,16 @@ export default function ComparateurFooter({ locale }: { locale: string }) {
               {isEn ? "Transparency" : "Transparence"}
             </Link>
             <Link
-              href="/legal/terms"
+              href="/cgu"
               style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
             >
               {isEn ? "Terms" : "Conditions générales"}
+            </Link>
+            <Link
+              href="/cookies"
+              style={{ fontSize: "14px", color: "var(--ink-3)", textDecoration: "none" }}
+            >
+              Cookies
             </Link>
           </div>
         </div>

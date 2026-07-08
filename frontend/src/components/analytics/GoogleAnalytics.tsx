@@ -2,14 +2,50 @@
 
 import Script from "next/script";
 import { usePathname } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import CookieConsent from "./CookieConsent";
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-KTF5X89N";
 
+// Clé du consentement CONSO, persistée par la bannière du comparateur
+// (components/comparateur/cookie-consent.tsx) : 'all' | 'essential' en
+// localStorage + cookie 1st-party, avec un CustomEvent 'cmp-consent' au choix.
+const CMP_CONSENT_KEY = "cmp_cookie_consent";
+
+// Hôtes conso (apex) : la bannière du comparateur y est montée par le layout
+// (comparateur) et pilote seule le consentement. On n'y affiche donc PAS la
+// bannière marketing (sinon double bannière). Sur pro./app./run.app/localhost,
+// la bannière marketing reste le mécanisme existant (clé feedplug_cookie_consent).
+function isConsumerHostname(hostname: string) {
+  return hostname === "feedplug.com" || hostname === "www.feedplug.com";
+}
+
 export default function GoogleAnalytics() {
   const pathname = usePathname();
   const [consentGiven, setConsentGiven] = useState(false);
+  const [consumerHost, setConsumerHost] = useState(false);
+
+  // Deux signaux de consentement cohabitent (OU logique) :
+  //  - marketing B2B : bannière ./CookieConsent (callbacks onAccept/onRefuse,
+  //    clé feedplug_cookie_consent) — mécanisme historique, inchangé ;
+  //  - conso comparateur : clé cmp_cookie_consent ('all' = accepté) lue au
+  //    montage + event 'cmp-consent' dispatché en live par la bannière conso.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CMP_CONSENT_KEY) === "all") setConsentGiven(true);
+    } catch {
+      /* stockage indisponible : on reste sur "pas de consentement" */
+    }
+    setConsumerHost(isConsumerHostname(window.location.hostname));
+
+    const onCmpConsent = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail === "all") setConsentGiven(true);
+      else if (detail === "essential") setConsentGiven(false);
+    };
+    window.addEventListener("cmp-consent", onCmpConsent);
+    return () => window.removeEventListener("cmp-consent", onCmpConsent);
+  }, []);
 
   const handleAccept = useCallback(() => {
     setConsentGiven(true);
@@ -25,7 +61,7 @@ export default function GoogleAnalytics() {
 
   return (
     <>
-      {/* GTM only loads after cookie consent */}
+      {/* GTM only loads after cookie consent (bannière marketing OU conso) */}
       {consentGiven && GTM_ID && (
         <>
           <Script id="gtm-init" strategy="afterInteractive">
@@ -47,7 +83,7 @@ export default function GoogleAnalytics() {
           </noscript>
         </>
       )}
-      <CookieConsent onAccept={handleAccept} onRefuse={handleRefuse} />
+      {!consumerHost && <CookieConsent onAccept={handleAccept} onRefuse={handleRefuse} />}
     </>
   );
 }
