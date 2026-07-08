@@ -640,6 +640,17 @@ module.exports.ingestCsvFromUrl = async function ingestCsvFromUrl({ prisma, feed
 						const gidRows = await prisma.$queryRawUnsafe(`SELECT DISTINCT groupid FROM "FeedItem" WHERE feedid = $1::text AND groupid IS NOT NULL`, feed.id);
 						const cat = await categorizeGroups(prisma, { groupIds: gidRows.map((r) => r.groupid) });
 						console.log(`🏷️  Catégorisation comparateur: ${cat.classified}/${cat.total} produits classés`);
+						// Rattrapage IA : les produits de CE flux restés sans catégorie après les
+						// mots-clés partent en lots à Gemini (catégorie + couleur). Borné, non
+						// bloquant, no-op sans GEMINI_API_KEY (le backfill du stock passe par
+						// POST /internal/comparator/ai-enrich).
+						try {
+							const { runAiEnrichment } = require('../domains/comparator/ai-categorization');
+							const ai = await runAiEnrichment(prisma, { groupIds: gidRows.map((r) => r.groupid), limit: 100 });
+							if (!ai.skipped) console.log(`🤖 Enrichissement IA comparateur: ${ai.categorized} catégorisés, ${ai.colored} couleurs (${ai.processed} candidats, ${ai.failedBatches} lot(s) en échec)`);
+						} catch (aiErr) {
+							console.warn('⚠️  Enrichissement IA comparateur échoué:', aiErr.message);
+						}
 					} else {
 						// Gating AWIN : source non approuvée (pending/rejected/revoked) → offres masquées.
 						const { detachFeed } = require('../domains/comparator/matching');

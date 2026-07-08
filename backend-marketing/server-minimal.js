@@ -6298,6 +6298,13 @@ registerComparatorAlertsRoutes(app, {
   getPrismaReady: () => prismaReady,
 });
 
+// Enrichissement IA du catalogue comparateur (backfill catégories/attributs, auth x-scheduler-secret).
+const { registerComparatorAiEnrichRoutes } = require('./routes/comparator-ai-enrich');
+registerComparatorAiEnrichRoutes(app, {
+  getPrisma: () => prisma,
+  getPrismaReady: () => prismaReady,
+});
+
 const { registerPlatformsRoutes } = require('./routes/platforms');
 registerPlatformsRoutes(app, {
   getPrisma: () => prisma,
